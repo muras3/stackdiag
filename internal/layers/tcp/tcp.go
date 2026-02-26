@@ -55,7 +55,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		DurationMS: durationMS,
 		Observations: map[string]any{
 			"remote_ip":   remoteAddr.IP.String(),
-			"remote_port": fmt.Sprintf("%d", remoteAddr.Port),
+			"remote_port": remoteAddr.Port,
 		},
 		Error: nil,
 	}

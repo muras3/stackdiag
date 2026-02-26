@@ -3,7 +3,6 @@ package tcp
 import (
 	"context"
 	"errors"
-	"fmt"
 	"net"
 	"os"
 	"strings"
@@ -76,7 +75,7 @@ func TestTCPSuccess(t *testing.T) {
 	if !ok {
 		t.Fatal("missing remote_port observation")
 	}
-	if remotePort != fmt.Sprintf("%d", addr.Port) {
+	if remotePort != addr.Port {
 		t.Errorf("remote_port = %v, want %d", remotePort, addr.Port)
 	}
 }

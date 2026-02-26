@@ -3,6 +3,7 @@ package http
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -58,6 +59,12 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 			Observations: map[string]any{"method": method},
 			Error:        &core.ProbeError{Code: "HTTP_ERROR", Message: err.Error()},
 		}
+	}
+
+	// When using a resolved IP, set Host header to the original hostname
+	// so virtual-host routing and TLS SNI work correctly.
+	if len(pctx.ResolvedIPs) > 0 {
+		req.Host = pctx.Target.Host
 	}
 
 	for k, v := range pctx.Headers {
@@ -128,10 +135,11 @@ func classifyHTTPError(err error) *core.ProbeError {
 }
 
 func isTimeout(err error) bool {
-	if err == context.DeadlineExceeded {
+	if errors.Is(err, context.DeadlineExceeded) {
 		return true
 	}
-	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
 		return true
 	}
 	// Check wrapped errors.

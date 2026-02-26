@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -184,7 +185,8 @@ func isUntrustedChain(msg string) bool {
 }
 
 func isHandshakeTimeout(err error) bool {
-	if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
 		return true
 	}
 	return false
@@ -194,13 +196,13 @@ func isHandshakeTimeout(err error) bool {
 func tlsVersionString(version uint16) string {
 	switch version {
 	case tls.VersionTLS10:
-		return "TLS 1.0"
+		return "TLSv1.0"
 	case tls.VersionTLS11:
-		return "TLS 1.1"
+		return "TLSv1.1"
 	case tls.VersionTLS12:
-		return "TLS 1.2"
+		return "TLSv1.2"
 	case tls.VersionTLS13:
-		return "TLS 1.3"
+		return "TLSv1.3"
 	default:
 		return fmt.Sprintf("unknown (0x%04x)", version)
 	}

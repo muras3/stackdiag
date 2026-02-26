@@ -53,7 +53,7 @@ func Render(w io.Writer, r *core.Result, useColor bool) error {
 		// Right-align the duration field.
 		paddedDur := fmt.Sprintf("%*s", maxDurLen, dur)
 
-		line := fmt.Sprintf("%-4s  %s  %s  %s", name, sym, paddedDur, desc)
+		line := fmt.Sprintf("  %-4s  %s  %s  %s", name, sym, paddedDur, desc)
 		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}
