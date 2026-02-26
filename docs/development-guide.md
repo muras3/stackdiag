@@ -68,29 +68,14 @@ Phase 3
 
 ## Test Architecture
 
-### Test Tiers
+詳細は `docs/test-strategy.md` を参照。
 
-| 層 | 方式 | 速度 |
-|----|------|------|
-| Unit | fake Resolver/Dialer/Transport注入 | <1s |
-| Integration | localhost httptest, net.Listen | <3s |
-| E2E | ビルド済バイナリ exec.Command | <10s |
-| External | `RUN_EXTERNAL=1` でopt-in | CI対象外 |
-
-### Faking Strategy
-
-| レイヤー | Fake方式 |
-|---------|---------|
-| DNS | `Resolver` interface + fake resolver |
-| TCP | `Dialer` interface + local `net.Listen` |
-| TLS | local TLS server or abstracted handshake |
-| HTTP | `http.Client` with custom transport / `httptest.Server` |
-
-### Golden File Tests
-
-- レンダラー出力を `testdata/*.golden` で管理
-- シナリオ: success, dns_fail, tls_warn, http_500, timeout
-- `-update` フラグで再生成
+要約：
+- **テストピラミッド**: Small多数 / Medium中程度 / Large少数
+- **障害マトリクス**: レイヤー×障害パターンの網羅（成功より障害テストが重要）
+- **実環境検証**: Docker Compose canary + dig/openssl/curlクロス検証
+- **Contract tests**: JSONスキーマの後方互換性自動検証
+- **Fuzz tests**: Go native fuzzing でパーサー堅牢性保証
 
 ## Directory Structure
 
@@ -109,8 +94,14 @@ internal/
     table/
   exitcode/
   testkit/        # shared fakes
-test/e2e/
-testdata/         # golden files
+test/
+  e2e/            # binary-level tests
+  acceptance/     # real-network cross-validation harness
+testdata/
+  golden/         # renderer output snapshots
+  fuzz/           # fuzz seed corpus
+  certs/          # TLS test fixture certificates
+docker-compose.test.yml  # canary test infrastructure
 Makefile
 ```
 
@@ -119,11 +110,13 @@ Makefile
 ### Local/CI Parity via Makefile
 
 ```makefile
-lint:       go vet ./... && gofumpt -l -d . (差分あればfail)
-test:       go test ./...
-test-race:  go test -race ./...
-build:      CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/probe ./cmd/probe
-e2e:        build → go test ./test/e2e/...
+lint:        go vet ./... && gofumpt -l -d . (差分あればfail)
+test:        go test ./...
+test-race:   go test -race ./...
+test-fuzz:   go test -fuzz=. -fuzztime=30s ./internal/core/...
+build:       CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/probe ./cmd/probe
+e2e:         build → go test ./test/e2e/...
+acceptance:  docker compose -f docker-compose.test.yml up -d → go test ./test/acceptance/... → down
 ```
 
 ### GitHub Actions Pipeline
@@ -131,8 +124,9 @@ e2e:        build → go test ./test/e2e/...
 | トリガー | 実行 |
 |---------|------|
 | PR | lint → test-race → build |
-| push main | lint → test-race → build → e2e |
-| tag `v*` | 上記 + goreleaser |
+| push main | lint → test-race → build → e2e → acceptance (Docker canary) |
+| Nightly | 全層 + fuzz(長時間) + 公開エンドポイントsmoke + benchmark trend |
+| tag `v*` | 全層 + acceptance + smoke → goreleaser |
 
 ### Release
 

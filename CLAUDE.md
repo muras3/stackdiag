@@ -10,6 +10,7 @@
 - `docs/product-design.md` — プロダクト設計、JSONスキーマ、MVP scope
 - `docs/development-guide.md` — チーム構成、開発手法、CI/CD、ディレクトリ構造
 - `docs/design-decisions.md` — Claude-Codex合意の意思決定ログ
+- `docs/test-strategy.md` — テスト戦略、障害マトリクス、実環境検証
 
 ## Rules
 
