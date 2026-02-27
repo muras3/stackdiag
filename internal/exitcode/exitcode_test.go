@@ -158,3 +158,26 @@ func TestFromResult(t *testing.T) {
 		})
 	}
 }
+
+func TestWorstExitCode(t *testing.T) {
+	tests := []struct {
+		name  string
+		codes []int
+		want  int
+	}{
+		{"mixed codes", []int{0, 20, 10}, 20},
+		{"all zero", []int{0, 0, 0}, 0},
+		{"two non-zero", []int{2, 10}, 10},
+		{"empty slice", []int{}, 0},
+		{"single value", []int{40}, 40},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := exitcode.WorstExitCode(tt.codes)
+			if got != tt.want {
+				t.Errorf("WorstExitCode(%v) = %d, want %d", tt.codes, got, tt.want)
+			}
+		})
+	}
+}

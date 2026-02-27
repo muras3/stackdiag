@@ -70,3 +70,15 @@ func FromResult(r *core.Result) int {
 
 	return 0
 }
+
+// WorstExitCode returns the maximum exit code from a slice.
+// Returns 0 for an empty slice.
+func WorstExitCode(codes []int) int {
+	worst := 0
+	for _, c := range codes {
+		if c > worst {
+			worst = c
+		}
+	}
+	return worst
+}
