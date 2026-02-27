@@ -18,7 +18,13 @@ func New(layers []core.Layer) *Runner {
 }
 
 // Run executes layers sequentially, stopping on fail, continuing on warn.
+// This is a convenience wrapper around RunOnce.
 func (r *Runner) Run(pctx *core.ProbeContext) *core.Result {
+	return r.RunOnce(pctx)
+}
+
+// RunOnce executes layers sequentially, stopping on fail, continuing on warn.
+func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 	start := time.Now()
 	allLayerNames := core.LayerOrder
 	result := &core.Result{
