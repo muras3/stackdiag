@@ -1,4 +1,4 @@
-# probe v0.1 全コードレビュー & テスト再実行 — 最終報告書
+# stackdiag v0.1 全コードレビュー & テスト再実行 — 最終報告書
 
 **日時:** 2026-02-27
 **レビュー体制:** Claude Agent Teams (8並列 Wave 1 + 4並列 Wave 2) + Codex (gpt-5.3-codex) + Gemini (gemini-3.1-pro-preview)
@@ -178,7 +178,7 @@ Wave 1で10件修正、Wave 2で2件修正。
 
 ## 8. 結論
 
-probe v0.1 は2段階のレビュー (Claude 8並列 + Codex/Gemini 4並列) を経て、Critical 6件・High 3件を含む全重大問題を解消。全テスト (ユニット + E2E、race detector付き) がPASS。Design Decisions 12項目に完全準拠。
+stackdiag v0.1 は2段階のレビュー (Claude 8並列 + Codex/Gemini 4並列) を経て、Critical 6件・High 3件を含む全重大問題を解消。全テスト (ユニット + E2E、race detector付き) がPASS。Design Decisions 12項目に完全準拠。
 
 Codex外部レビューにより、Claude単独では検出できなかった5件の問題 (HTTP SNI, TLS truncation, TLS deadline, HTTP 500 mapping, contract skip) を発見・修正。外部レビューの価値が実証された。
 

@@ -1,8 +1,10 @@
+project_name: stackdiag
+
 version: 2
 
 builds:
-  - main: ./cmd/probe
-    binary: probe
+  - main: ./cmd/stackdiag
+    binary: stackdiag
     env:
       - CGO_ENABLED=0
     flags:
@@ -32,7 +34,7 @@ checksum:
 release:
   github:
     owner: muras3
-    name: probe
+    name: stackdiag
 
 changelog:
   sort: asc

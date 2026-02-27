@@ -3,8 +3,8 @@ package runner
 import (
 	"time"
 
-	"github.com/muras3/probe/internal/core"
-	"github.com/muras3/probe/internal/exitcode"
+	"github.com/muras3/stackdiag/internal/core"
+	"github.com/muras3/stackdiag/internal/exitcode"
 )
 
 // Runner orchestrates sequential layer execution.

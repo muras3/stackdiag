@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/muras3/probe/internal/core"
+	"github.com/muras3/stackdiag/internal/core"
 )
 
 // contractResult returns a full Result with all layers for contract testing.

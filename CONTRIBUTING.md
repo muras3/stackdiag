@@ -1,6 +1,6 @@
-# Contributing to probe
+# Contributing to stackdiag
 
-Thanks for your interest in contributing to probe! This guide will help you get started.
+Thanks for your interest in contributing to stackdiag! This guide will help you get started.
 
 ## Development Setup
 
@@ -12,10 +12,10 @@ Thanks for your interest in contributing to probe! This guide will help you get 
 ### Clone and Build
 
 ```bash
-git clone https://github.com/muras3/probe.git
-cd probe
+git clone https://github.com/muras3/stackdiag.git
+cd stackdiag
 make build
-# Binary at ./bin/probe
+# Binary at ./bin/stackdiag
 ```
 
 ### Run Tests
@@ -50,7 +50,7 @@ make lint
 ## Project Structure
 
 ```
-cmd/probe/          Entry point
+cmd/stackdiag/          Entry point
 internal/
   cli/              Argument parsing
   core/             Data model (Result, LayerResult, Target)
@@ -115,10 +115,10 @@ docs: update schema reference for v0.1
 
 ## Architecture Notes
 
-probe's internal data model **is** the JSON output. The table renderer is a view layer on top of the same `core.Result` struct. Any new layer or observation field should be added to `internal/core/types.go` first, then to the layer implementation, and finally to the renderers.
+stackdiag's internal data model **is** the JSON output. The table renderer is a view layer on top of the same `core.Result` struct. Any new layer or observation field should be added to `internal/core/types.go` first, then to the layer implementation, and finally to the renderers.
 
 See [docs/schema.md](docs/schema.md) for the complete output specification.
 
 ## License
 
-By contributing to probe, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+By contributing to stackdiag, you agree that your contributions will be licensed under the [MIT License](LICENSE).

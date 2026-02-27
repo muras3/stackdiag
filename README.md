@@ -1,11 +1,11 @@
-# probe
+# stackdiag
 
 > Structured network diagnostics for AI agents and humans.
 
 One command to diagnose DNS → TCP → TLS → HTTP — layer by layer.
 
 ```
-$ probe https://api.example.com/health
+$ stackdiag https://api.example.com/health
 
   dns   ✓   9ms   api.example.com → 203.0.113.10
   tcp   ✓  16ms   :443
@@ -21,11 +21,11 @@ $ probe https://api.example.com/health
 - Stops at the first failure, tells you **which layer** broke
 - `--json` + layer-based exit codes for **automation and AI agents**
 
-## Why probe?
+## Why stackdiag?
 
 Debugging "HTTPS isn't working" today means running 4 commands: `dig`, `nc`, `openssl s_client`, `curl`. Each has different output formats, exit codes, and failure modes.
 
-**probe** replaces that workflow with a single command that:
+**stackdiag** replaces that workflow with a single command that:
 
 - Tests every layer in sequence (DNS → TCP → TLS → HTTP)
 - Stops at the first failure and tells you exactly which layer broke
@@ -35,16 +35,16 @@ Debugging "HTTPS isn't working" today means running 4 commands: `dig`, `nc`, `op
 
 ## Install
 
-**No runtime dependencies required.** probe is a single static binary.
+**No runtime dependencies required.** stackdiag is a single static binary.
 
 ```bash
 # Download binary (Linux amd64)
-curl -sL https://github.com/muras3/probe/releases/latest/download/probe_linux_amd64.tar.gz | tar xz
-sudo mv probe /usr/local/bin/
+curl -sL https://github.com/muras3/stackdiag/releases/latest/download/stackdiag_linux_amd64.tar.gz | tar xz
+sudo mv stackdiag /usr/local/bin/
 
 # Download binary (macOS Apple Silicon)
-curl -sL https://github.com/muras3/probe/releases/latest/download/probe_darwin_arm64.tar.gz | tar xz
-sudo mv probe /usr/local/bin/
+curl -sL https://github.com/muras3/stackdiag/releases/latest/download/stackdiag_darwin_arm64.tar.gz | tar xz
+sudo mv stackdiag /usr/local/bin/
 ```
 
 <details>
@@ -52,12 +52,12 @@ sudo mv probe /usr/local/bin/
 
 ```bash
 # Go (requires Go 1.21+)
-go install github.com/muras3/probe/cmd/probe@latest
+go install github.com/muras3/stackdiag/cmd/stackdiag@latest
 
 # From source
-git clone https://github.com/muras3/probe.git
-cd probe && make build
-# Binary at ./bin/probe
+git clone https://github.com/muras3/stackdiag.git
+cd stackdiag && make build
+# Binary at ./bin/stackdiag
 ```
 
 </details>
@@ -66,25 +66,25 @@ cd probe && make build
 
 ```bash
 # Basic HTTPS check
-probe https://example.com
+stackdiag https://example.com
 
 # Check a specific endpoint with JSON output
-probe --json https://api.example.com/health
+stackdiag --json https://api.example.com/health
 
 # TCP-only connectivity test
-probe tcp://db.internal:5432
+stackdiag tcp://db.internal:5432
 
 # HTTP with custom method and headers
-probe --method POST --header "Content-Type: application/json" https://api.example.com/v1/data
+stackdiag --method POST --header "Content-Type: application/json" https://api.example.com/v1/data
 
 # Skip TLS certificate verification
-probe --insecure https://self-signed.example.com
+stackdiag --insecure https://self-signed.example.com
 ```
 
 ## Options
 
 ```
-probe <url> [options]
+stackdiag <url> [options]
 
 Targets:
   https://host/path     Full HTTPS check (DNS + TCP + TLS + HTTP)
@@ -104,7 +104,7 @@ Options:
 
 ## JSON Output
 
-With `--json`, probe writes structured JSON to stdout:
+With `--json`, stackdiag writes structured JSON to stdout:
 
 ```json
 {
@@ -163,12 +163,12 @@ Full schema documentation: [docs/schema.md](docs/schema.md)
 Exit codes indicate the **first failing layer**, so you can branch on them directly:
 
 ```bash
-probe https://api.example.com || echo "exit code: $?"
+stackdiag https://api.example.com || echo "exit code: $?"
 ```
 
 ## For AI Agents
 
-probe is designed as a **tool interface for AI agents** — not just a CLI with `--json` bolted on.
+stackdiag is designed as a **tool interface for AI agents** — not just a CLI with `--json` bolted on.
 
 **What makes it agent-friendly:**
 
@@ -182,8 +182,8 @@ probe is designed as a **tool interface for AI agents** — not just a CLI with 
 **Agent usage example:**
 
 ```bash
-# Run probe, parse with jq, decide next action
-RESULT=$(probe --json https://api.example.com 2>/dev/null)
+# Run stackdiag, parse with jq, decide next action
+RESULT=$(stackdiag --json https://api.example.com 2>/dev/null)
 STATUS=$(echo "$RESULT" | jq -r '.layers.tls.status')
 if [ "$STATUS" = "fail" ]; then
   CODE=$(echo "$RESULT" | jq -r '.layers.tls.error.code')
@@ -191,16 +191,16 @@ if [ "$STATUS" = "fail" ]; then
 fi
 ```
 
-**MCP integration:** probe is stateless — wrap `probe --json <target>` as a tool in any MCP server. No adapter needed for basic usage.
+**MCP integration:** stackdiag is stateless — wrap `stackdiag --json <target>` as a tool in any MCP server. No adapter needed for basic usage.
 
 ## When to Use Something Else
 
 - **DNS only?** Use `dig` or `dog` — they support all record types and transports
 - **HTTP headers only?** Use `curl -I` — it's already everywhere
-- **Load testing?** Use `hey` or `k6` — probe tests one request at a time
+- **Load testing?** Use `hey` or `k6` — stackdiag tests one request at a time
 - **Full network monitoring?** Use Prometheus + Blackbox Exporter
 
-probe is for **diagnosing connection failures** across the full stack, quickly.
+stackdiag is for **diagnosing connection failures** across the full stack, quickly.
 
 ## Contributing
 

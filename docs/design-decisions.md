@@ -1,4 +1,4 @@
-# probe — Design Decisions Log
+# stackdiag — Design Decisions Log
 
 Claude-Codex間の議論で合意した意思決定の記録。
 

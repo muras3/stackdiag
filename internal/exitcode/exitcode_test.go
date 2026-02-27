@@ -3,8 +3,8 @@ package exitcode_test
 import (
 	"testing"
 
-	"github.com/muras3/probe/internal/core"
-	"github.com/muras3/probe/internal/exitcode"
+	"github.com/muras3/stackdiag/internal/core"
+	"github.com/muras3/stackdiag/internal/exitcode"
 )
 
 func TestFromResult(t *testing.T) {

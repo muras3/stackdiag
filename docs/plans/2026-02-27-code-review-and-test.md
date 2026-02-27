@@ -1,10 +1,10 @@
-# probe v0.1 全コードレビュー & テスト再実行計画
+# stackdiag v0.1 全コードレビュー & テスト再実行計画
 
 ## Context
 
 v0.1実装の全16タスクが完了済みだが、Task 15「Codexフルコードレビュー」が未実施。プロジェクト規定では **Code Reviewer: Codex（全コード）** が必須。本計画では Agent Teams を用いて最大並列でコードレビューを実施し、テストを再実行する。
 
-## チーム構成: `probe-review`（8並列）
+## チーム構成: `stackdiag-review`（8並列）
 
 | エージェント名 | 役割 | 担当範囲 |
 |---|---|---|
@@ -150,7 +150,7 @@ Wave 4:
 **対象ファイル（6ファイル, 716行）:**
 - `internal/runner/runner.go` + `runner_test.go`
 - `internal/cli/cli.go` + `cli_test.go`
-- `cmd/probe/main.go`
+- `cmd/stackdiag/main.go`
 - `test/e2e/probe_test.go`
 
 **チェックリスト:**

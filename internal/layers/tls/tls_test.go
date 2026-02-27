@@ -14,7 +14,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/muras3/probe/internal/core"
+	"github.com/muras3/stackdiag/internal/core"
 )
 
 // --- Helper: generate a self-signed certificate with configurable properties ---
@@ -40,7 +40,7 @@ func generateCert(t *testing.T, opts certOpts) (tls.Certificate, *x509.CertPool)
 
 	template := &x509.Certificate{
 		SerialNumber:          serial,
-		Subject:               pkix.Name{Organization: []string{"probe-test"}},
+		Subject:               pkix.Name{Organization: []string{"stackdiag-test"}},
 		NotBefore:             opts.notBefore,
 		NotAfter:              opts.notAfter,
 		KeyUsage:              x509.KeyUsageDigitalSignature,

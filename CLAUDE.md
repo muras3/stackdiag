@@ -1,8 +1,8 @@
-# probe — Project Instructions
+# stackdiag — Project Instructions
 
 ## What is this?
 
-`probe` — structured network diagnostics for AI agents and humans.
+`stackdiag` — structured network diagnostics for AI agents and humans.
 1コマンドでDNS→TCP→TLS→HTTPを切り分ける軽量Go CLI。
 
 ## Key Documents
