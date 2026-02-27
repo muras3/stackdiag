@@ -100,3 +100,35 @@ func TestParseArgsVersion(t *testing.T) {
 		t.Error("Version should be true")
 	}
 }
+
+func TestParseArgsFlagsAfterTarget(t *testing.T) {
+	cfg, err := ParseArgs([]string{"https://example.com", "--json"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.JSON {
+		t.Error("JSON should be true when flag comes after target")
+	}
+	if cfg.Target != "https://example.com" {
+		t.Errorf("Target = %q, want https://example.com", cfg.Target)
+	}
+}
+
+func TestParseArgsFlagsMixedPosition(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--method", "POST", "https://example.com", "--json", "--timeout", "5"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Method != "POST" {
+		t.Errorf("Method = %q, want POST", cfg.Method)
+	}
+	if !cfg.JSON {
+		t.Error("JSON should be true")
+	}
+	if cfg.Timeout != 5 {
+		t.Errorf("Timeout = %d, want 5", cfg.Timeout)
+	}
+	if cfg.Target != "https://example.com" {
+		t.Errorf("Target = %q, want https://example.com", cfg.Target)
+	}
+}
