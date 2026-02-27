@@ -37,7 +37,7 @@ jobs:
 
       - name: Check binary size
         run: |
-          size=$(stat --format=%s bin/probe)
+          size=$(stat --format=%s bin/stackdiag)
           echo "Binary size: $((size / 1024 / 1024))MB (${size} bytes)"
           max=$((5 * 1024 * 1024))
           if [ "$size" -ge "$max" ]; then
