@@ -394,7 +394,7 @@ func tlsScanResult() *core.Result {
 			map[string]any{"version": "TLSv1.2", "supported": true},
 			map[string]any{"version": "TLSv1.3", "supported": true},
 		},
-		"supported_versions":         []any{"TLSv1.0", "TLSv1.2", "TLSv1.3"},
+		"supported_versions":          []any{"TLSv1.0", "TLSv1.2", "TLSv1.3"},
 		"deprecated_versions_enabled": []any{"TLSv1.0"},
 	}
 	return r

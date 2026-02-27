@@ -315,9 +315,9 @@ func (l *Layer) performTLSScan(pctx *core.ProbeContext, addr string, result *cor
 	}
 
 	result.Observations["tls_scan"] = map[string]any{
-		"performed":                  true,
-		"attempts":                   attempts,
-		"supported_versions":         supportedVersions,
+		"performed":                   true,
+		"attempts":                    attempts,
+		"supported_versions":          supportedVersions,
 		"deprecated_versions_enabled": deprecatedEnabled,
 	}
 

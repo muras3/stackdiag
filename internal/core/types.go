@@ -218,7 +218,7 @@ type CountResult struct {
 	Target        string                      `json:"target"`
 	Count         int                         `json:"count"`
 	ExitCode      int                         `json:"exit_code"`
-	Attempts      []*AttemptResult             `json:"attempts"`
+	Attempts      []*AttemptResult            `json:"attempts"`
 	Statistics    map[string]*LayerStatistics `json:"statistics"`
 }
 

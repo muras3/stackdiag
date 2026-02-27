@@ -508,7 +508,7 @@ type fakeLayerFunc struct {
 	fn   func() *core.LayerResult
 }
 
-func (f *fakeLayerFunc) Name() string                           { return f.name }
+func (f *fakeLayerFunc) Name() string                                 { return f.name }
 func (f *fakeLayerFunc) Probe(_ *core.ProbeContext) *core.LayerResult { return f.fn() }
 
 func TestRunStartedAtAndWallClock(t *testing.T) {

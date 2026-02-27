@@ -658,7 +658,7 @@ func TestTLSNotYetValidCert(t *testing.T) {
 	now := time.Now()
 	cert, pool := generateCert(t, certOpts{
 		hosts:     []string{"localhost"},
-		notBefore: now.Add(1 * time.Hour),          // not valid yet
+		notBefore: now.Add(1 * time.Hour), // not valid yet
 		notAfter:  now.Add(365 * 24 * time.Hour),
 	})
 
