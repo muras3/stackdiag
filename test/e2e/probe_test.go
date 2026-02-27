@@ -48,11 +48,15 @@ func runProbe(t *testing.T, args ...string) (stdout, stderr string, exitCode int
 // skipIfUnreachable skips the test if the host cannot be reached.
 func skipIfUnreachable(t *testing.T, host string) {
 	t.Helper()
-	conn, err := net.DialTimeout("tcp", host+":443", 5e9)
-	if err != nil {
-		t.Skipf("skipping: cannot reach %s: %v", host, err)
+	// Try port 443 first, then port 80.
+	for _, port := range []string{"443", "80"} {
+		conn, err := net.DialTimeout("tcp", net.JoinHostPort(host, port), 5e9)
+		if err == nil {
+			conn.Close()
+			return
+		}
 	}
-	conn.Close()
+	t.Skipf("skipping: cannot reach %s on port 443 or 80", host)
 }
 
 func TestVersionFlag(t *testing.T) {
@@ -146,12 +150,15 @@ func TestJSONOutputStructure(t *testing.T) {
 // --- New E2E tests ---
 
 func TestHelpFlag(t *testing.T) {
-	stdout, _, exitCode := runProbe(t, "--help")
+	stdout, stderr, exitCode := runProbe(t, "--help")
 	if exitCode != 0 {
 		t.Errorf("exit code = %d, want 0", exitCode)
 	}
 	if !strings.Contains(stdout, "Usage") {
 		t.Errorf("expected usage info on stdout, got: %s", stdout)
+	}
+	if len(stderr) > 0 {
+		t.Errorf("expected empty stderr for --help, got: %s", stderr)
 	}
 }
 
@@ -231,7 +238,7 @@ func TestStdoutStderrSeparation(t *testing.T) {
 	defer ln.Close()
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	stdout, _, _ := runProbe(t, "--json", "--timeout", "3",
+	stdout, stderr, _ := runProbe(t, "--json", "--timeout", "3",
 		fmt.Sprintf("tcp://127.0.0.1:%d", port))
 
 	// stdout must contain valid JSON data.
@@ -242,6 +249,14 @@ func TestStdoutStderrSeparation(t *testing.T) {
 	var result map[string]any
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Errorf("stdout should be valid JSON: %v", err)
+	}
+
+	// stderr should not contain JSON data (only logs/diagnostics if any).
+	if len(stderr) > 0 {
+		var tmp map[string]any
+		if json.Unmarshal([]byte(stderr), &tmp) == nil {
+			t.Error("stderr should not contain JSON data — stdout=data, stderr=logs")
+		}
 	}
 }
 

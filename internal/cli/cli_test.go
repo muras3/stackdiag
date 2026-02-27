@@ -183,12 +183,12 @@ func TestParseArgsInvalidTimeout(t *testing.T) {
 }
 
 func TestParseArgsEmptyTarget(t *testing.T) {
-	cfg, err := ParseArgs([]string{""})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
+	_, err := ParseArgs([]string{""})
+	if err == nil {
+		t.Fatal("expected error for empty target")
 	}
-	if cfg.Target != "" {
-		t.Errorf("Target = %q, want empty string", cfg.Target)
+	if !strings.Contains(err.Error(), "target URL required") {
+		t.Errorf("error = %q, want 'target URL required'", err.Error())
 	}
 }
 

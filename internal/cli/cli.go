@@ -94,6 +94,9 @@ func ParseArgs(args []string) (*Config, error) {
 		return nil, fmt.Errorf("target URL required")
 	}
 	cfg.Target = positional[0]
+	if strings.TrimSpace(cfg.Target) == "" {
+		return nil, fmt.Errorf("target URL required")
+	}
 
 	return cfg, nil
 }
