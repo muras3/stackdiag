@@ -6,16 +6,7 @@
 
 Structured network diagnostics for AI agents and humans.
 
-```
-$ stdiag https://api.example.com/health
-
-  dns   ✓   9ms   api.example.com → 203.0.113.10
-  tcp   ✓  16ms   :443
-  tls   ⚠  31ms   TLSv1.3, cert expires in 5d
-  http  ✗  57ms   503 Service Unavailable
-
-  122ms total | first issue: tls | exit 40
-```
+![demo](demo.gif)
 
 One command to diagnose DNS → TCP → TLS → HTTP — layer by layer. Stops at the first failure. Tells you which layer broke.
 
