@@ -244,3 +244,17 @@ func (d *capturingDialer) DialContext(ctx context.Context, network, address stri
 	}
 	return d.inner.DialContext(ctx, network, address)
 }
+
+func TestTCPEmptyObservationsOnFailure(t *testing.T) {
+	layer := New(&testkit.FakeDialer{Err: errors.New("connection failed")})
+	pctx := makeCtx("192.0.2.1", 443, []string{"192.0.2.1"})
+
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if len(result.Observations) != 0 {
+		t.Errorf("observations = %v, want empty map on failure", result.Observations)
+	}
+}

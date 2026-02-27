@@ -264,3 +264,78 @@ func TestRunSchemaVersion(t *testing.T) {
 		t.Errorf("Target = %q", result.Target)
 	}
 }
+
+func TestRunHTTPScheme(t *testing.T) {
+	// http:// target should run dns+tcp+http, tls=skip.
+	layers := []core.Layer{
+		&fakeLayer{name: "dns", result: okResult()},
+		&fakeLayer{name: "tcp", result: okResult()},
+		&fakeLayer{name: "http", result: okResult()},
+	}
+
+	r := New(layers)
+	result := r.Run(&core.ProbeContext{
+		Context: context.Background(),
+		Target:  core.Target{Original: "http://example.com", Scheme: "http", Host: "example.com", Port: 80, Path: "/"},
+	})
+
+	if result.Layers["dns"].Status != core.StatusOK {
+		t.Errorf("dns status = %q, want ok", result.Layers["dns"].Status)
+	}
+	if result.Layers["tcp"].Status != core.StatusOK {
+		t.Errorf("tcp status = %q, want ok", result.Layers["tcp"].Status)
+	}
+	if result.Layers["http"].Status != core.StatusOK {
+		t.Errorf("http status = %q, want ok", result.Layers["http"].Status)
+	}
+	if result.Layers["tls"].Status != core.StatusSkip {
+		t.Errorf("tls status = %q, want skip", result.Layers["tls"].Status)
+	}
+	if result.Summary.ExitCode != 0 {
+		t.Errorf("ExitCode = %d, want 0", result.Summary.ExitCode)
+	}
+}
+
+func TestRunEmptyLayers(t *testing.T) {
+	r := New([]core.Layer{})
+	result := r.Run(&core.ProbeContext{
+		Context: context.Background(),
+		Target:  core.Target{Original: "https://example.com", Scheme: "https", Host: "example.com", Port: 443, Path: "/"},
+	})
+
+	// All layers should be skip.
+	for _, name := range []string{"dns", "tcp", "tls", "http"} {
+		lr, ok := result.Layers[name]
+		if !ok {
+			t.Errorf("missing layer %q", name)
+			continue
+		}
+		if lr.Status != core.StatusSkip {
+			t.Errorf("layer %q status = %q, want skip", name, lr.Status)
+		}
+	}
+	if result.Summary.ExitCode != 0 {
+		t.Errorf("ExitCode = %d, want 0", result.Summary.ExitCode)
+	}
+}
+
+func TestRunStartedAtAndWallClock(t *testing.T) {
+	layers := []core.Layer{
+		&fakeLayer{name: "dns", result: okResult(), delay: 10 * time.Millisecond},
+	}
+
+	r := New(layers)
+	before := time.Now()
+	result := r.Run(&core.ProbeContext{
+		Context: context.Background(),
+		Target:  core.Target{Original: "tcp://example.com:80", Scheme: "tcp", Host: "example.com", Port: 80},
+	})
+	after := time.Now()
+
+	if result.StartedAt.Before(before) || result.StartedAt.After(after) {
+		t.Errorf("StartedAt = %v, expected between %v and %v", result.StartedAt, before, after)
+	}
+	if result.Summary.WallClockMS <= 0 {
+		t.Errorf("WallClockMS = %v, want > 0", result.Summary.WallClockMS)
+	}
+}

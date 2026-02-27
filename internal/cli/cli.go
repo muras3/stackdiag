@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -52,6 +53,7 @@ func ParseArgs(args []string) (*Config, error) {
 	}
 
 	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // Suppress Go's default usage output; probe shows its own.
 
 	cfg := &Config{
 		Method:  "GET",
@@ -73,6 +75,10 @@ func ParseArgs(args []string) (*Config, error) {
 
 	if cfg.Version {
 		return cfg, nil
+	}
+
+	if cfg.Method == "" {
+		return nil, fmt.Errorf("method must not be empty")
 	}
 
 	// Parse header values into map.

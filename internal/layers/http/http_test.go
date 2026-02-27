@@ -372,6 +372,77 @@ func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 	return f(req)
 }
 
+func TestHTTP3xxStatusOk(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Location", "/redirected")
+		w.WriteHeader(301)
+	}))
+	defer srv.Close()
+
+	client := srv.Client()
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+	layer := New(client)
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusOK {
+		t.Errorf("status = %q, want ok for 3xx; error = %v", result.Status, result.Error)
+	}
+	sc, ok := result.Observations["status_code"]
+	if !ok {
+		t.Fatal("missing status_code")
+	}
+	if sc.(int) != 301 {
+		t.Errorf("status_code = %v, want 301", sc)
+	}
+}
+
+func TestHTTPGeneric5xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(501)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "HTTP_5XX" {
+		t.Errorf("error = %v, want HTTP_5XX (501 is not a named status code)", result.Error)
+	}
+}
+
+func TestHTTPProtocolObservation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusOK {
+		t.Fatalf("status = %q, want ok; error = %v", result.Status, result.Error)
+	}
+	proto, ok := result.Observations["protocol"]
+	if !ok {
+		t.Fatal("missing protocol observation")
+	}
+	p := proto.(string)
+	if !strings.HasPrefix(p, "HTTP/") {
+		t.Errorf("protocol = %q, want HTTP/... prefix", p)
+	}
+}
+
 // targetFromURL parses an httptest server URL into a Target.
 func targetFromURL(t *testing.T, rawURL string) core.Target {
 	t.Helper()

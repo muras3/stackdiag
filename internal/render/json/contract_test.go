@@ -232,3 +232,124 @@ func TestContractSummaryFields(t *testing.T) {
 		}
 	}
 }
+
+func TestContractErrorFieldStructure(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResult()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	layers := m["layers"].(map[string]any)
+	for name, raw := range layers {
+		layer := raw.(map[string]any)
+		errField := layer["error"]
+		if errField == nil {
+			continue
+		}
+		errObj, ok := errField.(map[string]any)
+		if !ok {
+			t.Errorf("layer %q error is not an object: %T", name, errField)
+			continue
+		}
+		if _, ok := errObj["code"]; !ok {
+			t.Errorf("layer %q error missing 'code' field", name)
+		}
+		if _, ok := errObj["message"]; !ok {
+			t.Errorf("layer %q error missing 'message' field", name)
+		}
+	}
+}
+
+func TestContractStartedAtFormat(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResult()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	startedAt, ok := m["started_at"].(string)
+	if !ok {
+		t.Fatal("started_at is not a string")
+	}
+	if _, err := time.Parse(time.RFC3339, startedAt); err != nil {
+		t.Errorf("started_at %q is not valid RFC3339: %v", startedAt, err)
+	}
+}
+
+func TestContractDurationMsType(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResult()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	layers := m["layers"].(map[string]any)
+	for name, raw := range layers {
+		layer := raw.(map[string]any)
+		dur, ok := layer["duration_ms"]
+		if !ok {
+			t.Errorf("layer %q missing duration_ms", name)
+			continue
+		}
+		if _, ok := dur.(float64); !ok {
+			t.Errorf("layer %q duration_ms is %T, want number", name, dur)
+		}
+	}
+}
+
+func TestContractObservations(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResult()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	layers := m["layers"].(map[string]any)
+
+	// DNS should have query_name.
+	dnsObs := layers["dns"].(map[string]any)["observations"].(map[string]any)
+	if _, ok := dnsObs["query_name"]; !ok {
+		t.Error("dns observations missing query_name")
+	}
+
+	// TCP should have remote_ip and remote_port.
+	tcpObs := layers["tcp"].(map[string]any)["observations"].(map[string]any)
+	for _, field := range []string{"remote_ip", "remote_port"} {
+		if _, ok := tcpObs[field]; !ok {
+			t.Errorf("tcp observations missing %q", field)
+		}
+	}
+
+	// TLS should have version, cipher_suite, cert_days_until_expiry.
+	tlsObs := layers["tls"].(map[string]any)["observations"].(map[string]any)
+	for _, field := range []string{"version", "cipher_suite", "cert_days_until_expiry"} {
+		if _, ok := tlsObs[field]; !ok {
+			t.Errorf("tls observations missing %q", field)
+		}
+	}
+
+	// HTTP should have method, protocol, status_code.
+	httpObs := layers["http"].(map[string]any)["observations"].(map[string]any)
+	for _, field := range []string{"method", "protocol", "status_code"} {
+		if _, ok := httpObs[field]; !ok {
+			t.Errorf("http observations missing %q", field)
+		}
+	}
+}
