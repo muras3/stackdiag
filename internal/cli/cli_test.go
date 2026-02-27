@@ -323,3 +323,57 @@ func TestParseArgsErrorMessages(t *testing.T) {
 		})
 	}
 }
+
+func TestParseArgsRejectsMethodWithNonLetters(t *testing.T) {
+	_, err := ParseArgs([]string{"--method", "POST1", "https://example.com"})
+	if err == nil {
+		t.Fatal("expected error for method containing non-letter")
+	}
+	if !strings.Contains(err.Error(), "invalid HTTP method") {
+		t.Fatalf("error = %q, want invalid HTTP method", err.Error())
+	}
+}
+
+func TestParseArgsRejectsHeaderControlCharacters(t *testing.T) {
+	tests := []struct {
+		name string
+		arg  string
+	}{
+		{name: "value contains newline", arg: "X-Test: hello\nworld"},
+		{name: "name contains carriage return", arg: "X-Test\r: value"},
+		{name: "value contains NUL", arg: "X-Test: a\x00b"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseArgs([]string{"--header", tt.arg, "https://example.com"})
+			if err == nil {
+				t.Fatal("expected header validation error")
+			}
+		})
+	}
+}
+
+func TestParseArgsTimeoutRange(t *testing.T) {
+	tests := []struct {
+		name    string
+		timeout string
+		wantErr bool
+	}{
+		{name: "minimum", timeout: "1", wantErr: false},
+		{name: "maximum", timeout: "300", wantErr: false},
+		{name: "zero", timeout: "0", wantErr: true},
+		{name: "negative", timeout: "-1", wantErr: true},
+		{name: "too large", timeout: "301", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseArgs([]string{"--timeout", tt.timeout, "https://example.com"})
+			if tt.wantErr && err == nil {
+				t.Fatalf("expected timeout error for %s", tt.timeout)
+			}
+			if !tt.wantErr && err != nil {
+				t.Fatalf("unexpected timeout error for %s: %v", tt.timeout, err)
+			}
+		})
+	}
+}

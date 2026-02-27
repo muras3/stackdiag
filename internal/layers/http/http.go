@@ -20,6 +20,8 @@ type Layer struct {
 	client *http.Client
 }
 
+const defaultMaxResponseHeaderBytes int64 = 1 << 20 // 1 MiB
+
 // New creates an HTTP Layer with the given http.Client.
 func New(client *http.Client) *Layer {
 	return &Layer{client: client}
@@ -35,8 +37,9 @@ func NewDefault(insecure bool, serverName string) *Layer {
 		tlsCfg.ServerName = serverName
 	}
 	transport := &http.Transport{
-		DisableKeepAlives: true,
-		TLSClientConfig:   tlsCfg,
+		DisableKeepAlives:      true,
+		TLSClientConfig:        tlsCfg,
+		MaxResponseHeaderBytes: defaultMaxResponseHeaderBytes,
 	}
 	client := &http.Client{
 		Transport: transport,
@@ -178,7 +181,12 @@ func buildRequestHeaders(headers map[string]string, redact bool) map[string]stri
 // isSensitiveHeader returns true for headers whose values should be redacted.
 func isSensitiveHeader(name string) bool {
 	switch strings.ToLower(name) {
-	case "authorization", "cookie", "proxy-authorization":
+	case "authorization",
+		"cookie",
+		"proxy-authorization",
+		"set-cookie",
+		"x-api-key",
+		"x-auth-token":
 		return true
 	default:
 		return false

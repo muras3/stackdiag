@@ -26,8 +26,9 @@ func ParseTarget(raw string) (Target, error) {
 	}
 
 	// If no scheme, default to https.
+	hadScheme := strings.Contains(raw, "://")
 	normalized := raw
-	if !strings.Contains(normalized, "://") {
+	if !hadScheme {
 		normalized = "https://" + normalized
 	}
 
@@ -67,8 +68,18 @@ func ParseTarget(raw string) (Target, error) {
 		path = "/"
 	}
 
+	original := raw
+	if u.User != nil {
+		sanitized := *u
+		sanitized.User = nil
+		original = sanitized.String()
+		if !hadScheme {
+			original = strings.TrimPrefix(original, "https://")
+		}
+	}
+
 	return Target{
-		Original: raw,
+		Original: original,
 		Scheme:   scheme,
 		Host:     host,
 		Port:     port,

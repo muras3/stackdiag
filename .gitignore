@@ -5,3 +5,4 @@ bin/
 *.so
 *.dylib
 .DS_Store
+.agent-logs/

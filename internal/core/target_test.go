@@ -268,6 +268,16 @@ func TestParseTargetURLWithFragment(t *testing.T) {
 	}
 }
 
+func TestParseTargetStripsUserInfoFromOriginal(t *testing.T) {
+	got, err := ParseTarget("https://alice:secret@example.com/private")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Original != "https://example.com/private" {
+		t.Fatalf("Original = %q, want %q", got.Original, "https://example.com/private")
+	}
+}
+
 func TestParseTargetBareHostnameWithPort(t *testing.T) {
 	got, err := ParseTarget("example.com:8443")
 	if err != nil {
