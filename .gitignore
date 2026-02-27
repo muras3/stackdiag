@@ -6,3 +6,4 @@ bin/
 *.dylib
 .DS_Store
 .agent-logs/
+docs/internal/
