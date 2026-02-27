@@ -758,6 +758,255 @@ func TestTLSMinVersionEnforcedInsecure(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// scanHandshaker returns different results based on MinVersion in tls.Config.
+// =============================================================================
+
+type scanHandshaker struct {
+	// normalState is returned for the normal probe (MinVersion != MaxVersion).
+	normalState *tls.ConnectionState
+	normalDur   float64
+	normalErr   error
+	// versionResults maps TLS version constant to handshake result.
+	versionResults map[uint16]struct {
+		state *tls.ConnectionState
+		dur   float64
+		err   error
+	}
+}
+
+func (s *scanHandshaker) Handshake(_ context.Context, _ string, cfg *tls.Config) (*tls.ConnectionState, float64, error) {
+	// If MinVersion == MaxVersion, this is a scan call for a specific version.
+	if cfg.MinVersion == cfg.MaxVersion && cfg.MinVersion != 0 {
+		if r, ok := s.versionResults[cfg.MinVersion]; ok {
+			return r.state, r.dur, r.err
+		}
+		return nil, 0, errors.New("unexpected version in scan")
+	}
+	// Normal probe call.
+	return s.normalState, s.normalDur, s.normalErr
+}
+
+func newScanHandshaker(normalState *tls.ConnectionState) *scanHandshaker {
+	return &scanHandshaker{
+		normalState: normalState,
+		normalDur:   5.0,
+		versionResults: map[uint16]struct {
+			state *tls.ConnectionState
+			dur   float64
+			err   error
+		}{
+			tls.VersionTLS10: {state: &tls.ConnectionState{Version: tls.VersionTLS10}, dur: 12.0},
+			tls.VersionTLS11: {dur: 5.1, err: errors.New("tls: protocol version not supported")},
+			tls.VersionTLS12: {state: &tls.ConnectionState{Version: tls.VersionTLS12}, dur: 8.3},
+			tls.VersionTLS13: {state: &tls.ConnectionState{Version: tls.VersionTLS13}, dur: 7.4},
+		},
+	}
+}
+
+func makeScanPctx() *core.ProbeContext {
+	pctx := makePctx("localhost", 443, "127.0.0.1", false)
+	pctx.TLSScan = true
+	return pctx
+}
+
+func validLeaf() *x509.Certificate {
+	now := time.Now()
+	return &x509.Certificate{
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  []string{"localhost"},
+	}
+}
+
+func validState() *tls.ConnectionState {
+	return &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{validLeaf()},
+	}
+}
+
+// =============================================================================
+// TLS Scan Tests
+// =============================================================================
+
+func TestTLSScanAllVersions(t *testing.T) {
+	h := newScanHandshaker(validState())
+	layer := New(h)
+	pctx := makeScanPctx()
+
+	result := layer.Probe(pctx)
+
+	scanRaw, ok := result.Observations["tls_scan"]
+	if !ok {
+		t.Fatal("missing tls_scan in observations")
+	}
+	scan, ok := scanRaw.(map[string]any)
+	if !ok {
+		t.Fatalf("tls_scan is not map[string]any: %T", scanRaw)
+	}
+
+	if scan["performed"] != true {
+		t.Errorf("performed = %v, want true", scan["performed"])
+	}
+
+	attempts, ok := scan["attempts"].([]map[string]any)
+	if !ok {
+		t.Fatalf("attempts is not []map[string]any: %T", scan["attempts"])
+	}
+	if len(attempts) != 4 {
+		t.Fatalf("len(attempts) = %d, want 4", len(attempts))
+	}
+
+	// TLSv1.0 → supported
+	if attempts[0]["version"] != "TLSv1.0" || attempts[0]["supported"] != true {
+		t.Errorf("attempts[0] = %v, want TLSv1.0 supported", attempts[0])
+	}
+	// TLSv1.1 → not supported
+	if attempts[1]["version"] != "TLSv1.1" || attempts[1]["supported"] != false {
+		t.Errorf("attempts[1] = %v, want TLSv1.1 not supported", attempts[1])
+	}
+	// TLSv1.2 → supported
+	if attempts[2]["version"] != "TLSv1.2" || attempts[2]["supported"] != true {
+		t.Errorf("attempts[2] = %v, want TLSv1.2 supported", attempts[2])
+	}
+	// TLSv1.3 → supported
+	if attempts[3]["version"] != "TLSv1.3" || attempts[3]["supported"] != true {
+		t.Errorf("attempts[3] = %v, want TLSv1.3 supported", attempts[3])
+	}
+
+	// supported_versions
+	sv, ok := scan["supported_versions"].([]string)
+	if !ok {
+		t.Fatalf("supported_versions is not []string: %T", scan["supported_versions"])
+	}
+	expected := []string{"TLSv1.0", "TLSv1.2", "TLSv1.3"}
+	if len(sv) != len(expected) {
+		t.Fatalf("supported_versions = %v, want %v", sv, expected)
+	}
+	for i, v := range expected {
+		if sv[i] != v {
+			t.Errorf("supported_versions[%d] = %q, want %q", i, sv[i], v)
+		}
+	}
+
+	// deprecated_versions_enabled
+	dv, ok := scan["deprecated_versions_enabled"].([]string)
+	if !ok {
+		t.Fatalf("deprecated_versions_enabled is not []string: %T", scan["deprecated_versions_enabled"])
+	}
+	if len(dv) != 1 || dv[0] != "TLSv1.0" {
+		t.Errorf("deprecated_versions_enabled = %v, want [TLSv1.0]", dv)
+	}
+}
+
+func TestTLSScanDeprecatedWarning(t *testing.T) {
+	h := newScanHandshaker(validState())
+	layer := New(h)
+	pctx := makeScanPctx()
+
+	result := layer.Probe(pctx)
+
+	// Normal probe was ok, but deprecated TLSv1.0 is supported → warn
+	if result.Status != core.StatusWarn {
+		t.Errorf("status = %q, want warn", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_DEPRECATED_VERSION_ENABLED" {
+		t.Errorf("error = %v, want TLS_DEPRECATED_VERSION_ENABLED", result.Error)
+	}
+}
+
+func TestTLSScanNotPerformedByDefault(t *testing.T) {
+	h := &fakeHandshaker{
+		state:      validState(),
+		durationMS: 5.0,
+	}
+	layer := New(h)
+	pctx := makePctx("localhost", 443, "127.0.0.1", false)
+	// TLSScan is false by default
+
+	result := layer.Probe(pctx)
+
+	if _, ok := result.Observations["tls_scan"]; ok {
+		t.Error("tls_scan should not be in observations when --tls-scan is not set")
+	}
+}
+
+func TestTLSScanWithFailedNormalProbe(t *testing.T) {
+	h := &scanHandshaker{
+		normalDur: 5.0,
+		normalErr: errors.New("x509: certificate signed by unknown authority"),
+		versionResults: map[uint16]struct {
+			state *tls.ConnectionState
+			dur   float64
+			err   error
+		}{
+			tls.VersionTLS10: {state: &tls.ConnectionState{Version: tls.VersionTLS10}, dur: 12.0},
+			tls.VersionTLS11: {dur: 5.1, err: errors.New("tls: protocol version not supported")},
+			tls.VersionTLS12: {state: &tls.ConnectionState{Version: tls.VersionTLS12}, dur: 8.3},
+			tls.VersionTLS13: {state: &tls.ConnectionState{Version: tls.VersionTLS13}, dur: 7.4},
+		},
+	}
+	layer := New(h)
+	pctx := makeScanPctx()
+
+	result := layer.Probe(pctx)
+
+	// Status stays fail (normal probe failed)
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_UNTRUSTED_CHAIN" {
+		t.Errorf("error = %v, want TLS_UNTRUSTED_CHAIN", result.Error)
+	}
+
+	// Scan results should still be in observations
+	scanRaw, ok := result.Observations["tls_scan"]
+	if !ok {
+		t.Fatal("missing tls_scan in observations even with failed normal probe")
+	}
+	scan := scanRaw.(map[string]any)
+	if scan["performed"] != true {
+		t.Errorf("performed = %v, want true", scan["performed"])
+	}
+}
+
+func TestTLSScanNoDeprecated(t *testing.T) {
+	h := &scanHandshaker{
+		normalState: validState(),
+		normalDur:   5.0,
+		versionResults: map[uint16]struct {
+			state *tls.ConnectionState
+			dur   float64
+			err   error
+		}{
+			tls.VersionTLS10: {dur: 5.0, err: errors.New("tls: protocol version not supported")},
+			tls.VersionTLS11: {dur: 5.0, err: errors.New("tls: protocol version not supported")},
+			tls.VersionTLS12: {state: &tls.ConnectionState{Version: tls.VersionTLS12}, dur: 8.3},
+			tls.VersionTLS13: {state: &tls.ConnectionState{Version: tls.VersionTLS13}, dur: 7.4},
+		},
+	}
+	layer := New(h)
+	pctx := makeScanPctx()
+
+	result := layer.Probe(pctx)
+
+	// No deprecated versions → status stays ok
+	if result.Status != core.StatusOK {
+		t.Errorf("status = %q, want ok (no deprecated versions)", result.Status)
+	}
+	if result.Error != nil {
+		t.Errorf("unexpected error: %v", result.Error)
+	}
+
+	scan := result.Observations["tls_scan"].(map[string]any)
+	dv := scan["deprecated_versions_enabled"].([]string)
+	if len(dv) != 0 {
+		t.Errorf("deprecated_versions_enabled = %v, want empty", dv)
+	}
+}
+
 func TestTLSInsecureNotYetValidCert(t *testing.T) {
 	now := time.Now()
 	cert, _ := generateCert(t, certOpts{
