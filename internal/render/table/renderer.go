@@ -279,17 +279,29 @@ func renderTLSScanLine(w io.Writer, lr *core.LayerResult, useColor bool) error {
 	if !ok {
 		return nil
 	}
-	attempts, ok := scanMap["attempts"].([]any)
-	if !ok || len(attempts) == 0 {
+	attemptsRaw := scanMap["attempts"]
+	if attemptsRaw == nil {
+		return nil
+	}
+
+	// Handle both []any (from JSON round-trip) and []map[string]any (from direct Probe).
+	var attemptMaps []map[string]any
+	switch a := attemptsRaw.(type) {
+	case []any:
+		for _, v := range a {
+			if m, ok := v.(map[string]any); ok {
+				attemptMaps = append(attemptMaps, m)
+			}
+		}
+	case []map[string]any:
+		attemptMaps = a
+	}
+	if len(attemptMaps) == 0 {
 		return nil
 	}
 
 	var parts []string
-	for _, a := range attempts {
-		am, ok := a.(map[string]any)
-		if !ok {
-			continue
-		}
+	for _, am := range attemptMaps {
 		version, _ := am["version"].(string)
 		supported, _ := am["supported"].(bool)
 
@@ -305,8 +317,29 @@ func renderTLSScanLine(w io.Writer, lr *core.LayerResult, useColor bool) error {
 	}
 
 	line := fmt.Sprintf("    scan: %s", strings.Join(parts, " | "))
-	_, err := fmt.Fprintln(w, line)
-	return err
+	if _, err := fmt.Fprintln(w, line); err != nil {
+		return err
+	}
+
+	// Show legend if any deprecated versions were found.
+	for _, am := range attemptMaps {
+		version, _ := am["version"].(string)
+		supported, _ := am["supported"].(bool)
+		if supported && deprecatedVersions[version] {
+			legend := "deprecated"
+			if useColor {
+				legend = colorYellow + "\u26a0" + colorReset + " = deprecated"
+			} else {
+				legend = "[!!] = deprecated"
+			}
+			if _, err := fmt.Fprintf(w, "           %s\n", legend); err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
 }
 
 // scanStatusSymbol returns a compact symbol for the scan sub-line.

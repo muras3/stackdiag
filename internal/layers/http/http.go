@@ -99,6 +99,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		"method":          method,
 		"protocol":        resp.Proto,
 		"status_code":     resp.StatusCode,
+		"status_text":     http.StatusText(resp.StatusCode),
 		"request_headers": buildRequestHeaders(pctx.Headers, pctx.Redact),
 	}
 

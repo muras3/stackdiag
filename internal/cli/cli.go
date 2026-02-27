@@ -72,7 +72,10 @@ EXIT CODES:
 EXAMPLES:
   stackdiag https://example.com
   stackdiag --json https://api.example.com/health
-  stackdiag tcp://db.internal:5432`
+  stackdiag tcp://db.internal:5432
+  stackdiag --tls-scan https://example.com
+  stackdiag --count 5 https://example.com
+  stackdiag --bearer-env API_TOKEN https://api.example.com/health`
 }
 
 // headerList collects multiple --header flags.
