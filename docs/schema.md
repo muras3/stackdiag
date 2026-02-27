@@ -105,6 +105,7 @@ The `code` field is the primary interface for programmatic consumers. The `messa
 | `method` | string | HTTP method used |
 | `protocol` | string | HTTP protocol (e.g., `"HTTP/2"`) |
 | `status_code` | int | HTTP response status code |
+| `status_text` | string | HTTP status text (e.g., `"OK"`, `"Service Unavailable"`) |
 | `request_headers` | object | Request headers sent (sensitive values redacted by default) |
 
 ## Summary
@@ -160,6 +161,7 @@ All error codes follow the pattern `{LAYER}_{CONDITION}`. The `code` field is th
 | `TLS_UNTRUSTED_CHAIN` | Certificate chain is not trusted |
 | `TLS_HANDSHAKE_TIMEOUT` | TLS handshake timed out |
 | `TLS_PROTOCOL_ERROR` | TLS protocol error |
+| `TLS_DEPRECATED_VERSION_ENABLED` | Server supports deprecated TLS versions (warning, via `--tls-scan`) |
 | `TLS_ERROR` | Other TLS error (fallback) |
 
 ### HTTP Errors
@@ -254,6 +256,106 @@ Uses the system resolver via Go's `net.LookupHost`. No custom DNS server configu
 
 Layers may return partial `observations` on failure. For example, an HTTP layer that fails to connect still includes `"method"` in observations.
 
+## `--tls-scan` Mode
+
+When `--tls-scan` is used, the TLS layer's `observations` include an additional `tls_scan` object:
+
+```json
+{
+  "tls_scan": {
+    "performed": true,
+    "attempts": [
+      { "version": "TLSv1.0", "supported": false, "duration_ms": 12.3, "error": { "code": "TLS_PROTOCOL_ERROR", "message": "..." } },
+      { "version": "TLSv1.1", "supported": false, "duration_ms": 11.1, "error": { "code": "TLS_PROTOCOL_ERROR", "message": "..." } },
+      { "version": "TLSv1.2", "supported": true, "duration_ms": 15.2, "error": null },
+      { "version": "TLSv1.3", "supported": true, "duration_ms": 14.8, "error": null }
+    ],
+    "supported_versions": ["TLSv1.2", "TLSv1.3"],
+    "deprecated_versions_enabled": []
+  }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `performed` | bool | Always `true` when `--tls-scan` is used |
+| `attempts` | array | One entry per TLS version probed (1.0, 1.1, 1.2, 1.3) |
+| `attempts[].version` | string | TLS version string |
+| `attempts[].supported` | bool | Whether the server accepted this version |
+| `attempts[].duration_ms` | float64 | Handshake duration |
+| `attempts[].error` | object\|null | Error details if handshake failed |
+| `supported_versions` | []string | List of supported TLS versions |
+| `deprecated_versions_enabled` | []string | Deprecated versions (TLSv1.0, TLSv1.1) the server still supports |
+
+If `deprecated_versions_enabled` is non-empty and the normal probe succeeded, the TLS layer status is upgraded to `warn` with error code `TLS_DEPRECATED_VERSION_ENABLED`.
+
+## `--count N` Mode
+
+When `--count N` is used, the output structure changes to a `CountResult`:
+
+```json
+{
+  "schema_version": "v0.1",
+  "target": "https://example.com",
+  "count": 5,
+  "exit_code": 0,
+  "attempts": [
+    {
+      "attempt": 1,
+      "started_at": "2026-02-26T18:42:03Z",
+      "layers": { "dns": {...}, "tcp": {...}, "tls": {...}, "http": {...} },
+      "summary": { "wall_clock_ms": 120, "first_non_ok_layer": "", "exit_code": 0 }
+    }
+  ],
+  "statistics": {
+    "dns": { "p50_ms": 8.5, "p95_ms": 12.1, "success_count": 5, "fail_count": 0, "skip_count": 0, "sample_count": 5, "loss_ratio": 0 },
+    "tcp": { "..." : "..." },
+    "tls": { "..." : "..." },
+    "http": { "..." : "..." }
+  }
+}
+```
+
+### CountResult Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `schema_version` | string | Schema version identifier |
+| `target` | string | Original target URL |
+| `count` | int | Number of attempts requested |
+| `exit_code` | int | Worst exit code across all attempts |
+| `attempts` | array | Individual attempt results (same structure as single-run) |
+| `statistics` | object | Per-layer aggregate statistics |
+
+### LayerStatistics Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `p50_ms` | float64\|null | Median duration (null if no successful samples) |
+| `p95_ms` | float64\|null | 95th percentile duration (null if no successful samples) |
+| `success_count` | int | Number of attempts where this layer succeeded |
+| `fail_count` | int | Number of attempts where this layer failed |
+| `skip_count` | int | Number of attempts where this layer was skipped |
+| `sample_count` | int | Total number of attempts |
+| `loss_ratio` | float64 | Fraction of failed attempts (0.0 to 1.0) |
+
+## Tool Error JSON
+
+When `--json` is used and an argument or target parsing error occurs, stackdiag outputs a structured error instead of plain text:
+
+```json
+{
+  "schema_version": "v0.1",
+  "error": {
+    "code": "INVALID_TARGET",
+    "message": "unsupported scheme: \"ftp\""
+  },
+  "exit_code": 1
+}
+```
+
+This ensures programmatic consumers always receive parseable JSON, even for tool errors.
+
 ## Schema Contract
 
 These guarantees hold across all versions:
@@ -310,7 +412,8 @@ These guarantees hold across all versions:
       "observations": {
         "method": "GET",
         "protocol": "HTTP/2",
-        "status_code": 503
+        "status_code": 503,
+        "status_text": "Service Unavailable"
       },
       "error": {
         "code": "HTTP_503",

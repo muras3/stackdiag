@@ -661,49 +661,69 @@ func TestBasicEnvSendsHeader(t *testing.T) {
 
 func TestBearerEnvUnsetExits1(t *testing.T) {
 	// Use an env var name that does not exist.
-	_, stderr, exitCode := runStackdiag(t, "https://example.com", "--bearer-env", "NONEXISTENT_VAR_E2E_TEST", "--json", "--timeout", "5")
+	stdout, _, exitCode := runStackdiag(t, "https://example.com", "--bearer-env", "NONEXISTENT_VAR_E2E_TEST", "--json", "--timeout", "5")
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1", exitCode)
 	}
 
-	if !strings.Contains(stderr, "not set") {
-		t.Errorf("stderr should mention 'not set', got: %s", stderr)
+	// With --json, error goes to stdout as structured JSON.
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("expected valid JSON: %v\n%s", err, stdout)
 	}
-
-	// Security: stderr must NOT contain any token value.
-	if strings.Contains(stderr, "NONEXISTENT_VAR_E2E_TEST_VALUE") {
-		t.Error("stderr should not leak token values")
+	errObj, ok := result["error"].(map[string]any)
+	if !ok {
+		t.Fatal("missing error object")
+	}
+	if errObj["code"] != "INVALID_ARGS" {
+		t.Errorf("error code = %v, want INVALID_ARGS", errObj["code"])
+	}
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(msg, "not set") {
+		t.Errorf("error message should mention 'not set', got: %s", msg)
 	}
 }
 
 func TestBearerEnvEmptyExits1(t *testing.T) {
 	t.Setenv("TEST_BEARER_EMPTY", "")
 
-	_, stderr, exitCode := runStackdiag(t, "https://example.com", "--bearer-env", "TEST_BEARER_EMPTY", "--json", "--timeout", "5")
+	stdout, _, exitCode := runStackdiag(t, "https://example.com", "--bearer-env", "TEST_BEARER_EMPTY", "--json", "--timeout", "5")
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1", exitCode)
 	}
 
-	if !strings.Contains(stderr, "empty") {
-		t.Errorf("stderr should mention 'empty', got: %s", stderr)
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("expected valid JSON: %v\n%s", err, stdout)
+	}
+	errObj, _ := result["error"].(map[string]any)
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(msg, "empty") {
+		t.Errorf("error message should mention 'empty', got: %s", msg)
 	}
 }
 
 func TestBasicEnvNoColonExits1(t *testing.T) {
 	t.Setenv("TEST_BASIC_NOCOLON", "nocolon")
 
-	_, stderr, exitCode := runStackdiag(t, "https://example.com", "--basic-env", "TEST_BASIC_NOCOLON", "--json", "--timeout", "5")
+	stdout, _, exitCode := runStackdiag(t, "https://example.com", "--basic-env", "TEST_BASIC_NOCOLON", "--json", "--timeout", "5")
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1", exitCode)
 	}
 
-	if !strings.Contains(stderr, "user:password") {
-		t.Errorf("stderr should mention format requirement, got: %s", stderr)
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("expected valid JSON: %v\n%s", err, stdout)
+	}
+	errObj, _ := result["error"].(map[string]any)
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(msg, "user:password") {
+		t.Errorf("error message should mention format requirement, got: %s", msg)
 	}
 
-	// Security: stderr must NOT contain the credential value.
-	if strings.Contains(stderr, "nocolon") {
-		t.Error("stderr should not leak credential values")
+	// Security: stdout must NOT contain the credential value.
+	if strings.Contains(stdout, "nocolon") {
+		t.Error("stdout should not leak credential values")
 	}
 }
 
@@ -711,28 +731,40 @@ func TestBearerEnvBasicEnvConflict(t *testing.T) {
 	t.Setenv("TEST_TOK", "token")
 	t.Setenv("TEST_CRED", "user:pass")
 
-	_, stderr, exitCode := runStackdiag(t, "https://example.com",
+	stdout, _, exitCode := runStackdiag(t, "https://example.com",
 		"--bearer-env", "TEST_TOK", "--basic-env", "TEST_CRED", "--json", "--timeout", "5")
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1", exitCode)
 	}
 
-	if !strings.Contains(stderr, "cannot be used together") {
-		t.Errorf("stderr should mention conflict, got: %s", stderr)
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("expected valid JSON: %v\n%s", err, stdout)
+	}
+	errObj, _ := result["error"].(map[string]any)
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(msg, "cannot be used together") {
+		t.Errorf("error message should mention conflict, got: %s", msg)
 	}
 }
 
 func TestBearerEnvHeaderConflict(t *testing.T) {
 	t.Setenv("TEST_TOK2", "token")
 
-	_, stderr, exitCode := runStackdiag(t, "https://example.com",
+	stdout, _, exitCode := runStackdiag(t, "https://example.com",
 		"--bearer-env", "TEST_TOK2", "--header", "Authorization: Bearer manual", "--json", "--timeout", "5")
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1", exitCode)
 	}
 
-	if !strings.Contains(stderr, "conflicts") {
-		t.Errorf("stderr should mention conflict, got: %s", stderr)
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("expected valid JSON: %v\n%s", err, stdout)
+	}
+	errObj, _ := result["error"].(map[string]any)
+	msg, _ := errObj["message"].(string)
+	if !strings.Contains(msg, "conflicts") {
+		t.Errorf("error message should mention conflict, got: %s", msg)
 	}
 }
 
@@ -766,6 +798,46 @@ func TestBearerEnvRedactedInJSON(t *testing.T) {
 	}
 	if headers["Authorization"] != "[REDACTED]" {
 		t.Errorf("Authorization = %v, want [REDACTED]", headers["Authorization"])
+	}
+}
+
+func TestJSONInvalidTargetStructuredError(t *testing.T) {
+	stdout, _, exitCode := runStackdiag(t, "--json", "ftp://example.com")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("expected valid JSON on stdout for invalid target: %v\n%s", err, stdout)
+	}
+
+	errObj, ok := result["error"].(map[string]any)
+	if !ok {
+		t.Fatal("missing error object in JSON output")
+	}
+	if errObj["code"] != "INVALID_TARGET" {
+		t.Errorf("error code = %v, want INVALID_TARGET", errObj["code"])
+	}
+}
+
+func TestJSONNoArgsStructuredError(t *testing.T) {
+	stdout, _, exitCode := runStackdiag(t, "--json")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("expected valid JSON on stdout for missing args: %v\n%s", err, stdout)
+	}
+
+	errObj, ok := result["error"].(map[string]any)
+	if !ok {
+		t.Fatal("missing error object in JSON output")
+	}
+	if errObj["code"] != "INVALID_ARGS" {
+		t.Errorf("error code = %v, want INVALID_ARGS", errObj["code"])
 	}
 }
 
