@@ -583,6 +583,34 @@ func TestHTTPRequestHeadersRedaction(t *testing.T) {
 	}
 }
 
+func TestNewDefaultMinVersionTLS12(t *testing.T) {
+	layer := NewDefault(false, "example.com")
+	transport, ok := layer.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type = %T, want *http.Transport", layer.client.Transport)
+	}
+	if transport.TLSClientConfig == nil {
+		t.Fatal("TLSClientConfig is nil")
+	}
+	if transport.TLSClientConfig.MinVersion != 0x0303 { // tls.VersionTLS12
+		t.Errorf("MinVersion = 0x%04x, want 0x0303 (TLS 1.2)", transport.TLSClientConfig.MinVersion)
+	}
+}
+
+func TestNewDefaultMinVersionTLS12Insecure(t *testing.T) {
+	layer := NewDefault(true, "example.com")
+	transport, ok := layer.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type = %T, want *http.Transport", layer.client.Transport)
+	}
+	if transport.TLSClientConfig == nil {
+		t.Fatal("TLSClientConfig is nil")
+	}
+	if transport.TLSClientConfig.MinVersion != 0x0303 { // tls.VersionTLS12
+		t.Errorf("MinVersion = 0x%04x, want 0x0303 (TLS 1.2) even with insecure=true", transport.TLSClientConfig.MinVersion)
+	}
+}
+
 func TestNewDefaultSetsResponseHeaderLimit(t *testing.T) {
 	layer := NewDefault(false, "example.com")
 	transport, ok := layer.client.Transport.(*http.Transport)

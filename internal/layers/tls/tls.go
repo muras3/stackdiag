@@ -71,6 +71,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	cfg := &tls.Config{
 		ServerName:         pctx.Target.Host,
 		InsecureSkipVerify: pctx.Insecure,
+		MinVersion:         tls.VersionTLS12,
 	}
 
 	state, durationMS, err := l.handshaker.Handshake(pctx.Context, addr, cfg)

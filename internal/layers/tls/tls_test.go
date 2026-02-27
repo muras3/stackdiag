@@ -689,6 +689,75 @@ func TestTLSNotYetValidCert(t *testing.T) {
 // Test: Insecure mode with not-yet-valid cert via real TLS server — status=warn
 // =============================================================================
 
+// =============================================================================
+// Test: MinVersion TLS 1.2 enforcement
+// =============================================================================
+
+// configCaptor captures the *tls.Config passed to the Handshaker.
+type configCaptor struct {
+	captured *tls.Config
+	inner    Handshaker
+}
+
+func (c *configCaptor) Handshake(ctx context.Context, addr string, cfg *tls.Config) (*tls.ConnectionState, float64, error) {
+	c.captured = cfg
+	return c.inner.Handshake(ctx, addr, cfg)
+}
+
+func TestTLSMinVersionEnforced(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  []string{"localhost"},
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	captor := &configCaptor{inner: &fakeHandshaker{state: state, durationMS: 1.0}}
+	layer := New(captor)
+
+	pctx := makePctx("localhost", 443, "127.0.0.1", false)
+	layer.Probe(pctx)
+
+	if captor.captured == nil {
+		t.Fatal("config was not captured")
+	}
+	if captor.captured.MinVersion != tls.VersionTLS12 {
+		t.Errorf("MinVersion = 0x%04x, want 0x%04x (TLS 1.2)", captor.captured.MinVersion, tls.VersionTLS12)
+	}
+}
+
+func TestTLSMinVersionEnforcedInsecure(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  []string{"localhost"},
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	captor := &configCaptor{inner: &fakeHandshaker{state: state, durationMS: 1.0}}
+	layer := New(captor)
+
+	pctx := makePctx("localhost", 443, "127.0.0.1", true) // insecure=true
+	layer.Probe(pctx)
+
+	if captor.captured == nil {
+		t.Fatal("config was not captured")
+	}
+	if captor.captured.MinVersion != tls.VersionTLS12 {
+		t.Errorf("MinVersion = 0x%04x, want 0x%04x (TLS 1.2) even with insecure=true", captor.captured.MinVersion, tls.VersionTLS12)
+	}
+}
+
 func TestTLSInsecureNotYetValidCert(t *testing.T) {
 	now := time.Now()
 	cert, _ := generateCert(t, certOpts{
