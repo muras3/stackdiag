@@ -496,6 +496,91 @@ func TestNoRedactFlagAccepted(t *testing.T) {
 	}
 }
 
+func TestRedactMasksAuthorizationHeader(t *testing.T) {
+	skipIfUnreachable(t, "example.com")
+	secret := "Bearer secret-token-e2e-test"
+
+	stdout, _, exitCode := runProbe(t, "https://example.com", "--json", "--timeout", "10",
+		"--header", "Authorization: "+secret)
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0", exitCode)
+	}
+
+	// The raw secret must NOT appear anywhere in stdout.
+	if strings.Contains(stdout, "secret-token-e2e-test") {
+		t.Fatal("secret appeared in stdout with default redaction enabled")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	layers := result["layers"].(map[string]any)
+	httpLayer := layers["http"].(map[string]any)
+	obs := httpLayer["observations"].(map[string]any)
+	headers, ok := obs["request_headers"].(map[string]any)
+	if !ok {
+		t.Fatal("missing request_headers in observations")
+	}
+	if headers["Authorization"] != "[REDACTED]" {
+		t.Fatalf("Authorization = %v, want [REDACTED]", headers["Authorization"])
+	}
+}
+
+func TestNoRedactShowsRawAuthorizationHeader(t *testing.T) {
+	skipIfUnreachable(t, "example.com")
+	secret := "Bearer secret-token-e2e-noredact"
+
+	stdout, _, exitCode := runProbe(t, "https://example.com", "--json", "--timeout", "10",
+		"--no-redact", "--header", "Authorization: "+secret)
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0", exitCode)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	layers := result["layers"].(map[string]any)
+	httpLayer := layers["http"].(map[string]any)
+	obs := httpLayer["observations"].(map[string]any)
+	headers, ok := obs["request_headers"].(map[string]any)
+	if !ok {
+		t.Fatal("missing request_headers in observations")
+	}
+	if headers["Authorization"] != secret {
+		t.Fatalf("Authorization = %v, want %q", headers["Authorization"], secret)
+	}
+}
+
+func TestNonSensitiveHeaderShownWithRedact(t *testing.T) {
+	skipIfUnreachable(t, "example.com")
+
+	stdout, _, exitCode := runProbe(t, "https://example.com", "--json", "--timeout", "10",
+		"--header", "X-Request-Id: abc123")
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0", exitCode)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	layers := result["layers"].(map[string]any)
+	httpLayer := layers["http"].(map[string]any)
+	obs := httpLayer["observations"].(map[string]any)
+	headers, ok := obs["request_headers"].(map[string]any)
+	if !ok {
+		t.Fatal("missing request_headers in observations")
+	}
+	if headers["X-Request-Id"] != "abc123" {
+		t.Fatalf("X-Request-Id = %v, want abc123", headers["X-Request-Id"])
+	}
+}
+
 func TestBareHostname(t *testing.T) {
 	skipIfUnreachable(t, "example.com")
 

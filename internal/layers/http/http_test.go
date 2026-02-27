@@ -443,6 +443,170 @@ func TestHTTPProtocolObservation(t *testing.T) {
 	}
 }
 
+// requestHeadersObs extracts request_headers from observations as map[string]string.
+func requestHeadersObs(t *testing.T, result *core.LayerResult) map[string]string {
+	t.Helper()
+	raw, ok := result.Observations["request_headers"]
+	if !ok {
+		t.Fatal("missing request_headers observation")
+	}
+	switch h := raw.(type) {
+	case map[string]string:
+		return h
+	case map[string]any:
+		out := make(map[string]string, len(h))
+		for k, v := range h {
+			s, ok := v.(string)
+			if !ok {
+				t.Fatalf("request_headers[%q] has non-string type %T", k, v)
+			}
+			out[k] = s
+		}
+		return out
+	default:
+		t.Fatalf("request_headers has unexpected type %T", raw)
+		return nil
+	}
+}
+
+func TestHTTPRequestHeadersPresent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	pctx.Headers = map[string]string{"X-Custom": "value"}
+	pctx.Redact = true
+
+	result := layer.Probe(pctx)
+	got := requestHeadersObs(t, result)
+	if got["X-Custom"] != "value" {
+		t.Errorf("X-Custom = %q, want %q", got["X-Custom"], "value")
+	}
+}
+
+func TestHTTPRequestHeadersRedaction(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	tests := []struct {
+		name    string
+		headers map[string]string
+		redact  bool
+		wantKey string
+		wantVal string
+	}{
+		{
+			name:    "Authorization redacted",
+			headers: map[string]string{"Authorization": "Bearer secret-token"},
+			redact:  true,
+			wantKey: "Authorization",
+			wantVal: "[REDACTED]",
+		},
+		{
+			name:    "Cookie redacted",
+			headers: map[string]string{"Cookie": "session=abc123"},
+			redact:  true,
+			wantKey: "Cookie",
+			wantVal: "[REDACTED]",
+		},
+		{
+			name:    "Proxy-Authorization redacted",
+			headers: map[string]string{"Proxy-Authorization": "Basic dXNlcjpwYXNz"},
+			redact:  true,
+			wantKey: "Proxy-Authorization",
+			wantVal: "[REDACTED]",
+		},
+		{
+			name:    "case-insensitive authorization",
+			headers: map[string]string{"authorization": "Bearer token"},
+			redact:  true,
+			wantKey: "authorization",
+			wantVal: "[REDACTED]",
+		},
+		{
+			name:    "no-redact shows raw Authorization",
+			headers: map[string]string{"Authorization": "Bearer secret-token"},
+			redact:  false,
+			wantKey: "Authorization",
+			wantVal: "Bearer secret-token",
+		},
+		{
+			name:    "non-sensitive header unmasked when redact=true",
+			headers: map[string]string{"X-Custom": "value"},
+			redact:  true,
+			wantKey: "X-Custom",
+			wantVal: "value",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			layer := New(srv.Client())
+			pctx := makePctx(srv.URL)
+			pctx.Target = targetFromURL(t, srv.URL)
+			pctx.Headers = tt.headers
+			pctx.Redact = tt.redact
+
+			result := layer.Probe(pctx)
+			got := requestHeadersObs(t, result)
+			if got[tt.wantKey] != tt.wantVal {
+				t.Errorf("%s = %q, want %q", tt.wantKey, got[tt.wantKey], tt.wantVal)
+			}
+		})
+	}
+}
+
+func TestHTTPRequestHeadersMixedSensitive(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	pctx.Headers = map[string]string{
+		"Authorization": "Bearer token",
+		"X-Request-Id":  "abc123",
+	}
+	pctx.Redact = true
+
+	result := layer.Probe(pctx)
+	got := requestHeadersObs(t, result)
+
+	if got["Authorization"] != "[REDACTED]" {
+		t.Errorf("Authorization = %q, want [REDACTED]", got["Authorization"])
+	}
+	if got["X-Request-Id"] != "abc123" {
+		t.Errorf("X-Request-Id = %q, want abc123", got["X-Request-Id"])
+	}
+}
+
+func TestHTTPRequestHeadersEmptyMap(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	pctx.Headers = map[string]string{}
+	pctx.Redact = true
+
+	result := layer.Probe(pctx)
+	got := requestHeadersObs(t, result)
+	if len(got) != 0 {
+		t.Errorf("expected empty request_headers, got %v", got)
+	}
+}
+
 // targetFromURL parses an httptest server URL into a Target.
 func targetFromURL(t *testing.T, rawURL string) core.Target {
 	t.Helper()

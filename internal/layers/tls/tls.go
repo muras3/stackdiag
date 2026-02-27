@@ -196,6 +196,8 @@ func classifyTLSError(err error) *core.ProbeError {
 		return &core.ProbeError{Code: "TLS_UNTRUSTED_CHAIN", Message: msg}
 	case isHandshakeTimeout(err):
 		return &core.ProbeError{Code: "TLS_HANDSHAKE_TIMEOUT", Message: msg}
+	case isProtocolError(msg):
+		return &core.ProbeError{Code: "TLS_PROTOCOL_ERROR", Message: msg}
 	default:
 		return &core.ProbeError{Code: "TLS_ERROR", Message: msg}
 	}
@@ -221,6 +223,12 @@ func isHostnameMismatch(msg string) bool {
 func isUntrustedChain(msg string) bool {
 	return strings.Contains(msg, "x509: certificate signed by unknown authority") ||
 		strings.Contains(msg, "unknown authority")
+}
+
+func isProtocolError(msg string) bool {
+	return strings.Contains(msg, "protocol version") ||
+		strings.Contains(msg, "oversized record") ||
+		strings.Contains(msg, "tls: alert")
 }
 
 func isHandshakeTimeout(err error) bool {

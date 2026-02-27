@@ -485,6 +485,51 @@ func TestTLSInsecureModeExpiredCertViaFake(t *testing.T) {
 	}
 }
 
+func TestTLSProtocolVersionError(t *testing.T) {
+	layer := New(&fakeHandshaker{
+		durationMS: 3.0,
+		err:        errors.New("tls: protocol version not supported"),
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_PROTOCOL_ERROR" {
+		t.Fatalf("error = %v, want TLS_PROTOCOL_ERROR", result.Error)
+	}
+}
+
+func TestTLSRecordError(t *testing.T) {
+	layer := New(&fakeHandshaker{
+		durationMS: 3.0,
+		err:        errors.New("tls: oversized record received with length 20527"),
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_PROTOCOL_ERROR" {
+		t.Fatalf("error = %v, want TLS_PROTOCOL_ERROR", result.Error)
+	}
+}
+
+func TestTLSAlertError(t *testing.T) {
+	layer := New(&fakeHandshaker{
+		durationMS: 3.0,
+		err:        errors.New("tls: alert(40): handshake failure"),
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_PROTOCOL_ERROR" {
+		t.Fatalf("error = %v, want TLS_PROTOCOL_ERROR", result.Error)
+	}
+}
+
 func TestTLSGenericError(t *testing.T) {
 	layer := New(&fakeHandshaker{
 		durationMS: 2.0,

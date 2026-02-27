@@ -3,6 +3,7 @@ package json
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -55,6 +56,60 @@ func TestRender(t *testing.T) {
 	// Must be indented (contains newlines).
 	if !bytes.Contains(buf.Bytes(), []byte("\n")) {
 		t.Error("expected indented JSON output")
+	}
+}
+
+func TestRenderIncludesRequestHeaders(t *testing.T) {
+	r := testResult()
+	r.Layers["http"] = &core.LayerResult{
+		Status:     core.StatusOK,
+		DurationMS: 12,
+		Observations: map[string]any{
+			"method":          "GET",
+			"request_headers": map[string]string{"X-Custom": "abc"},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, r); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("invalid JSON: %v", err)
+	}
+
+	layers := m["layers"].(map[string]any)
+	httpLayer := layers["http"].(map[string]any)
+	obs := httpLayer["observations"].(map[string]any)
+	if _, ok := obs["request_headers"]; !ok {
+		t.Fatal("missing layers.http.observations.request_headers")
+	}
+}
+
+func TestRenderContainsRedactedTokenNotRawSecret(t *testing.T) {
+	r := testResult()
+	r.Layers["http"] = &core.LayerResult{
+		Status:     core.StatusOK,
+		DurationMS: 12,
+		Observations: map[string]any{
+			"request_headers": map[string]string{
+				"Authorization": "[REDACTED]",
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, r); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "[REDACTED]") {
+		t.Fatal("missing [REDACTED] in JSON")
+	}
+	if strings.Contains(out, "secret-token") {
+		t.Fatal("raw secret leaked in JSON")
 	}
 }
 
