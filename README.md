@@ -79,6 +79,15 @@ stackdiag --method POST --header "Content-Type: application/json" https://api.ex
 
 # Skip TLS certificate verification
 stackdiag --insecure https://self-signed.example.com
+
+# Scan supported TLS versions
+stackdiag --tls-scan https://example.com
+
+# Run 5 attempts and show statistics
+stackdiag --count 5 https://example.com
+
+# Authenticate using a Bearer token from an environment variable
+stackdiag --bearer-env API_TOKEN https://api.example.com/health
 ```
 
 ## Options
@@ -99,6 +108,10 @@ Options:
   --timeout N           Timeout in seconds (default: 10)
   --insecure            Skip TLS certificate verification
   --no-redact           Show sensitive header values (default: redacted)
+  --tls-scan            Probe TLS 1.0/1.1/1.2/1.3 version support
+  --count N             Run N attempts and show statistics
+  --bearer-env VAR      Read Bearer token from environment variable
+  --basic-env VAR       Read Basic auth (user:pass) from environment variable
   --version             Show version
 ```
 
@@ -136,7 +149,7 @@ With `--json`, stackdiag writes structured JSON to stdout:
         "message": "Certificate expires in 5 days"
       }
     },
-    "http": { "status": "fail", "duration_ms": 57, "..." : "..." }
+    "http": { "status": "fail", "duration_ms": 57, "observations": { "status_code": 503, "status_text": "Service Unavailable" }, "..." : "..." }
   },
   "summary": {
     "wall_clock_ms": 122,
