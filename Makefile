@@ -5,7 +5,7 @@ LDFLAGS  = -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 .PHONY: build lint test test-race test-fuzz e2e fmt fmt-check clean release-dry release-check
 
 build:
-	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/stackdiag ./cmd/stackdiag
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/stdiag ./cmd/stackdiag
 
 lint:
 	go vet ./...

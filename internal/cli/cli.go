@@ -30,12 +30,13 @@ type Config struct {
 	Count     int    // --count N
 }
 
-// HelpText returns the full help message for stackdiag.
+// HelpText returns the full help message for stdiag.
 func HelpText() string {
-	return `stackdiag - structured diagnostics for AI agents and humans
+	return `stdiag - stackdiag CLI
+Structured diagnostics for AI agents and humans
 
 USAGE:
-  stackdiag <url> [options]
+  stdiag <url> [options]
 
 TARGETS:
   https://host/path     Full HTTPS check (DNS → TCP → TLS → HTTP)
@@ -70,12 +71,12 @@ EXIT CODES:
   40  HTTP failure
 
 EXAMPLES:
-  stackdiag https://example.com
-  stackdiag --json https://api.example.com/health
-  stackdiag tcp://db.internal:5432
-  stackdiag --tls-scan https://example.com
-  stackdiag --count 5 https://example.com
-  stackdiag --bearer-env API_TOKEN https://api.example.com/health`
+  stdiag https://example.com
+  stdiag --json https://api.example.com/health
+  stdiag tcp://db.internal:5432
+  stdiag --tls-scan https://example.com
+  stdiag --count 5 https://example.com
+  stdiag --bearer-env API_TOKEN https://api.example.com/health`
 }
 
 // headerList collects multiple --header flags.
@@ -112,8 +113,8 @@ func ParseArgs(args []string) (*Config, error) {
 		}
 	}
 
-	fs := flag.NewFlagSet("stackdiag", flag.ContinueOnError)
-	fs.SetOutput(io.Discard) // Suppress Go's default usage output; stackdiag shows its own.
+	fs := flag.NewFlagSet("stdiag", flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // Suppress Go's default usage output; stdiag shows its own.
 
 	cfg := &Config{
 		Method:  "GET",
