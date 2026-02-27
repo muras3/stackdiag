@@ -118,3 +118,41 @@ func TestDNSName(t *testing.T) {
 		t.Errorf("Name() = %q, want dns", layer.Name())
 	}
 }
+
+func TestDNSMultipleIPs(t *testing.T) {
+	layer := New(&testkit.FakeResolver{IPs: []string{"203.0.113.10", "203.0.113.11", "203.0.113.12"}})
+	pctx := makeCtx(5 * time.Second)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusOK {
+		t.Errorf("status = %q, want ok", result.Status)
+	}
+	answers, ok := result.Observations["answers"]
+	if !ok {
+		t.Fatal("missing answers observation")
+	}
+	ips := answers.([]string)
+	if len(ips) != 3 {
+		t.Errorf("answers len = %d, want 3", len(ips))
+	}
+	if len(pctx.ResolvedIPs) != 3 {
+		t.Errorf("ResolvedIPs len = %d, want 3", len(pctx.ResolvedIPs))
+	}
+}
+
+func TestDNSQueryNameOnFailure(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "no such host", Name: "bad.example.com", IsNotFound: true}
+	layer := New(&testkit.FakeResolver{Err: dnsErr})
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	qn, ok := result.Observations["query_name"]
+	if !ok {
+		t.Fatal("missing query_name observation on failure")
+	}
+	if qn != "example.com" {
+		t.Errorf("query_name = %q, want example.com", qn)
+	}
+}

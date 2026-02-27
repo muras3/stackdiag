@@ -420,6 +420,86 @@ func TestTLSHandshakeTimeoutViaFakeHandshaker(t *testing.T) {
 	}
 }
 
+// =============================================================================
+// Test: Insecure mode with expired cert — should bypass expiry (status=warn)
+// =============================================================================
+
+func TestTLSInsecureModeExpiredCert(t *testing.T) {
+	now := time.Now()
+	cert, _ := generateCert(t, certOpts{
+		hosts:     []string{"localhost"},
+		notBefore: now.Add(-48 * time.Hour),
+		notAfter:  now.Add(-1 * time.Hour), // expired
+	})
+
+	addr, cleanup := startTLSServer(t, cert)
+	defer cleanup()
+
+	host, portStr, _ := net.SplitHostPort(addr)
+	port := 0
+	for _, c := range portStr {
+		port = port*10 + int(c-'0')
+	}
+
+	// insecure=true should bypass expired cert
+	layer := NewDefault()
+	pctx := makePctx("localhost", port, host, true)
+	result := layer.Probe(pctx)
+
+	if result.Status == core.StatusFail {
+		t.Errorf("status = %q, want ok or warn (insecure mode should bypass expired cert); error = %v", result.Status, result.Error)
+	}
+}
+
+// =============================================================================
+// Test: Insecure mode with expired cert via fake handshaker — status=warn
+// =============================================================================
+
+func TestTLSInsecureModeExpiredCertViaFake(t *testing.T) {
+	now := time.Now()
+	expiredAt := now.Add(-1 * time.Hour)
+
+	leaf := &x509.Certificate{
+		NotAfter: expiredAt,
+		DNSNames: []string{"localhost"},
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	layer := New(&fakeHandshaker{
+		state:      state,
+		durationMS: 3.0,
+	})
+
+	pctx := makePctx("localhost", 443, "127.0.0.1", true) // insecure=true
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusWarn {
+		t.Errorf("status = %q, want warn (insecure mode with expired cert)", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_CERT_EXPIRED" {
+		t.Errorf("error = %v, want TLS_CERT_EXPIRED warning", result.Error)
+	}
+}
+
+func TestTLSGenericError(t *testing.T) {
+	layer := New(&fakeHandshaker{
+		durationMS: 2.0,
+		err:        errors.New("some unknown TLS error"),
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_ERROR" {
+		t.Fatalf("error = %v, want TLS_ERROR", result.Error)
+	}
+}
+
 // Test: Cert expired less than 24h ago — must be EXPIRED, not EXPIRING_SOON.
 // Regression test for int truncation: int(-0.04) == 0 in Go.
 func TestTLSCertExpiredLessThan24h(t *testing.T) {

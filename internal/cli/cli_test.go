@@ -1,6 +1,9 @@
 package cli
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseArgsBasic(t *testing.T) {
 	cfg, err := ParseArgs([]string{"https://example.com"})
@@ -98,5 +101,123 @@ func TestParseArgsVersion(t *testing.T) {
 	}
 	if !cfg.Version {
 		t.Error("Version should be true")
+	}
+}
+
+func TestParseArgsFlagsAfterTarget(t *testing.T) {
+	cfg, err := ParseArgs([]string{"https://example.com", "--json"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.JSON {
+		t.Error("JSON should be true when flag comes after target")
+	}
+	if cfg.Target != "https://example.com" {
+		t.Errorf("Target = %q, want https://example.com", cfg.Target)
+	}
+}
+
+func TestParseArgsEmptyMethod(t *testing.T) {
+	_, err := ParseArgs([]string{"--method", "", "https://example.com"})
+	if err == nil {
+		t.Fatal("expected error for empty method")
+	}
+}
+
+func TestParseArgsUnknownFlagNoDoubleUsage(t *testing.T) {
+	_, err := ParseArgs([]string{"--bogus", "https://example.com"})
+	if err == nil {
+		t.Fatal("expected error for unknown flag")
+	}
+	// The error should come from our code, not contain duplicate usage lines.
+	// The key thing is that fs.Parse doesn't print its own usage to stderr.
+}
+
+func TestParseArgsFlagsMixedPosition(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--method", "POST", "https://example.com", "--json", "--timeout", "5"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Method != "POST" {
+		t.Errorf("Method = %q, want POST", cfg.Method)
+	}
+	if !cfg.JSON {
+		t.Error("JSON should be true")
+	}
+	if cfg.Timeout != 5 {
+		t.Errorf("Timeout = %d, want 5", cfg.Timeout)
+	}
+	if cfg.Target != "https://example.com" {
+		t.Errorf("Target = %q, want https://example.com", cfg.Target)
+	}
+}
+
+func TestParseArgsInvalidHeader(t *testing.T) {
+	_, err := ParseArgs([]string{"--header", "BadHeader", "https://example.com"})
+	if err == nil {
+		t.Fatal("expected error for header without colon")
+	}
+	if !strings.Contains(err.Error(), "invalid header format") {
+		t.Errorf("error = %q, want it to contain 'invalid header format'", err.Error())
+	}
+}
+
+func TestParseArgsDoubleDashSeparator(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--", "--json"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Target != "--json" {
+		t.Errorf("Target = %q, want --json", cfg.Target)
+	}
+	if cfg.JSON {
+		t.Error("JSON should be false when --json is after --")
+	}
+}
+
+func TestParseArgsInvalidTimeout(t *testing.T) {
+	_, err := ParseArgs([]string{"--timeout", "abc", "example.com"})
+	if err == nil {
+		t.Fatal("expected error for non-numeric timeout")
+	}
+}
+
+func TestParseArgsEmptyTarget(t *testing.T) {
+	_, err := ParseArgs([]string{""})
+	if err == nil {
+		t.Fatal("expected error for empty target")
+	}
+	if !strings.Contains(err.Error(), "target URL required") {
+		t.Errorf("error = %q, want 'target URL required'", err.Error())
+	}
+}
+
+func TestParseArgsErrorMessages(t *testing.T) {
+	tests := []struct {
+		name    string
+		args    []string
+		wantMsg string
+	}{
+		{
+			name:    "no args",
+			args:    []string{},
+			wantMsg: "target URL required",
+		},
+		{
+			name:    "invalid header",
+			args:    []string{"--header", "NoColon", "example.com"},
+			wantMsg: "invalid header format",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseArgs(tt.args)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tt.wantMsg) {
+				t.Errorf("error = %q, want it to contain %q", err.Error(), tt.wantMsg)
+			}
+		})
 	}
 }

@@ -26,6 +26,10 @@ var (
 func main() {
 	cfg, err := cli.ParseArgs(os.Args[1:])
 	if err != nil {
+		if err.Error() == "flag: help requested" {
+			fmt.Fprintln(os.Stdout, "Usage: probe <url> [--json] [--method METHOD] [--header KEY:VALUE] [--timeout N] [--insecure]")
+			os.Exit(0)
+		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		fmt.Fprintln(os.Stderr, "Usage: probe <url> [--json] [--method METHOD] [--header KEY:VALUE] [--timeout N] [--insecure]")
 		os.Exit(1)

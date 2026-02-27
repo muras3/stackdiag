@@ -94,6 +94,14 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		// Use raw duration for expired check to avoid truncation-to-zero
 		// when cert expired less than 24h ago (int(-0.5) == 0 in Go).
 		if timeUntilExpiry < 0 {
+			if pctx.Insecure {
+				return &core.LayerResult{
+					Status:       core.StatusWarn,
+					DurationMS:   durationMS,
+					Observations: obs,
+					Error:        &core.ProbeError{Code: "TLS_CERT_EXPIRED", Message: "certificate has expired"},
+				}
+			}
 			return &core.LayerResult{
 				Status:       core.StatusFail,
 				DurationMS:   durationMS,

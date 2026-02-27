@@ -3,6 +3,7 @@ package cli
 import (
 	"flag"
 	"fmt"
+	"io"
 	"strings"
 )
 
@@ -29,7 +30,30 @@ func (h *headerList) Set(value string) error {
 
 // ParseArgs parses command-line arguments into a Config.
 func ParseArgs(args []string) (*Config, error) {
+	// Separate positional args from flags so flags can appear anywhere.
+	// Go's flag package stops parsing at the first non-flag argument.
+	var flagArgs, positional []string
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		if a == "--" {
+			positional = append(positional, args[i+1:]...)
+			break
+		}
+		stripped := strings.TrimLeft(a, "-")
+		if stripped != a && stripped != "" {
+			flagArgs = append(flagArgs, a)
+			// If this flag takes a value, consume the next arg too.
+			if needsValue(stripped) && i+1 < len(args) {
+				i++
+				flagArgs = append(flagArgs, args[i])
+			}
+		} else {
+			positional = append(positional, a)
+		}
+	}
+
 	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // Suppress Go's default usage output; probe shows its own.
 
 	cfg := &Config{
 		Method:  "GET",
@@ -45,12 +69,16 @@ func ParseArgs(args []string) (*Config, error) {
 	fs.BoolVar(&cfg.Insecure, "insecure", false, "skip TLS certificate verification")
 	fs.BoolVar(&cfg.Version, "version", false, "show version")
 
-	if err := fs.Parse(args); err != nil {
+	if err := fs.Parse(flagArgs); err != nil {
 		return nil, err
 	}
 
 	if cfg.Version {
 		return cfg, nil
+	}
+
+	if cfg.Method == "" {
+		return nil, fmt.Errorf("method must not be empty")
 	}
 
 	// Parse header values into map.
@@ -62,11 +90,22 @@ func ParseArgs(args []string) (*Config, error) {
 		cfg.Headers[strings.TrimSpace(k)] = strings.TrimSpace(v)
 	}
 
-	remaining := fs.Args()
-	if len(remaining) == 0 {
+	if len(positional) == 0 {
 		return nil, fmt.Errorf("target URL required")
 	}
-	cfg.Target = remaining[0]
+	cfg.Target = positional[0]
+	if strings.TrimSpace(cfg.Target) == "" {
+		return nil, fmt.Errorf("target URL required")
+	}
 
 	return cfg, nil
+}
+
+// needsValue returns true for flags that require an argument.
+func needsValue(name string) bool {
+	switch name {
+	case "method", "header", "timeout":
+		return true
+	}
+	return false
 }

@@ -1,6 +1,9 @@
 package core
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestParseTarget(t *testing.T) {
 	tests := []struct {
@@ -215,5 +218,99 @@ func TestTargetHostPort(t *testing.T) {
 	tgt = Target{Host: "::1", Port: 443}
 	if got := tgt.HostPort(); got != "[::1]:443" {
 		t.Errorf("HostPort() = %q, want [::1]:443", got)
+	}
+}
+
+func TestParseTargetPortBoundaries(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		port    int
+	}{
+		{name: "port 0", input: "https://example.com:0", wantErr: true},
+		{name: "port 1", input: "https://example.com:1", wantErr: false, port: 1},
+		{name: "port 65535", input: "https://example.com:65535", wantErr: false, port: 65535},
+		{name: "port 65536", input: "https://example.com:65536", wantErr: true},
+		{name: "port -1", input: "https://example.com:-1", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseTarget(tt.input)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected error for %q", tt.input)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Port != tt.port {
+				t.Errorf("Port = %d, want %d", got.Port, tt.port)
+			}
+		})
+	}
+}
+
+func TestParseTargetURLWithFragment(t *testing.T) {
+	// Fragments are stripped by url.Parse; should not cause error for http/https.
+	got, err := ParseTarget("https://example.com/path#frag")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Host != "example.com" {
+		t.Errorf("Host = %q, want example.com", got.Host)
+	}
+	// Fragment is not included in Path (url.Parse strips it).
+	if got.Path != "/path" {
+		t.Errorf("Path = %q, want /path", got.Path)
+	}
+}
+
+func TestParseTargetBareHostnameWithPort(t *testing.T) {
+	got, err := ParseTarget("example.com:8443")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got.Host != "example.com" {
+		t.Errorf("Host = %q, want example.com", got.Host)
+	}
+	if got.Port != 8443 {
+		t.Errorf("Port = %d, want 8443", got.Port)
+	}
+	if got.Scheme != "https" {
+		t.Errorf("Scheme = %q, want https", got.Scheme)
+	}
+}
+
+func TestParseTargetErrorMessages(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantMsg string
+	}{
+		{name: "empty", input: "", wantMsg: "empty target"},
+		{name: "bad scheme", input: "ftp://example.com", wantMsg: "unsupported scheme"},
+		{name: "tcp no port", input: "tcp://example.com", wantMsg: "tcp scheme requires an explicit port"},
+		{name: "port out of range", input: "https://example.com:99999", wantMsg: "port out of range"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseTarget(tt.input)
+			if err == nil {
+				t.Fatal("expected error")
+			}
+			if !strings.Contains(err.Error(), tt.wantMsg) {
+				t.Errorf("error = %q, want it to contain %q", err.Error(), tt.wantMsg)
+			}
+		})
+	}
+}
+
+func TestParseTargetTCPWithFragment(t *testing.T) {
+	_, err := ParseTarget("tcp://example.com:5432#frag")
+	if err == nil {
+		t.Fatal("expected error for tcp with fragment")
 	}
 }
