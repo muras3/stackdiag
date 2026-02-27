@@ -523,6 +523,27 @@ func TestHTTPRequestHeadersRedaction(t *testing.T) {
 			wantVal: "[REDACTED]",
 		},
 		{
+			name:    "X-API-Key redacted",
+			headers: map[string]string{"X-API-Key": "super-secret"},
+			redact:  true,
+			wantKey: "X-API-Key",
+			wantVal: "[REDACTED]",
+		},
+		{
+			name:    "X-Auth-Token redacted",
+			headers: map[string]string{"X-Auth-Token": "super-secret"},
+			redact:  true,
+			wantKey: "X-Auth-Token",
+			wantVal: "[REDACTED]",
+		},
+		{
+			name:    "Set-Cookie redacted",
+			headers: map[string]string{"Set-Cookie": "session=abc123"},
+			redact:  true,
+			wantKey: "Set-Cookie",
+			wantVal: "[REDACTED]",
+		},
+		{
 			name:    "case-insensitive authorization",
 			headers: map[string]string{"authorization": "Bearer token"},
 			redact:  true,
@@ -559,6 +580,17 @@ func TestHTTPRequestHeadersRedaction(t *testing.T) {
 				t.Errorf("%s = %q, want %q", tt.wantKey, got[tt.wantKey], tt.wantVal)
 			}
 		})
+	}
+}
+
+func TestNewDefaultSetsResponseHeaderLimit(t *testing.T) {
+	layer := NewDefault(false, "example.com")
+	transport, ok := layer.client.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport type = %T, want *http.Transport", layer.client.Transport)
+	}
+	if transport.MaxResponseHeaderBytes != 1<<20 {
+		t.Fatalf("MaxResponseHeaderBytes = %d, want %d", transport.MaxResponseHeaderBytes, 1<<20)
 	}
 }
 

@@ -45,6 +45,10 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Error: timeout must be greater than 0")
 		os.Exit(1)
 	}
+	if cfg.Timeout > 300 {
+		fmt.Fprintln(os.Stderr, "Error: timeout must be 300 seconds or less")
+		os.Exit(1)
+	}
 
 	tgt, err := core.ParseTarget(cfg.Target)
 	if err != nil {

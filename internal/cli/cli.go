@@ -7,6 +7,11 @@ import (
 	"strings"
 )
 
+const (
+	minTimeoutSeconds = 1
+	maxTimeoutSeconds = 300
+)
+
 // Config holds parsed CLI options.
 type Config struct {
 	Target   string
@@ -37,7 +42,7 @@ OPTIONS:
   --json                Output as JSON (default: table)
   --method METHOD       HTTP method (default: GET)
   --header KEY:VALUE    HTTP header (repeatable)
-  --timeout N           Timeout in seconds (default: 10)
+  --timeout N           Timeout in seconds (1-300, default: 10)
   --insecure            Skip TLS certificate verification
   --no-redact           Show sensitive header values (default: redacted)
   --version             Show version
@@ -127,8 +132,15 @@ func ParseArgs(args []string) (*Config, error) {
 		return cfg, nil
 	}
 
+	cfg.Method = strings.ToUpper(strings.TrimSpace(cfg.Method))
 	if cfg.Method == "" {
 		return nil, fmt.Errorf("method must not be empty")
+	}
+	if !isValidMethod(cfg.Method) {
+		return nil, fmt.Errorf("invalid HTTP method %q: use ASCII letters only", cfg.Method)
+	}
+	if cfg.Timeout < minTimeoutSeconds || cfg.Timeout > maxTimeoutSeconds {
+		return nil, fmt.Errorf("timeout must be between %d and %d seconds", minTimeoutSeconds, maxTimeoutSeconds)
 	}
 
 	// Parse header values into map.
@@ -137,7 +149,18 @@ func ParseArgs(args []string) (*Config, error) {
 		if !ok {
 			return nil, fmt.Errorf("invalid header format: %q (expected Key: Value)", h)
 		}
-		cfg.Headers[strings.TrimSpace(k)] = strings.TrimSpace(v)
+		if containsForbiddenControl(k) {
+			return nil, fmt.Errorf("invalid header name %q: contains forbidden control characters", strings.TrimSpace(k))
+		}
+		if containsForbiddenControl(v) {
+			return nil, fmt.Errorf("invalid value for header %q: contains forbidden control characters", strings.TrimSpace(k))
+		}
+		key := strings.TrimSpace(k)
+		value := strings.TrimSpace(v)
+		if err := validateHeaderKV(key, value); err != nil {
+			return nil, err
+		}
+		cfg.Headers[key] = value
 	}
 
 	if len(positional) == 0 {
@@ -158,4 +181,50 @@ func needsValue(name string) bool {
 		return true
 	}
 	return false
+}
+
+func isValidMethod(method string) bool {
+	for i := 0; i < len(method); i++ {
+		c := method[i]
+		if c < 'A' || c > 'Z' {
+			return false
+		}
+	}
+	return true
+}
+
+func validateHeaderKV(key, value string) error {
+	if key == "" {
+		return fmt.Errorf("header name must not be empty")
+	}
+	if !isValidHeaderName(key) {
+		return fmt.Errorf("invalid header name %q", key)
+	}
+	if containsForbiddenControl(key) {
+		return fmt.Errorf("invalid header name %q: contains forbidden control characters", key)
+	}
+	if containsForbiddenControl(value) {
+		return fmt.Errorf("invalid value for header %q: contains forbidden control characters", key)
+	}
+	return nil
+}
+
+func containsForbiddenControl(s string) bool {
+	return strings.ContainsAny(s, "\r\n\x00")
+}
+
+func isValidHeaderName(name string) bool {
+	for i := 0; i < len(name); i++ {
+		c := name[i]
+		if c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' {
+			continue
+		}
+		switch c {
+		case '!', '#', '$', '%', '&', '\'', '*', '+', '-', '.', '^', '_', '`', '|', '~':
+			continue
+		default:
+			return false
+		}
+	}
+	return true
 }
