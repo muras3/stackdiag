@@ -148,6 +148,7 @@ type ProbeContext struct {
 	Redact      bool
 	Method      string
 	Headers     map[string]string
+	TLSScan     bool // --tls-scan: probe TLS version support
 }
 
 // Layer is the interface that each network layer must implement.

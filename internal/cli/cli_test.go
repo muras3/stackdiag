@@ -353,6 +353,166 @@ func TestParseArgsRejectsHeaderControlCharacters(t *testing.T) {
 	}
 }
 
+// --- v0.1 expansion: auth flags ---
+
+func TestParseArgsBearerEnv(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--bearer-env", "MY_TOKEN", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BearerEnv != "MY_TOKEN" {
+		t.Errorf("BearerEnv = %q, want MY_TOKEN", cfg.BearerEnv)
+	}
+}
+
+func TestParseArgsBasicEnv(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--basic-env", "MY_CRED", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.BasicEnv != "MY_CRED" {
+		t.Errorf("BasicEnv = %q, want MY_CRED", cfg.BasicEnv)
+	}
+}
+
+func TestParseArgsBearerAndBasicConflict(t *testing.T) {
+	_, err := ParseArgs([]string{
+		"--bearer-env", "TOK",
+		"--basic-env", "CRED",
+		"https://example.com",
+	})
+	if err == nil {
+		t.Fatal("expected error for --bearer-env + --basic-env conflict")
+	}
+	if !strings.Contains(err.Error(), "cannot be used together") {
+		t.Errorf("error = %q, want conflict message", err.Error())
+	}
+}
+
+func TestParseArgsBearerEnvConflictsWithAuthHeader(t *testing.T) {
+	_, err := ParseArgs([]string{
+		"--bearer-env", "TOK",
+		"--header", "Authorization: Bearer xxx",
+		"https://example.com",
+	})
+	if err == nil {
+		t.Fatal("expected error for --bearer-env + --header Authorization conflict")
+	}
+	if !strings.Contains(err.Error(), "conflicts") {
+		t.Errorf("error = %q, want conflict message", err.Error())
+	}
+}
+
+func TestParseArgsBasicEnvConflictsWithAuthHeader(t *testing.T) {
+	_, err := ParseArgs([]string{
+		"--basic-env", "CRED",
+		"--header", "authorization: Basic xxx",
+		"https://example.com",
+	})
+	if err == nil {
+		t.Fatal("expected error: --basic-env conflicts with Authorization header")
+	}
+	if !strings.Contains(err.Error(), "conflicts") {
+		t.Errorf("error = %q, want conflict message", err.Error())
+	}
+}
+
+// --- v0.1 expansion: tls-scan flag ---
+
+func TestParseArgsTLSScan(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--tls-scan", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.TLSScan {
+		t.Error("TLSScan should be true")
+	}
+}
+
+func TestParseArgsTLSScanDefault(t *testing.T) {
+	cfg, err := ParseArgs([]string{"https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.TLSScan {
+		t.Error("TLSScan should default to false")
+	}
+}
+
+// --- v0.1 expansion: count flag ---
+
+func TestParseArgsCount(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--count", "5", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Count != 5 {
+		t.Errorf("Count = %d, want 5", cfg.Count)
+	}
+}
+
+func TestParseArgsCountDefault(t *testing.T) {
+	cfg, err := ParseArgs([]string{"https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Count != 0 {
+		t.Errorf("Count = %d, want 0 (unset)", cfg.Count)
+	}
+}
+
+func TestParseArgsCountZero(t *testing.T) {
+	_, err := ParseArgs([]string{"--count", "0", "https://example.com"})
+	if err == nil {
+		t.Fatal("expected error for --count 0")
+	}
+	if !strings.Contains(err.Error(), "positive integer") {
+		t.Errorf("error = %q, want positive integer message", err.Error())
+	}
+}
+
+func TestParseArgsCountNegative(t *testing.T) {
+	_, err := ParseArgs([]string{"--count", "-1", "https://example.com"})
+	if err == nil {
+		t.Fatal("expected error for --count -1")
+	}
+}
+
+func TestParseArgsCountNonNumeric(t *testing.T) {
+	_, err := ParseArgs([]string{"--count", "abc", "https://example.com"})
+	if err == nil {
+		t.Fatal("expected error for --count abc")
+	}
+}
+
+// --- v0.1 expansion: help text sections ---
+
+func TestHelpTextContainsAuthSection(t *testing.T) {
+	text := HelpText()
+	if !strings.Contains(text, "AUTHENTICATION:") {
+		t.Error("HelpText() missing AUTHENTICATION section")
+	}
+	if !strings.Contains(text, "--bearer-env") {
+		t.Error("HelpText() missing --bearer-env option")
+	}
+	if !strings.Contains(text, "--basic-env") {
+		t.Error("HelpText() missing --basic-env option")
+	}
+}
+
+func TestHelpTextContainsDiagnosticsSection(t *testing.T) {
+	text := HelpText()
+	if !strings.Contains(text, "DIAGNOSTICS:") {
+		t.Error("HelpText() missing DIAGNOSTICS section")
+	}
+	if !strings.Contains(text, "--tls-scan") {
+		t.Error("HelpText() missing --tls-scan option")
+	}
+	if !strings.Contains(text, "--count") {
+		t.Error("HelpText() missing --count option")
+	}
+}
+
 func TestParseArgsTimeoutRange(t *testing.T) {
 	tests := []struct {
 		name    string

@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/muras3/stackdiag/internal/cli"
@@ -50,6 +52,45 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Auth header injection from environment variables.
+	if cfg.BearerEnv != "" {
+		envVal := os.Getenv(cfg.BearerEnv)
+		if envVal == "" {
+			if _, ok := os.LookupEnv(cfg.BearerEnv); !ok {
+				fmt.Fprintf(os.Stderr, "Error: environment variable %q is not set\n", cfg.BearerEnv)
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: environment variable %q is empty\n", cfg.BearerEnv)
+			}
+			os.Exit(1)
+		}
+		if strings.TrimSpace(envVal) == "" {
+			fmt.Fprintf(os.Stderr, "Error: environment variable %q contains only whitespace\n", cfg.BearerEnv)
+			os.Exit(1)
+		}
+		cfg.Headers["Authorization"] = "Bearer " + envVal
+	}
+	if cfg.BasicEnv != "" {
+		envVal := os.Getenv(cfg.BasicEnv)
+		if envVal == "" {
+			if _, ok := os.LookupEnv(cfg.BasicEnv); !ok {
+				fmt.Fprintf(os.Stderr, "Error: environment variable %q is not set\n", cfg.BasicEnv)
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: environment variable %q is empty\n", cfg.BasicEnv)
+			}
+			os.Exit(1)
+		}
+		if strings.TrimSpace(envVal) == "" {
+			fmt.Fprintf(os.Stderr, "Error: environment variable %q contains only whitespace\n", cfg.BasicEnv)
+			os.Exit(1)
+		}
+		if !strings.Contains(envVal, ":") {
+			fmt.Fprintf(os.Stderr, "Error: environment variable %q must be in user:password format\n", cfg.BasicEnv)
+			os.Exit(1)
+		}
+		encoded := base64Encode(envVal)
+		cfg.Headers["Authorization"] = "Basic " + encoded
+	}
+
 	tgt, err := core.ParseTarget(cfg.Target)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -70,6 +111,7 @@ func main() {
 		Redact:   cfg.Redact,
 		Method:   cfg.Method,
 		Headers:  cfg.Headers,
+		TLSScan:  cfg.TLSScan,
 	}
 
 	// Run diagnostics.
@@ -109,6 +151,11 @@ func buildLayers(tgt core.Target, insecure bool) []core.Layer {
 	}
 
 	return layers
+}
+
+// base64Encode returns the standard base64 encoding of s.
+func base64Encode(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
 }
 
 // isColorEnabled checks if color output should be used.

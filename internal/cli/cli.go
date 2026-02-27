@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 )
 
@@ -14,15 +15,19 @@ const (
 
 // Config holds parsed CLI options.
 type Config struct {
-	Target   string
-	JSON     bool
-	Method   string
-	Headers  map[string]string
-	Timeout  int
-	Insecure bool
-	Redact   bool
-	Version  bool
-	Help     bool
+	Target    string
+	JSON      bool
+	Method    string
+	Headers   map[string]string
+	Timeout   int
+	Insecure  bool
+	Redact    bool
+	Version   bool
+	Help      bool
+	BearerEnv string // --bearer-env ENV_VAR
+	BasicEnv  string // --basic-env ENV_VAR
+	TLSScan   bool   // --tls-scan
+	Count     int    // --count N
 }
 
 // HelpText returns the full help message for stackdiag.
@@ -46,6 +51,14 @@ OPTIONS:
   --insecure            Skip TLS certificate verification
   --no-redact           Show sensitive header values (default: redacted)
   --version             Show version
+
+AUTHENTICATION:
+  --bearer-env VAR      Read Bearer token from environment variable
+  --basic-env VAR       Read Basic auth (user:pass) from environment variable
+
+DIAGNOSTICS:
+  --tls-scan            Probe TLS 1.0/1.1/1.2/1.3 version support
+  --count N             Run N attempts and show statistics
 
 EXIT CODES:
   0   All layers passed
@@ -107,6 +120,7 @@ func ParseArgs(args []string) (*Config, error) {
 	var headers headerList
 	var noRedact bool
 	var redactFlag bool // explicit --redact (sugar, no-op since default is true)
+	var countStr string
 
 	fs.BoolVar(&cfg.JSON, "json", false, "output as JSON")
 	fs.StringVar(&cfg.Method, "method", "GET", "HTTP method")
@@ -116,6 +130,10 @@ func ParseArgs(args []string) (*Config, error) {
 	fs.BoolVar(&noRedact, "no-redact", false, "disable redaction of sensitive values")
 	fs.BoolVar(&redactFlag, "redact", false, "redact sensitive values (default)")
 	fs.BoolVar(&cfg.Version, "version", false, "show version")
+	fs.StringVar(&cfg.BearerEnv, "bearer-env", "", "environment variable for Bearer token")
+	fs.StringVar(&cfg.BasicEnv, "basic-env", "", "environment variable for Basic auth")
+	fs.BoolVar(&cfg.TLSScan, "tls-scan", false, "probe TLS version support")
+	fs.StringVar(&countStr, "count", "", "number of attempts")
 
 	if err := fs.Parse(flagArgs); err != nil {
 		if err.Error() == "flag: help requested" {
@@ -143,6 +161,15 @@ func ParseArgs(args []string) (*Config, error) {
 		return nil, fmt.Errorf("timeout must be between %d and %d seconds", minTimeoutSeconds, maxTimeoutSeconds)
 	}
 
+	// Parse --count value.
+	if countStr != "" {
+		n, err := strconv.Atoi(countStr)
+		if err != nil || n < 1 {
+			return nil, fmt.Errorf("--count must be a positive integer, got %q", countStr)
+		}
+		cfg.Count = n
+	}
+
 	// Parse header values into map.
 	for _, h := range headers {
 		k, v, ok := strings.Cut(h, ":")
@@ -163,6 +190,21 @@ func ParseArgs(args []string) (*Config, error) {
 		cfg.Headers[key] = value
 	}
 
+	// Auth conflict detection.
+	if cfg.BearerEnv != "" && cfg.BasicEnv != "" {
+		return nil, fmt.Errorf("--bearer-env and --basic-env cannot be used together")
+	}
+	if cfg.BearerEnv != "" || cfg.BasicEnv != "" {
+		for k := range cfg.Headers {
+			if strings.EqualFold(k, "authorization") {
+				if cfg.BearerEnv != "" {
+					return nil, fmt.Errorf("--bearer-env conflicts with --header Authorization")
+				}
+				return nil, fmt.Errorf("--basic-env conflicts with --header Authorization")
+			}
+		}
+	}
+
 	if len(positional) == 0 {
 		return nil, fmt.Errorf("target URL required")
 	}
@@ -177,7 +219,7 @@ func ParseArgs(args []string) (*Config, error) {
 // needsValue returns true for flags that require an argument.
 func needsValue(name string) bool {
 	switch name {
-	case "method", "header", "timeout":
+	case "method", "header", "timeout", "bearer-env", "basic-env", "count":
 		return true
 	}
 	return false
