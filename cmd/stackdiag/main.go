@@ -43,7 +43,7 @@ func main() {
 	}
 
 	if cfg.Version {
-		fmt.Printf("stackdiag %s (%s)\n", version, commit)
+		fmt.Printf("stdiag %s (%s)\n", version, commit)
 		os.Exit(0)
 	}
 

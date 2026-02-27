@@ -16,19 +16,19 @@ import (
 	"testing"
 )
 
-// binaryPath returns the path to the built stackdiag binary.
+// binaryPath returns the path to the built stdiag binary.
 func binaryPath(t *testing.T) string {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
 	projectRoot := filepath.Join(filepath.Dir(file), "..", "..")
-	bin := filepath.Join(projectRoot, "bin", "stackdiag")
+	bin := filepath.Join(projectRoot, "bin", "stdiag")
 	if _, err := os.Stat(bin); os.IsNotExist(err) {
 		t.Fatalf("binary not found at %s — run 'make build' first", bin)
 	}
 	return bin
 }
 
-// runStackdiag runs stackdiag with separate stdout/stderr capture.
+// runStackdiag runs stdiag with separate stdout/stderr capture.
 func runStackdiag(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 	bin := binaryPath(t)
@@ -68,8 +68,8 @@ func TestVersionFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("--version failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "stackdiag") {
-		t.Errorf("--version output missing 'stackdiag': %s", out)
+	if !strings.Contains(string(out), "stdiag") {
+		t.Errorf("--version output missing 'stdiag': %s", out)
 	}
 }
 
