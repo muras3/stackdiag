@@ -1,24 +1,28 @@
 package tcp
 
 import (
+	"context"
 	"errors"
-	"fmt"
 	"net"
 	"os"
-	"strings"
+	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/muras3/probe/internal/core"
-	"github.com/muras3/probe/internal/testkit"
 )
+
+type Dialer interface {
+	DialContext(ctx context.Context, network, address string) (net.Conn, error)
+}
 
 // Layer performs TCP connection checks.
 type Layer struct {
-	dialer testkit.Dialer
+	dialer Dialer
 }
 
 // New creates a TCP Layer with the given dialer.
-func New(dialer testkit.Dialer) *Layer {
+func New(dialer Dialer) *Layer {
 	return &Layer{dialer: dialer}
 }
 
@@ -30,9 +34,9 @@ func NewDefault() *Layer {
 func (l *Layer) Name() string { return "tcp" }
 
 func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
-	address := pctx.Target.HostPort()
+	address := net.JoinHostPort(pctx.Target.Host, strconv.Itoa(pctx.Target.Port))
 	if len(pctx.ResolvedIPs) > 0 {
-		address = fmt.Sprintf("%s:%d", pctx.ResolvedIPs[0], pctx.Target.Port)
+		address = net.JoinHostPort(pctx.ResolvedIPs[0], strconv.Itoa(pctx.Target.Port))
 	}
 
 	start := time.Now()
@@ -49,13 +53,29 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	}
 	defer conn.Close()
 
-	remoteAddr := conn.RemoteAddr().(*net.TCPAddr)
+	remoteIP := ""
+	remotePort := 0
+	remoteAddr := conn.RemoteAddr()
+	if tcpAddr, ok := remoteAddr.(*net.TCPAddr); ok {
+		remoteIP = tcpAddr.IP.String()
+		remotePort = tcpAddr.Port
+	} else {
+		host, port, splitErr := net.SplitHostPort(remoteAddr.String())
+		if splitErr == nil {
+			remoteIP = host
+			parsedPort, parseErr := strconv.Atoi(port)
+			if parseErr == nil {
+				remotePort = parsedPort
+			}
+		}
+	}
+
 	return &core.LayerResult{
 		Status:     core.StatusOK,
 		DurationMS: durationMS,
 		Observations: map[string]any{
-			"remote_ip":   remoteAddr.IP.String(),
-			"remote_port": remoteAddr.Port,
+			"remote_ip":   remoteIP,
+			"remote_port": remotePort,
 		},
 		Error: nil,
 	}
@@ -68,24 +88,18 @@ func classifyTCPError(err error) *core.ProbeError {
 		return &core.ProbeError{Code: "TCP_TIMEOUT", Message: err.Error()}
 	}
 
-	// Check for connection refused via OpError wrapping a SyscallError.
+	// Use syscall errno for robust, OS-independent classification.
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
 		var sysErr *os.SyscallError
 		if errors.As(opErr.Err, &sysErr) {
-			if strings.Contains(sysErr.Err.Error(), "connection refused") {
+			if errors.Is(sysErr.Err, syscall.ECONNRESET) {
+				return &core.ProbeError{Code: "TCP_RESET", Message: err.Error()}
+			}
+			if errors.Is(sysErr.Err, syscall.ECONNREFUSED) {
 				return &core.ProbeError{Code: "TCP_REFUSED", Message: err.Error()}
 			}
 		}
-		// Also check the raw error string for "connection refused" (varies by OS).
-		if strings.Contains(err.Error(), "connection refused") {
-			return &core.ProbeError{Code: "TCP_REFUSED", Message: err.Error()}
-		}
-	}
-
-	// Fallback: check error string for connection refused (covers edge cases).
-	if strings.Contains(err.Error(), "connection refused") {
-		return &core.ProbeError{Code: "TCP_REFUSED", Message: err.Error()}
 	}
 
 	return &core.ProbeError{Code: "TCP_ERROR", Message: err.Error()}

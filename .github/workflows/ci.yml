@@ -26,11 +26,14 @@ jobs:
       - name: Lint
         run: make lint
 
-      - name: Test (race detector)
-        run: make test-race
-
       - name: Build
         run: make build
+
+      - name: E2E tests
+        run: make e2e
+
+      - name: Test (race detector)
+        run: make test-race
 
       - name: Check binary size
         run: |

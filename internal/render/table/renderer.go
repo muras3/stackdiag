@@ -48,7 +48,7 @@ func Render(w io.Writer, r *core.Result, useColor bool) error {
 
 		sym := statusSymbol(lr.Status, useColor)
 		dur := formatDuration(lr.DurationMS)
-		desc := layerDescription(name, lr)
+		desc := layerDescription(name, lr, useColor)
 
 		// Right-align the duration field.
 		paddedDur := fmt.Sprintf("%*s", maxDurLen, dur)
@@ -111,7 +111,7 @@ func formatDuration(ms float64) string {
 }
 
 // layerDescription builds the description string for a layer line.
-func layerDescription(name string, lr *core.LayerResult) string {
+func layerDescription(name string, lr *core.LayerResult, useColor bool) string {
 	// If the layer failed or warned and has an error, use error message for fail.
 	// For warn, we still show observations but fall through to error if no observations.
 	if lr.Status == core.StatusFail && lr.Error != nil {
@@ -126,7 +126,7 @@ func layerDescription(name string, lr *core.LayerResult) string {
 
 	switch name {
 	case "dns":
-		return dnsDescription(obs, lr)
+		return dnsDescription(obs, lr, useColor)
 	case "tcp":
 		return tcpDescription(obs, lr)
 	case "tls":
@@ -139,7 +139,7 @@ func layerDescription(name string, lr *core.LayerResult) string {
 }
 
 // dnsDescription builds: "{query_name} → {first_answer}" or error message.
-func dnsDescription(obs map[string]any, lr *core.LayerResult) string {
+func dnsDescription(obs map[string]any, lr *core.LayerResult, useColor bool) string {
 	queryName, _ := obs["query_name"].(string)
 	var firstAnswer string
 
@@ -156,8 +156,13 @@ func dnsDescription(obs map[string]any, lr *core.LayerResult) string {
 		}
 	}
 
+	arrow := " \u2192 "
+	if !useColor {
+		arrow = " -> "
+	}
+
 	if queryName != "" && firstAnswer != "" {
-		return queryName + " \u2192 " + firstAnswer
+		return queryName + arrow + firstAnswer
 	}
 	if queryName != "" {
 		return queryName

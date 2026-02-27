@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -26,10 +27,16 @@ func New(client *http.Client) *Layer {
 
 // NewDefault creates an HTTP Layer with a transport tuned for probing:
 // no keep-alives, no auto-redirect, configurable TLS.
-func NewDefault(insecure bool) *Layer {
+func NewDefault(insecure bool, serverName string) *Layer {
+	tlsCfg := &tls.Config{InsecureSkipVerify: insecure}
+	// When dialing a resolved IP, set ServerName so TLS SNI and certificate
+	// verification use the original hostname instead of the IP address.
+	if serverName != "" {
+		tlsCfg.ServerName = serverName
+	}
 	transport := &http.Transport{
 		DisableKeepAlives: true,
-		TLSClientConfig:   &tls.Config{InsecureSkipVerify: insecure},
+		TLSClientConfig:   tlsCfg,
 	}
 	client := &http.Client{
 		Transport: transport,
@@ -119,12 +126,16 @@ func buildURL(pctx *core.ProbeContext) string {
 		host = pctx.ResolvedIPs[0]
 	}
 
-	portStr := fmt.Sprintf(":%d", port)
+	hostPort := host
 	if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) {
-		portStr = ""
+		if ip := net.ParseIP(host); ip != nil && strings.Contains(host, ":") {
+			hostPort = fmt.Sprintf("[%s]", host)
+		}
+	} else {
+		hostPort = net.JoinHostPort(host, strconv.Itoa(port))
 	}
 
-	return fmt.Sprintf("%s://%s%s%s", scheme, host, portStr, path)
+	return fmt.Sprintf("%s://%s%s", scheme, hostPort, path)
 }
 
 func classifyHTTPError(err error) *core.ProbeError {
@@ -162,6 +173,8 @@ func classifyStatusCode(code int) *core.ProbeError {
 		return &core.ProbeError{Code: "HTTP_404", Message: msg}
 	case 429:
 		return &core.ProbeError{Code: "HTTP_429", Message: msg}
+	case 500:
+		return &core.ProbeError{Code: "HTTP_500", Message: msg}
 	case 502:
 		return &core.ProbeError{Code: "HTTP_502", Message: msg}
 	case 503:

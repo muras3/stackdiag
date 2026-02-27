@@ -2,8 +2,10 @@ package http
 
 import (
 	"context"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 	"time"
 
@@ -21,7 +23,7 @@ func makePctx(url string) *core.ProbeContext {
 }
 
 func TestHTTPName(t *testing.T) {
-	layer := NewDefault(false)
+	layer := NewDefault(false, "")
 	if layer.Name() != "http" {
 		t.Errorf("Name() = %q, want http", layer.Name())
 	}
@@ -154,8 +156,8 @@ func TestHTTP500(t *testing.T) {
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	if result.Error == nil || result.Error.Code != "HTTP_5XX" {
-		t.Errorf("error = %v, want HTTP_5XX", result.Error)
+	if result.Error == nil || result.Error.Code != "HTTP_500" {
+		t.Errorf("error = %v, want HTTP_500", result.Error)
 	}
 }
 
@@ -297,6 +299,77 @@ func TestHTTPCustomMethodAndHeaders(t *testing.T) {
 	if m, ok := result.Observations["method"]; !ok || m.(string) != "POST" {
 		t.Errorf("method observation = %v, want POST", result.Observations["method"])
 	}
+}
+
+func TestBuildURLWithResolvedIPv6(t *testing.T) {
+	pctx := &core.ProbeContext{
+		Target: core.Target{
+			Scheme: "http",
+			Host:   "example.com",
+			Port:   8080,
+			Path:   "/health",
+		},
+		ResolvedIPs: []string{"2001:db8::1"},
+	}
+
+	got := buildURL(pctx)
+	want := "http://[2001:db8::1]:8080/health"
+	if got != want {
+		t.Fatalf("buildURL() = %q, want %q", got, want)
+	}
+}
+
+func TestProbeResolvedIPSetsURLHostAndHostHeader(t *testing.T) {
+	var gotURLHost string
+	var gotHostHeader string
+
+	client := &http.Client{
+		Transport: roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			gotURLHost = req.URL.Host
+			gotHostHeader = req.Host
+			return &http.Response{
+				StatusCode: 200,
+				Status:     "200 OK",
+				Proto:      "HTTP/1.1",
+				ProtoMajor: 1,
+				ProtoMinor: 1,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader("")),
+				Request:    req,
+			}, nil
+		}),
+	}
+
+	layer := New(client)
+	pctx := &core.ProbeContext{
+		Context: context.Background(),
+		Target: core.Target{
+			Scheme: "http",
+			Host:   "example.com",
+			Port:   8080,
+			Path:   "/path",
+		},
+		Method:      "GET",
+		Headers:     map[string]string{},
+		ResolvedIPs: []string{"127.0.0.1"},
+	}
+
+	result := layer.Probe(pctx)
+	if result.Status != core.StatusOK {
+		t.Fatalf("status = %q, want ok; error = %v", result.Status, result.Error)
+	}
+	if gotURLHost != "127.0.0.1:8080" {
+		t.Fatalf("request URL host = %q, want %q", gotURLHost, "127.0.0.1:8080")
+	}
+	if gotHostHeader != "example.com" {
+		t.Fatalf("request Host header = %q, want %q", gotHostHeader, "example.com")
+	}
+}
+
+type roundTripperFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
 }
 
 // targetFromURL parses an httptest server URL into a Target.

@@ -5,7 +5,7 @@ import (
 	"errors"
 	"net"
 	"os"
-	"strings"
+	"syscall"
 	"testing"
 	"time"
 
@@ -178,14 +178,14 @@ func TestTCPFallsBackToHostPort(t *testing.T) {
 }
 
 func TestTCPConnectionRefusedFake(t *testing.T) {
-	// Use FakeDialer with a "connection refused" error to verify classification
+	// Use FakeDialer with syscall.ECONNREFUSED to verify classification
 	// without relying on actual port availability.
 	refusedErr := &net.OpError{
 		Op:  "dial",
 		Net: "tcp",
 		Err: &os.SyscallError{
 			Syscall: "connect",
-			Err:     errors.New("connection refused"),
+			Err:     syscall.ECONNREFUSED,
 		},
 	}
 	layer := New(&testkit.FakeDialer{Err: refusedErr})
@@ -201,6 +201,28 @@ func TestTCPConnectionRefusedFake(t *testing.T) {
 	}
 }
 
+func TestTCPConnectionReset(t *testing.T) {
+	resetErr := &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: &os.SyscallError{
+			Syscall: "read",
+			Err:     syscall.ECONNRESET,
+		},
+	}
+	layer := New(&testkit.FakeDialer{Err: resetErr})
+	pctx := makeCtx("192.0.2.1", 443, []string{"192.0.2.1"})
+
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TCP_RESET" {
+		t.Errorf("error code = %v, want TCP_RESET", result.Error)
+	}
+}
+
 // timeoutError implements net.Error with Timeout() == true.
 type timeoutError struct {
 	msg string
@@ -212,7 +234,7 @@ func (e *timeoutError) Temporary() bool { return false }
 
 // capturingDialer wraps a Dialer and captures the address passed to DialContext.
 type capturingDialer struct {
-	inner  testkit.Dialer
+	inner  Dialer
 	onDial func(address string)
 }
 
@@ -222,6 +244,3 @@ func (d *capturingDialer) DialContext(ctx context.Context, network, address stri
 	}
 	return d.inner.DialContext(ctx, network, address)
 }
-
-// Ensure tests compile references are used.
-var _ = strings.Contains

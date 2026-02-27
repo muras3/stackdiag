@@ -74,7 +74,7 @@ func TestDNSTimeout(t *testing.T) {
 	}
 }
 
-func TestDNSSERVFAIL(t *testing.T) {
+func TestDNSErrorDefault(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "server failure", Name: "fail.example.com"}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
 	result := layer.Probe(makeCtx(5 * time.Second))
@@ -82,8 +82,8 @@ func TestDNSSERVFAIL(t *testing.T) {
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	if result.Error == nil || result.Error.Code != "DNS_SERVFAIL" {
-		t.Errorf("error code = %v, want DNS_SERVFAIL", result.Error)
+	if result.Error == nil || result.Error.Code != "DNS_ERROR" {
+		t.Errorf("error code = %v, want DNS_ERROR", result.Error)
 	}
 }
 
@@ -96,6 +96,19 @@ func TestDNSGenericError(t *testing.T) {
 	}
 	if result.Error == nil || result.Error.Code != "DNS_ERROR" {
 		t.Errorf("error code = %v, want DNS_ERROR", result.Error)
+	}
+}
+
+func TestDNSContextCanceled(t *testing.T) {
+	// Verify that context.DeadlineExceeded is classified as DNS_TIMEOUT.
+	layer := New(&testkit.FakeResolver{Err: context.DeadlineExceeded})
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "DNS_TIMEOUT" {
+		t.Errorf("error code = %v, want DNS_TIMEOUT", result.Error)
 	}
 }
 

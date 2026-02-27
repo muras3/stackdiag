@@ -5,11 +5,6 @@ import (
 	"net"
 )
 
-// Resolver is the interface for DNS resolution (matches net.Resolver.LookupHost signature).
-type Resolver interface {
-	LookupHost(ctx context.Context, host string) ([]string, error)
-}
-
 // FakeResolver returns preconfigured results.
 type FakeResolver struct {
 	IPs []string
@@ -18,11 +13,6 @@ type FakeResolver struct {
 
 func (f *FakeResolver) LookupHost(_ context.Context, _ string) ([]string, error) {
 	return f.IPs, f.Err
-}
-
-// Dialer is the interface for TCP connections.
-type Dialer interface {
-	DialContext(ctx context.Context, network, address string) (net.Conn, error)
 }
 
 // FakeDialer returns preconfigured results.
