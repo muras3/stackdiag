@@ -116,6 +116,40 @@ func main() {
 
 	// Run diagnostics.
 	r := runner.New(layers)
+
+	if cfg.Count > 0 {
+		// Repeated measurement mode.
+		countResult := r.RunCount(cfg.Count, func(attempt int) *core.ProbeContext {
+			attemptCtx, attemptCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Timeout)*time.Second)
+			_ = attemptCancel // deferred in RunCount per attempt
+			return &core.ProbeContext{
+				Context:  attemptCtx,
+				Target:   tgt,
+				Insecure: cfg.Insecure,
+				Redact:   cfg.Redact,
+				Method:   cfg.Method,
+				Headers:  cfg.Headers,
+				TLSScan:  cfg.TLSScan,
+			}
+		})
+
+		if cfg.JSON {
+			if err := renderjson.RenderCount(os.Stdout, countResult); err != nil {
+				fmt.Fprintf(os.Stderr, "Error rendering JSON: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			useColor := isColorEnabled()
+			if err := table.RenderCount(os.Stdout, countResult, useColor); err != nil {
+				fmt.Fprintf(os.Stderr, "Error rendering table: %v\n", err)
+				os.Exit(1)
+			}
+		}
+
+		os.Exit(countResult.ExitCode)
+	}
+
+	// Single run mode.
 	result := r.Run(pctx)
 
 	// Render output: stdout = data, stderr = logs.
