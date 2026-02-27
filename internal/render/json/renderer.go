@@ -24,3 +24,23 @@ func RenderCount(w io.Writer, r *core.CountResult) error {
 	enc.SetEscapeHTML(false)
 	return enc.Encode(r)
 }
+
+// toolError is the JSON structure for argument/target parse errors.
+type toolError struct {
+	SchemaVersion string           `json:"schema_version"`
+	Error         *core.ProbeError `json:"error"`
+	ExitCode      int              `json:"exit_code"`
+}
+
+// RenderToolError writes a structured JSON error for argument/target parse failures.
+func RenderToolError(w io.Writer, code, message string, exitCode int) error {
+	e := toolError{
+		SchemaVersion: "v0.1",
+		Error:         &core.ProbeError{Code: code, Message: message},
+		ExitCode:      exitCode,
+	}
+	enc := json.NewEncoder(w)
+	enc.SetIndent("", "  ")
+	enc.SetEscapeHTML(false)
+	return enc.Encode(e)
+}

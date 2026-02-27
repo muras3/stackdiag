@@ -28,8 +28,12 @@ var (
 func main() {
 	cfg, err := cli.ParseArgs(os.Args[1:])
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		fmt.Fprintln(os.Stderr, "\n"+cli.HelpText())
+		if hasJSONFlag(os.Args[1:]) {
+			renderjson.RenderToolError(os.Stdout, "INVALID_ARGS", err.Error(), 1)
+		} else {
+			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+			fmt.Fprintln(os.Stderr, "\n"+cli.HelpText())
+		}
 		os.Exit(1)
 	}
 
@@ -57,15 +61,13 @@ func main() {
 		envVal := os.Getenv(cfg.BearerEnv)
 		if envVal == "" {
 			if _, ok := os.LookupEnv(cfg.BearerEnv); !ok {
-				fmt.Fprintf(os.Stderr, "Error: environment variable %q is not set\n", cfg.BearerEnv)
+				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is not set", cfg.BearerEnv))
 			} else {
-				fmt.Fprintf(os.Stderr, "Error: environment variable %q is empty\n", cfg.BearerEnv)
+				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is empty", cfg.BearerEnv))
 			}
-			os.Exit(1)
 		}
 		if strings.TrimSpace(envVal) == "" {
-			fmt.Fprintf(os.Stderr, "Error: environment variable %q contains only whitespace\n", cfg.BearerEnv)
-			os.Exit(1)
+			exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q contains only whitespace", cfg.BearerEnv))
 		}
 		cfg.Headers["Authorization"] = "Bearer " + envVal
 	}
@@ -73,19 +75,16 @@ func main() {
 		envVal := os.Getenv(cfg.BasicEnv)
 		if envVal == "" {
 			if _, ok := os.LookupEnv(cfg.BasicEnv); !ok {
-				fmt.Fprintf(os.Stderr, "Error: environment variable %q is not set\n", cfg.BasicEnv)
+				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is not set", cfg.BasicEnv))
 			} else {
-				fmt.Fprintf(os.Stderr, "Error: environment variable %q is empty\n", cfg.BasicEnv)
+				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is empty", cfg.BasicEnv))
 			}
-			os.Exit(1)
 		}
 		if strings.TrimSpace(envVal) == "" {
-			fmt.Fprintf(os.Stderr, "Error: environment variable %q contains only whitespace\n", cfg.BasicEnv)
-			os.Exit(1)
+			exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q contains only whitespace", cfg.BasicEnv))
 		}
 		if !strings.Contains(envVal, ":") {
-			fmt.Fprintf(os.Stderr, "Error: environment variable %q must be in user:password format\n", cfg.BasicEnv)
-			os.Exit(1)
+			exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q must be in user:password format", cfg.BasicEnv))
 		}
 		encoded := base64Encode(envVal)
 		cfg.Headers["Authorization"] = "Basic " + encoded
@@ -93,8 +92,7 @@ func main() {
 
 	tgt, err := core.ParseTarget(cfg.Target)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		exitToolError(cfg.JSON, "INVALID_TARGET", err.Error())
 	}
 
 	// Build layers based on target scheme.
@@ -189,6 +187,27 @@ func buildLayers(tgt core.Target, insecure bool) []core.Layer {
 // base64Encode returns the standard base64 encoding of s.
 func base64Encode(s string) string {
 	return base64.StdEncoding.EncodeToString([]byte(s))
+}
+
+// hasJSONFlag scans raw args for --json before full parsing (used when ParseArgs fails).
+func hasJSONFlag(args []string) bool {
+	for _, a := range args {
+		if a == "--json" {
+			return true
+		}
+	}
+	return false
+}
+
+// exitToolError outputs a structured error and exits with code 1.
+// When jsonMode is true, writes JSON to stdout; otherwise writes plain text to stderr.
+func exitToolError(jsonMode bool, code, message string) {
+	if jsonMode {
+		renderjson.RenderToolError(os.Stdout, code, message, 1)
+	} else {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", message)
+	}
+	os.Exit(1)
 }
 
 // isColorEnabled checks if color output should be used.
