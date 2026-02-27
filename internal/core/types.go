@@ -1,10 +1,16 @@
 package core
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 )
+
+// LayerOrder defines the canonical execution order for layers.
+// JSON output must always follow this order.
+var LayerOrder = []string{"dns", "tcp", "tls", "http"}
 
 // Status represents the outcome of a layer probe.
 type Status string
@@ -54,6 +60,83 @@ type Result struct {
 	Target        string                  `json:"target"`
 	Layers        map[string]*LayerResult `json:"layers"`
 	Summary       *Summary                `json:"summary"`
+}
+
+// marshalNoEscape marshals v without HTML escaping.
+func marshalNoEscape(v any) ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
+		return nil, err
+	}
+	// Encoder.Encode appends a newline; trim it.
+	b := buf.Bytes()
+	if len(b) > 0 && b[len(b)-1] == '\n' {
+		b = b[:len(b)-1]
+	}
+	return b, nil
+}
+
+// MarshalJSON implements json.Marshaler to guarantee layers appear in execution
+// order (dns→tcp→tls→http) rather than Go's default alphabetical map key order.
+func (r *Result) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteString(`{"schema_version":`)
+	b, err := marshalNoEscape(r.SchemaVersion)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteString(`,"started_at":`)
+	b, err = marshalNoEscape(r.StartedAt)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteString(`,"target":`)
+	b, err = marshalNoEscape(r.Target)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteString(`,"layers":{`)
+	first := true
+	for _, name := range LayerOrder {
+		lr, ok := r.Layers[name]
+		if !ok {
+			continue
+		}
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		b, err = marshalNoEscape(name)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(b)
+		buf.WriteByte(':')
+		b, err = marshalNoEscape(lr)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(b)
+	}
+	buf.WriteByte('}')
+
+	buf.WriteString(`,"summary":`)
+	b, err = marshalNoEscape(r.Summary)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
 }
 
 // ProbeContext carries shared state through the layer execution pipeline.

@@ -254,6 +254,46 @@ func TestParseArgsNoRedactThenRedact(t *testing.T) {
 	}
 }
 
+func TestHelpTextContainsSections(t *testing.T) {
+	text := HelpText()
+	sections := []string{"USAGE:", "TARGETS:", "OPTIONS:", "EXIT CODES:", "EXAMPLES:"}
+	for _, sec := range sections {
+		if !strings.Contains(text, sec) {
+			t.Errorf("HelpText() missing section %q", sec)
+		}
+	}
+}
+
+func TestHelpTextContainsOptions(t *testing.T) {
+	text := HelpText()
+	options := []string{"--json", "--method", "--header", "--timeout", "--insecure", "--no-redact", "--version"}
+	for _, opt := range options {
+		if !strings.Contains(text, opt) {
+			t.Errorf("HelpText() missing option %q", opt)
+		}
+	}
+}
+
+func TestHelpTextContainsExitCodes(t *testing.T) {
+	text := HelpText()
+	codes := []string{"0 ", "1 ", "2 ", "10 ", "20 ", "30 ", "40 "}
+	for _, code := range codes {
+		if !strings.Contains(text, code) {
+			t.Errorf("HelpText() missing exit code %q", code)
+		}
+	}
+}
+
+func TestParseArgsHelpFlag(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--help"})
+	if err != nil {
+		t.Fatalf("--help should not return error, got: %v", err)
+	}
+	if !cfg.Help {
+		t.Error("Help should be true with --help")
+	}
+}
+
 func TestParseArgsErrorMessages(t *testing.T) {
 	tests := []struct {
 		name    string

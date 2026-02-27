@@ -3,6 +3,7 @@ package json
 import (
 	"bytes"
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -307,6 +308,35 @@ func TestContractDurationMsType(t *testing.T) {
 		if _, ok := dur.(float64); !ok {
 			t.Errorf("layer %q duration_ms is %T, want number", name, dur)
 		}
+	}
+}
+
+func TestContractLayerOrder(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResult()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	// The raw JSON must have layers in execution order: dns, tcp, tls, http.
+	raw := buf.String()
+	expectedOrder := []string{"dns", "tcp", "tls", "http"}
+	lastIdx := -1
+	for _, name := range expectedOrder {
+		key := `"` + name + `"`
+		// Find the key inside the "layers" object.
+		idx := strings.Index(raw, `"layers"`)
+		if idx < 0 {
+			t.Fatal("missing layers key in JSON")
+		}
+		layersJSON := raw[idx:]
+		pos := strings.Index(layersJSON, key)
+		if pos < 0 {
+			t.Fatalf("layer %q not found in JSON output", name)
+		}
+		if pos <= lastIdx {
+			t.Errorf("layer %q (pos %d) appears before previous layer (pos %d); want execution order: dns→tcp→tls→http", name, pos, lastIdx)
+		}
+		lastIdx = pos
 	}
 }
 
