@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -119,12 +120,16 @@ func buildURL(pctx *core.ProbeContext) string {
 		host = pctx.ResolvedIPs[0]
 	}
 
-	portStr := fmt.Sprintf(":%d", port)
+	hostPort := host
 	if (scheme == "http" && port == 80) || (scheme == "https" && port == 443) {
-		portStr = ""
+		if ip := net.ParseIP(host); ip != nil && strings.Contains(host, ":") {
+			hostPort = fmt.Sprintf("[%s]", host)
+		}
+	} else {
+		hostPort = net.JoinHostPort(host, strconv.Itoa(port))
 	}
 
-	return fmt.Sprintf("%s://%s%s%s", scheme, host, portStr, path)
+	return fmt.Sprintf("%s://%s%s", scheme, hostPort, path)
 }
 
 func classifyHTTPError(err error) *core.ProbeError {

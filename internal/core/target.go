@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"strconv"
 	"strings"
@@ -53,6 +54,9 @@ func ParseTarget(raw string) (Target, error) {
 	}
 
 	path := u.Path
+	if u.RawQuery != "" {
+		path = u.Path + "?" + u.RawQuery
+	}
 	if path == "" && (scheme == "https" || scheme == "http") {
 		path = "/"
 	}
@@ -68,7 +72,14 @@ func ParseTarget(raw string) (Target, error) {
 
 func resolvePort(portStr, scheme string) (int, error) {
 	if portStr != "" {
-		return strconv.Atoi(portStr)
+		port, err := strconv.Atoi(portStr)
+		if err != nil {
+			return 0, err
+		}
+		if port < 1 || port > 65535 {
+			return 0, fmt.Errorf("port out of range: %d", port)
+		}
+		return port, nil
 	}
 	switch scheme {
 	case "https":
@@ -88,4 +99,4 @@ func (t Target) NeedsTLS() bool { return t.Scheme == "https" }
 func (t Target) NeedsHTTP() bool { return t.Scheme == "https" || t.Scheme == "http" }
 
 // HostPort returns "host:port".
-func (t Target) HostPort() string { return fmt.Sprintf("%s:%d", t.Host, t.Port) }
+func (t Target) HostPort() string { return net.JoinHostPort(t.Host, strconv.Itoa(t.Port)) }

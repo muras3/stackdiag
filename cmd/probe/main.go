@@ -36,6 +36,11 @@ func main() {
 		os.Exit(0)
 	}
 
+	if cfg.Timeout <= 0 {
+		fmt.Fprintln(os.Stderr, "Error: timeout must be greater than 0")
+		os.Exit(1)
+	}
+
 	tgt, err := core.ParseTarget(cfg.Target)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)

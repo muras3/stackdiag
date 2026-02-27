@@ -20,6 +20,7 @@ func New(layers []core.Layer) *Runner {
 // Run executes layers sequentially, stopping on fail, continuing on warn.
 func (r *Runner) Run(pctx *core.ProbeContext) *core.Result {
 	start := time.Now()
+	allLayerNames := []string{"dns", "tcp", "tls", "http"}
 	result := &core.Result{
 		SchemaVersion: "v0.1",
 		StartedAt:     start.UTC(),
@@ -56,6 +57,19 @@ func (r *Runner) Run(pctx *core.ProbeContext) *core.Result {
 		// Stop on fail (but continue on warn).
 		if !lr.Status.ShouldContinue() {
 			stopped = true
+		}
+	}
+
+	// Ensure schema contract: always include all known layer names.
+	for _, name := range allLayerNames {
+		if _, ok := result.Layers[name]; ok {
+			continue
+		}
+		result.Layers[name] = &core.LayerResult{
+			Status:       core.StatusSkip,
+			DurationMS:   0,
+			Observations: map[string]any{},
+			Error:        nil,
 		}
 	}
 

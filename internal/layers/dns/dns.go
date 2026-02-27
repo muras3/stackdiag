@@ -1,21 +1,25 @@
 package dns
 
 import (
+	"context"
 	"errors"
 	"net"
 	"time"
 
 	"github.com/muras3/probe/internal/core"
-	"github.com/muras3/probe/internal/testkit"
 )
+
+type Resolver interface {
+	LookupHost(ctx context.Context, host string) ([]string, error)
+}
 
 // Layer performs DNS resolution.
 type Layer struct {
-	resolver testkit.Resolver
+	resolver Resolver
 }
 
 // New creates a DNS Layer with the given resolver.
-func New(resolver testkit.Resolver) *Layer {
+func New(resolver Resolver) *Layer {
 	return &Layer{resolver: resolver}
 }
 
@@ -55,6 +59,10 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 }
 
 func classifyDNSError(err error) *core.ProbeError {
+	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
+		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: err.Error()}
+	}
+
 	var dnsErr *net.DNSError
 	if !errors.As(err, &dnsErr) {
 		return &core.ProbeError{Code: "DNS_ERROR", Message: err.Error()}
@@ -66,6 +74,6 @@ func classifyDNSError(err error) *core.ProbeError {
 	case dnsErr.IsTimeout:
 		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: dnsErr.Error()}
 	default:
-		return &core.ProbeError{Code: "DNS_SERVFAIL", Message: dnsErr.Error()}
+		return &core.ProbeError{Code: "DNS_ERROR", Message: dnsErr.Error()}
 	}
 }

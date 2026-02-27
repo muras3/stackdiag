@@ -212,7 +212,7 @@ func (e *timeoutError) Temporary() bool { return false }
 
 // capturingDialer wraps a Dialer and captures the address passed to DialContext.
 type capturingDialer struct {
-	inner  testkit.Dialer
+	inner  Dialer
 	onDial func(address string)
 }
 

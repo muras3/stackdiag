@@ -8,6 +8,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"errors"
 	"math/big"
 	"net"
 	"testing"
@@ -115,12 +116,13 @@ func makePctx(host string, port int, resolvedIP string, insecure bool) *core.Pro
 // --- Fake Handshaker for unit tests ---
 
 type fakeHandshaker struct {
-	state *tls.ConnectionState
-	err   error
+	state      *tls.ConnectionState
+	durationMS float64
+	err        error
 }
 
-func (f *fakeHandshaker) Handshake(_ context.Context, _ string, _ *tls.Config) (*tls.ConnectionState, error) {
-	return f.state, f.err
+func (f *fakeHandshaker) Handshake(_ context.Context, _ string, _ *tls.Config) (*tls.ConnectionState, float64, error) {
+	return f.state, f.durationMS, f.err
 }
 
 // =============================================================================
@@ -353,7 +355,52 @@ type realHandshakerWithRoots struct {
 	roots *x509.CertPool
 }
 
-func (h *realHandshakerWithRoots) Handshake(ctx context.Context, addr string, cfg *tls.Config) (*tls.ConnectionState, error) {
+func (h *realHandshakerWithRoots) Handshake(ctx context.Context, addr string, cfg *tls.Config) (*tls.ConnectionState, float64, error) {
 	cfg.RootCAs = h.roots
 	return (&DefaultHandshaker{}).Handshake(ctx, addr, cfg)
+}
+
+type fakeTimeoutError struct {
+	wrapped error
+}
+
+func (e *fakeTimeoutError) Error() string { return "wrapped timeout" }
+func (e *fakeTimeoutError) Unwrap() error { return e.wrapped }
+
+func TestTLSUntrustedChainViaFakeHandshaker(t *testing.T) {
+	layer := New(&fakeHandshaker{
+		durationMS: 4.5,
+		err:        errors.New("x509: certificate signed by unknown authority"),
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_UNTRUSTED_CHAIN" {
+		t.Fatalf("error = %v, want TLS_UNTRUSTED_CHAIN", result.Error)
+	}
+	if result.DurationMS != 4.5 {
+		t.Fatalf("duration_ms = %v, want 4.5", result.DurationMS)
+	}
+}
+
+func TestTLSHandshakeTimeoutViaFakeHandshaker(t *testing.T) {
+	layer := New(&fakeHandshaker{
+		durationMS: 12.3,
+		err: &fakeTimeoutError{
+			wrapped: &net.DNSError{Err: "i/o timeout", IsTimeout: true},
+		},
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_HANDSHAKE_TIMEOUT" {
+		t.Fatalf("error = %v, want TLS_HANDSHAKE_TIMEOUT", result.Error)
+	}
+	if result.DurationMS != 12.3 {
+		t.Fatalf("duration_ms = %v, want 12.3", result.DurationMS)
+	}
 }

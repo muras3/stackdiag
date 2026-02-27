@@ -181,11 +181,42 @@ func TestRunTCPOnly(t *testing.T) {
 		Target:  core.Target{Original: "tcp://example.com:8080", Scheme: "tcp", Host: "example.com", Port: 8080},
 	})
 
-	if len(result.Layers) != 2 {
-		t.Errorf("layers count = %d, want 2", len(result.Layers))
+	if len(result.Layers) != 4 {
+		t.Errorf("layers count = %d, want 4", len(result.Layers))
+	}
+	if result.Layers["tls"].Status != core.StatusSkip {
+		t.Errorf("tls status = %q, want skip", result.Layers["tls"].Status)
+	}
+	if result.Layers["http"].Status != core.StatusSkip {
+		t.Errorf("http status = %q, want skip", result.Layers["http"].Status)
 	}
 	if result.Summary.ExitCode != 0 {
 		t.Errorf("ExitCode = %d, want 0", result.Summary.ExitCode)
+	}
+}
+
+func TestRunDNSTCPIncludesSkippedTLSHTTP(t *testing.T) {
+	layers := []core.Layer{
+		&fakeLayer{name: "dns", result: okResult()},
+		&fakeLayer{name: "tcp", result: okResult()},
+	}
+
+	r := New(layers)
+	result := r.Run(&core.ProbeContext{
+		Context: context.Background(),
+		Target:  core.Target{Original: "tcp://example.com:8080", Scheme: "tcp", Host: "example.com", Port: 8080},
+	})
+
+	for _, name := range []string{"dns", "tcp", "tls", "http"} {
+		if _, ok := result.Layers[name]; !ok {
+			t.Fatalf("missing layer %q", name)
+		}
+	}
+	if result.Layers["tls"].Status != core.StatusSkip {
+		t.Errorf("tls status = %q, want skip", result.Layers["tls"].Status)
+	}
+	if result.Layers["http"].Status != core.StatusSkip {
+		t.Errorf("http status = %q, want skip", result.Layers["http"].Status)
 	}
 }
 

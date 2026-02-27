@@ -54,6 +54,39 @@ func TestParseTarget(t *testing.T) {
 			},
 		},
 		{
+			name:  "https IPv6 URL with port and path",
+			input: "https://[::1]:443/path",
+			want: Target{
+				Original: "https://[::1]:443/path",
+				Scheme:   "https",
+				Host:     "::1",
+				Port:     443,
+				Path:     "/path",
+			},
+		},
+		{
+			name:  "tcp IPv6 URL with port",
+			input: "tcp://[::1]:8080",
+			want: Target{
+				Original: "tcp://[::1]:8080",
+				Scheme:   "tcp",
+				Host:     "::1",
+				Port:     8080,
+				Path:     "",
+			},
+		},
+		{
+			name:  "https URL preserves query string",
+			input: "https://api.example.com/health?ready=1",
+			want: Target{
+				Original: "https://api.example.com/health?ready=1",
+				Scheme:   "https",
+				Host:     "api.example.com",
+				Port:     443,
+				Path:     "/health?ready=1",
+			},
+		},
+		{
 			name:  "bare hostname defaults to https",
 			input: "example.com",
 			want: Target{
@@ -77,6 +110,11 @@ func TestParseTarget(t *testing.T) {
 		{
 			name:    "tcp without port",
 			input:   "tcp://example.com",
+			wantErr: true,
+		},
+		{
+			name:    "port out of range",
+			input:   "https://example.com:70000",
 			wantErr: true,
 		},
 	}
@@ -146,5 +184,10 @@ func TestTargetHostPort(t *testing.T) {
 	tgt := Target{Host: "example.com", Port: 443}
 	if got := tgt.HostPort(); got != "example.com:443" {
 		t.Errorf("HostPort() = %q, want example.com:443", got)
+	}
+
+	tgt = Target{Host: "::1", Port: 443}
+	if got := tgt.HostPort(); got != "[::1]:443" {
+		t.Errorf("HostPort() = %q, want [::1]:443", got)
 	}
 }

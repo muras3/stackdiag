@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -19,28 +20,31 @@ const expiringThresholdDays = 30
 
 // Handshaker abstracts the TLS handshake for testability.
 type Handshaker interface {
-	Handshake(ctx context.Context, addr string, cfg *tls.Config) (*tls.ConnectionState, error)
+	Handshake(ctx context.Context, addr string, cfg *tls.Config) (*tls.ConnectionState, float64, error)
 }
 
 // DefaultHandshaker performs a real TLS handshake: dial TCP, then TLS.
 type DefaultHandshaker struct{}
 
-func (h *DefaultHandshaker) Handshake(ctx context.Context, addr string, cfg *tls.Config) (*tls.ConnectionState, error) {
+func (h *DefaultHandshaker) Handshake(ctx context.Context, addr string, cfg *tls.Config) (*tls.ConnectionState, float64, error) {
 	dialer := &net.Dialer{}
 	tcpConn, err := dialer.DialContext(ctx, "tcp", addr)
 	if err != nil {
-		return nil, fmt.Errorf("tcp dial: %w", err)
+		return nil, 0, fmt.Errorf("tcp dial: %w", err)
 	}
 
+	start := time.Now()
 	tlsConn := tls.Client(tcpConn, cfg)
 	if err := tlsConn.HandshakeContext(ctx); err != nil {
+		durationMS := float64(time.Since(start).Microseconds()) / 1000.0
 		tcpConn.Close()
-		return nil, err
+		return nil, durationMS, err
 	}
+	durationMS := float64(time.Since(start).Microseconds()) / 1000.0
 
 	state := tlsConn.ConnectionState()
 	tlsConn.Close()
-	return &state, nil
+	return &state, durationMS, nil
 }
 
 // Layer performs TLS handshake diagnostics.
@@ -69,10 +73,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		InsecureSkipVerify: pctx.Insecure,
 	}
 
-	start := time.Now()
-	state, err := l.handshaker.Handshake(pctx.Context, addr, cfg)
-	durationMS := float64(time.Since(start).Microseconds()) / 1000.0
-
+	state, durationMS, err := l.handshaker.Handshake(pctx.Context, addr, cfg)
 	if err != nil {
 		return &core.LayerResult{
 			Status:       core.StatusFail,
@@ -125,7 +126,7 @@ func buildAddr(pctx *core.ProbeContext) string {
 	if len(pctx.ResolvedIPs) > 0 {
 		host = pctx.ResolvedIPs[0]
 	}
-	return fmt.Sprintf("%s:%d", host, pctx.Target.Port)
+	return net.JoinHostPort(host, strconv.Itoa(pctx.Target.Port))
 }
 
 // buildObservations creates the observations map from the TLS connection state.
