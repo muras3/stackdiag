@@ -156,6 +156,69 @@ HTTPレイヤーのみ追加で `timing.ttfb_ms` / `timing.total_ms` を返す�
 | http | `protocol` | string | HTTPプロトコル（例: "HTTP/2"） |
 | http | `status_code` | int | HTTPステータスコード |
 
+### `--count N` 時の構造
+
+`--count` 指定時、出力は反復計測構造に拡張される。
+
+```json
+{
+  "schema_version": "v0.1",
+  "count": 5,
+  "exit_code": 20,
+  "attempts": [
+    {
+      "attempt": 1,
+      "started_at": "2026-02-27T08:00:00Z",
+      "layers": {
+        "dns": {"status": "ok", "duration_ms": 9, "observations": {"...": "..."}, "error": null},
+        "tcp": {"status": "ok", "duration_ms": 16, "observations": {"...": "..."}, "error": null},
+        "tls": {"status": "ok", "duration_ms": 31, "observations": {"...": "..."}, "error": null},
+        "http": {"status": "ok", "duration_ms": 57, "observations": {"...": "..."}, "error": null}
+      },
+      "summary": {"wall_clock_ms": 122, "exit_code": 0}
+    }
+  ],
+  "statistics": {
+    "dns": {"p50_ms": 9.5, "p95_ms": 12, "success_count": 5, "fail_count": 0, "skip_count": 0, "sample_count": 5, "loss_ratio": 0.0},
+    "tcp": {"p50_ms": 16, "p95_ms": 4500, "success_count": 4, "fail_count": 1, "skip_count": 0, "sample_count": 5, "loss_ratio": 0.2}
+  }
+}
+```
+
+ルール:
+- `--count` 未指定時: `attempts`, `statistics`, `count` フィールドなし（既存構造維持）
+- 判別子: `count` フィールドの有無
+- p50/p95: 成功試行（ok/warn）の `duration_ms` のみ
+- `loss_ratio`: `fail_count / sample_count`（skipは分母に入れない）
+- `exit_code`: N回中の最悪ケース
+
+### `--tls-scan` 時の observations
+
+`--tls-scan` 指定時、TLSレイヤーの `observations` に `tls_scan` フィールドが追加される。
+
+```json
+"tls_scan": {
+  "performed": true,
+  "attempts": [
+    {"version": "TLSv1.0", "supported": true, "duration_ms": 12.0, "error": null},
+    {"version": "TLSv1.1", "supported": false, "duration_ms": 5.1, "error": {"code": "TLS_PROTOCOL_ERROR", "message": "..."}},
+    {"version": "TLSv1.2", "supported": true, "duration_ms": 8.3, "error": null},
+    {"version": "TLSv1.3", "supported": true, "duration_ms": 7.4, "error": null}
+  ],
+  "supported_versions": ["TLSv1.0", "TLSv1.2", "TLSv1.3"],
+  "deprecated_versions_enabled": ["TLSv1.0"]
+}
+```
+
+- deprecated検出時: `status=warn`, `error.code=TLS_DEPRECATED_VERSION_ENABLED`
+- `--tls-scan` 未指定時: `tls_scan` フィールドなし
+
+### 認証競合ルール
+
+- `--header Authorization` と `--bearer-env` / `--basic-env` の同時指定はエラー
+- `--bearer-env` と `--basic-env` の同時指定もエラー
+- 環境変数が未設定/空/空白のみの場合もエラー
+
 ### Schema Contract
 
 1. フィールドを削除しない
@@ -211,10 +274,15 @@ HTTPレイヤーのみ追加で `timing.ttfb_ms` / `timing.total_ms` を返す�
 - `--redact`（デフォルトON — Authorization等の機密ヘッダをマスク）
 - exit code（大分類）
 - 色付き出力 + `NO_COLOR` 対応
+- MinVersion: `tls.VersionTLS12` 明示（TLS/HTTP両経路）
+- `--bearer-env ENV_VAR`（環境変数からBearerトークン取得）
+- `--basic-env ENV_VAR`（環境変数からBasic認証取得）
+- `--tls-scan`（TLSバージョンスキャン: 1.0/1.1/1.2/1.3個別試行）
+- `--count N`（反復計測 + p50/p95/loss統計）
 
 ### v0.2
 
-- `--count N`（複数回プローブ）
+（予約 — v0.1完了後に再検討）
 
 ### Phase 1
 
@@ -223,7 +291,6 @@ HTTPレイヤーのみ追加で `timing.ttfb_ms` / `timing.total_ms` を返す�
 
 ### Phase 2
 
-- `--bearer-env`（環境変数からBearerトークン取得）
 - `--header-file`（ファイルからヘッダ読み込み）
 - `--netrc`（.netrcからの認証情報）
 
@@ -239,8 +306,8 @@ HTTPレイヤーのみ追加で `timing.ttfb_ms` / `timing.total_ms` を返す�
 
 | Phase | 内容 |
 |-------|------|
-| MVP (v0.1) | HTTPS中心レイヤー切り分け + --json + table + --redact |
-| v0.2 | --count N |
+| MVP (v0.1) | HTTPS中心レイヤー切り分け + --json + table + --redact + MinVersion TLS1.2 + --bearer-env + --basic-env + --tls-scan + --count N |
+| v0.2 | （予約 — v0.1完了後に再検討） |
 | 1 | --verbose, dns:// スキーム |
-| 2 | 認証ヘルパー（--bearer-env, --header-file, --netrc）、Rule Engine、MCP adapter |
+| 2 | 認証ヘルパー（--header-file, --netrc）、Rule Engine、MCP adapter |
 | 3 | UDP / Proxy / HTTP3 / gRPC |

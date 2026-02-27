@@ -109,3 +109,41 @@ Claude-Codex間の議論で合意した意思決定の記録。
 - Core Tech Implementer: Codex（TLS/HTTP計測）
 - Code Reviewer: Codex（全コード）
 - UI/UX Lead: Claude
+
+## Decision 13: v0.1スコープ拡張 — 全機能統合リリース
+
+**提案:** Claude → 認証のみv0.1、Codex → MinVersion+認証のみv0.1
+**結論:** 全機能v0.1に統合（Human判断）
+
+- v0.1に以下を全て含める:
+  - MinVersion: `tls.VersionTLS12` 明示（TLS layer / HTTP Transport両方）
+  - `--bearer-env ENV_VAR`（環境変数からBearerトークン取得）
+  - `--basic-env ENV_VAR`（環境変数からBasic認証取得）
+  - `--tls-scan`（TLS 1.0/1.1/1.2/1.3バージョンスキャン）
+  - `--count N` + p50/p95/loss統計（反復計測と統計集約）
+- 理由:
+  - スキーマ契約（追加のみ許可、型変更禁止）があるため、ユーザーがいないv0.1のうちに最適な構造を設計すべき
+  - v0.2に送ると後方互換制約の中で設計する羽目になる
+  - 認証安全化はセキュリティ診断ツールとしてのアイデンティティに関わる
+  - デフォルト挙動は変わらず、全てオプション指定なのでシンプルさは維持
+- 認証競合ルール:
+  - `--header Authorization` と `--bearer-env`/`--basic-env` の同時指定はエラー（INVALID_ARGS, exit 1）
+  - `--bearer-env` と `--basic-env` の同時指定もエラー
+  - 環境変数が未設定/空/空白のみの場合もエラー
+  - 判定はヘッダ名の大文字小文字を無視
+- `--count N` JSON設計:
+  - `attempts` 配列に各試行の生データ（既存LayerResultと同じ構造）
+  - `statistics` セクションにレイヤー別集約（p50_ms, p95_ms, success_count, fail_count, skip_count, sample_count, loss_ratio）
+  - `--count` 未指定時は既存フラット構造を維持（後方互換）
+  - 判別子は `count` フィールドの有無
+  - exit codeはN回中の最悪ケース
+- `--tls-scan` JSON設計:
+  - `observations` 内に `tls_scan` オブジェクト
+  - `attempts` 配列（version, supported, duration_ms, error）
+  - supported_versions, deprecated_versions_enabled（`[]string`）
+  - deprecated検出時: `status=warn`, `error.code=TLS_DEPRECATED_VERSION_ENABLED`
+  - `--tls-scan` 未指定時は `tls_scan` フィールドなし
+- Phase 2に残すもの:
+  - `--header-file`（ファイルからヘッダ読み込み）
+  - `--netrc`（.netrcからの認証情報）
+  - Rule Engine、MCP adapter
