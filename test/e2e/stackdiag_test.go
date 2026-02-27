@@ -2,9 +2,12 @@ package e2e
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -603,5 +606,196 @@ func TestBareHostname(t *testing.T) {
 		} else {
 			t.Error("bare hostname should include tls layer (defaults to HTTPS)")
 		}
+	}
+}
+
+// --- Auth header injection E2E tests ---
+
+// headerCaptureServer starts an HTTP server that captures the Authorization header
+// from incoming requests and returns it in the response body.
+func headerCaptureServer(t *testing.T) (*httptest.Server, *string) {
+	t.Helper()
+	var captured string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		captured = r.Header.Get("Authorization")
+		w.WriteHeader(http.StatusOK)
+		fmt.Fprintln(w, "OK")
+	}))
+	t.Cleanup(srv.Close)
+	return srv, &captured
+}
+
+func TestBearerEnvSendsToken(t *testing.T) {
+	srv, captured := headerCaptureServer(t)
+
+	token := "my-secret-bearer-token-12345"
+	t.Setenv("TEST_BEARER_TOKEN", token)
+
+	_, _, exitCode := runStackdiag(t, srv.URL, "--bearer-env", "TEST_BEARER_TOKEN", "--json", "--timeout", "5")
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0", exitCode)
+	}
+
+	want := "Bearer " + token
+	if *captured != want {
+		t.Errorf("Authorization header = %q, want %q", *captured, want)
+	}
+}
+
+func TestBasicEnvSendsHeader(t *testing.T) {
+	srv, captured := headerCaptureServer(t)
+
+	cred := "admin:hunter2"
+	t.Setenv("TEST_BASIC_CRED", cred)
+
+	_, _, exitCode := runStackdiag(t, srv.URL, "--basic-env", "TEST_BASIC_CRED", "--json", "--timeout", "5")
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0", exitCode)
+	}
+
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte(cred))
+	if *captured != want {
+		t.Errorf("Authorization header = %q, want %q", *captured, want)
+	}
+}
+
+func TestBearerEnvUnsetExits1(t *testing.T) {
+	// Use an env var name that does not exist.
+	_, stderr, exitCode := runStackdiag(t, "https://example.com", "--bearer-env", "NONEXISTENT_VAR_E2E_TEST", "--json", "--timeout", "5")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+
+	if !strings.Contains(stderr, "not set") {
+		t.Errorf("stderr should mention 'not set', got: %s", stderr)
+	}
+
+	// Security: stderr must NOT contain any token value.
+	if strings.Contains(stderr, "NONEXISTENT_VAR_E2E_TEST_VALUE") {
+		t.Error("stderr should not leak token values")
+	}
+}
+
+func TestBearerEnvEmptyExits1(t *testing.T) {
+	t.Setenv("TEST_BEARER_EMPTY", "")
+
+	_, stderr, exitCode := runStackdiag(t, "https://example.com", "--bearer-env", "TEST_BEARER_EMPTY", "--json", "--timeout", "5")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+
+	if !strings.Contains(stderr, "empty") {
+		t.Errorf("stderr should mention 'empty', got: %s", stderr)
+	}
+}
+
+func TestBasicEnvNoColonExits1(t *testing.T) {
+	t.Setenv("TEST_BASIC_NOCOLON", "nocolon")
+
+	_, stderr, exitCode := runStackdiag(t, "https://example.com", "--basic-env", "TEST_BASIC_NOCOLON", "--json", "--timeout", "5")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+
+	if !strings.Contains(stderr, "user:password") {
+		t.Errorf("stderr should mention format requirement, got: %s", stderr)
+	}
+
+	// Security: stderr must NOT contain the credential value.
+	if strings.Contains(stderr, "nocolon") {
+		t.Error("stderr should not leak credential values")
+	}
+}
+
+func TestBearerEnvBasicEnvConflict(t *testing.T) {
+	t.Setenv("TEST_TOK", "token")
+	t.Setenv("TEST_CRED", "user:pass")
+
+	_, stderr, exitCode := runStackdiag(t, "https://example.com",
+		"--bearer-env", "TEST_TOK", "--basic-env", "TEST_CRED", "--json", "--timeout", "5")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+
+	if !strings.Contains(stderr, "cannot be used together") {
+		t.Errorf("stderr should mention conflict, got: %s", stderr)
+	}
+}
+
+func TestBearerEnvHeaderConflict(t *testing.T) {
+	t.Setenv("TEST_TOK2", "token")
+
+	_, stderr, exitCode := runStackdiag(t, "https://example.com",
+		"--bearer-env", "TEST_TOK2", "--header", "Authorization: Bearer manual", "--json", "--timeout", "5")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+
+	if !strings.Contains(stderr, "conflicts") {
+		t.Errorf("stderr should mention conflict, got: %s", stderr)
+	}
+}
+
+func TestBearerEnvRedactedInJSON(t *testing.T) {
+	srv, _ := headerCaptureServer(t)
+
+	token := "super-secret-redacted-test"
+	t.Setenv("TEST_BEARER_REDACT", token)
+
+	stdout, _, exitCode := runStackdiag(t, srv.URL, "--bearer-env", "TEST_BEARER_REDACT", "--json", "--timeout", "5")
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0", exitCode)
+	}
+
+	// Raw token must NOT appear in stdout.
+	if strings.Contains(stdout, token) {
+		t.Fatal("raw token appeared in JSON output with default redaction")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+
+	layers := result["layers"].(map[string]any)
+	httpLayer := layers["http"].(map[string]any)
+	obs := httpLayer["observations"].(map[string]any)
+	headers, ok := obs["request_headers"].(map[string]any)
+	if !ok {
+		t.Fatal("missing request_headers in observations")
+	}
+	if headers["Authorization"] != "[REDACTED]" {
+		t.Errorf("Authorization = %v, want [REDACTED]", headers["Authorization"])
+	}
+}
+
+func TestBearerEnvNoRedactShowsRaw(t *testing.T) {
+	srv, _ := headerCaptureServer(t)
+
+	token := "raw-token-visible-test"
+	t.Setenv("TEST_BEARER_NOREDACT", token)
+
+	stdout, _, exitCode := runStackdiag(t, srv.URL, "--bearer-env", "TEST_BEARER_NOREDACT",
+		"--no-redact", "--json", "--timeout", "5")
+	if exitCode != 0 {
+		t.Fatalf("exit code = %d, want 0", exitCode)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+
+	layers := result["layers"].(map[string]any)
+	httpLayer := layers["http"].(map[string]any)
+	obs := httpLayer["observations"].(map[string]any)
+	headers, ok := obs["request_headers"].(map[string]any)
+	if !ok {
+		t.Fatal("missing request_headers in observations")
+	}
+
+	want := "Bearer " + token
+	if headers["Authorization"] != want {
+		t.Errorf("Authorization = %v, want %q", headers["Authorization"], want)
 	}
 }
