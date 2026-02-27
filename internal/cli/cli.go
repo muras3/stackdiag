@@ -15,6 +15,7 @@ type Config struct {
 	Headers  map[string]string
 	Timeout  int
 	Insecure bool
+	Redact   bool
 	Version  bool
 }
 
@@ -61,17 +62,25 @@ func ParseArgs(args []string) (*Config, error) {
 	}
 
 	var headers headerList
+	var noRedact bool
+	var redactFlag bool // explicit --redact (sugar, no-op since default is true)
 
 	fs.BoolVar(&cfg.JSON, "json", false, "output as JSON")
 	fs.StringVar(&cfg.Method, "method", "GET", "HTTP method")
 	fs.Var(&headers, "header", "HTTP header (repeatable, format: Key: Value)")
 	fs.IntVar(&cfg.Timeout, "timeout", 10, "timeout in seconds")
 	fs.BoolVar(&cfg.Insecure, "insecure", false, "skip TLS certificate verification")
+	fs.BoolVar(&noRedact, "no-redact", false, "disable redaction of sensitive values")
+	fs.BoolVar(&redactFlag, "redact", false, "redact sensitive values (default)")
 	fs.BoolVar(&cfg.Version, "version", false, "show version")
 
 	if err := fs.Parse(flagArgs); err != nil {
 		return nil, err
 	}
+
+	// --no-redact is the canonical toggle; --redact is just sugar.
+	// Default is redact=true. --no-redact overrides regardless of order.
+	cfg.Redact = !noRedact
 
 	if cfg.Version {
 		return cfg, nil

@@ -62,6 +62,7 @@ type ProbeContext struct {
 	Target      Target
 	ResolvedIPs []string
 	Insecure    bool
+	Redact      bool
 	Method      string
 	Headers     map[string]string
 }
