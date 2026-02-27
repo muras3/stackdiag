@@ -71,16 +71,21 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	cfg := &tls.Config{
 		ServerName:         pctx.Target.Host,
 		InsecureSkipVerify: pctx.Insecure,
+		MinVersion:         tls.VersionTLS12,
 	}
 
 	state, durationMS, err := l.handshaker.Handshake(pctx.Context, addr, cfg)
 	if err != nil {
-		return &core.LayerResult{
+		result := &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   durationMS,
 			Observations: map[string]any{},
 			Error:        classifyTLSError(err),
 		}
+		if pctx.TLSScan {
+			l.performTLSScan(pctx, addr, result)
+		}
+		return result
 	}
 
 	obs := buildObservations(state, pctx.Target.Host)
@@ -142,12 +147,18 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		}
 	}
 
-	return &core.LayerResult{
+	result := &core.LayerResult{
 		Status:       core.StatusOK,
 		DurationMS:   durationMS,
 		Observations: obs,
 		Error:        nil,
 	}
+
+	if pctx.TLSScan {
+		l.performTLSScan(pctx, addr, result)
+	}
+
+	return result
 }
 
 // buildAddr constructs the dial address from the stackdiag context.
@@ -240,6 +251,84 @@ func isHandshakeTimeout(err error) bool {
 		return true
 	}
 	return false
+}
+
+// tlsScanVersions defines the TLS versions to probe during a scan, in order.
+var tlsScanVersions = []uint16{
+	tls.VersionTLS10,
+	tls.VersionTLS11,
+	tls.VersionTLS12,
+	tls.VersionTLS13,
+}
+
+// deprecatedVersions are TLS versions considered deprecated.
+var deprecatedVersions = map[uint16]bool{
+	tls.VersionTLS10: true,
+	tls.VersionTLS11: true,
+}
+
+// performTLSScan probes each TLS version individually and adds tls_scan to observations.
+// If deprecated versions are found and the current status is ok, it upgrades to warn.
+func (l *Layer) performTLSScan(pctx *core.ProbeContext, addr string, result *core.LayerResult) {
+	attempts := make([]map[string]any, 0, len(tlsScanVersions))
+	var supportedVersions []string
+	var deprecatedEnabled []string
+
+	for _, ver := range tlsScanVersions {
+		scanCfg := &tls.Config{
+			ServerName:         pctx.Target.Host,
+			InsecureSkipVerify: true, // scan only tests protocol support
+			MinVersion:         ver,
+			MaxVersion:         ver,
+		}
+
+		_, dur, err := l.handshaker.Handshake(pctx.Context, addr, scanCfg)
+
+		attempt := map[string]any{
+			"version":     tlsVersionString(ver),
+			"duration_ms": dur,
+		}
+
+		if err != nil {
+			attempt["supported"] = false
+			attempt["error"] = map[string]any{
+				"code":    classifyTLSError(err).Code,
+				"message": err.Error(),
+			}
+		} else {
+			attempt["supported"] = true
+			attempt["error"] = nil
+			supportedVersions = append(supportedVersions, tlsVersionString(ver))
+			if deprecatedVersions[ver] {
+				deprecatedEnabled = append(deprecatedEnabled, tlsVersionString(ver))
+			}
+		}
+
+		attempts = append(attempts, attempt)
+	}
+
+	if supportedVersions == nil {
+		supportedVersions = []string{}
+	}
+	if deprecatedEnabled == nil {
+		deprecatedEnabled = []string{}
+	}
+
+	result.Observations["tls_scan"] = map[string]any{
+		"performed":                   true,
+		"attempts":                    attempts,
+		"supported_versions":          supportedVersions,
+		"deprecated_versions_enabled": deprecatedEnabled,
+	}
+
+	// If deprecated versions found and normal probe was ok → warn
+	if len(deprecatedEnabled) > 0 && result.Status == core.StatusOK {
+		result.Status = core.StatusWarn
+		result.Error = &core.ProbeError{
+			Code:    "TLS_DEPRECATED_VERSION_ENABLED",
+			Message: fmt.Sprintf("deprecated TLS versions enabled: %s", strings.Join(deprecatedEnabled, ", ")),
+		}
+	}
 }
 
 // tlsVersionString converts a TLS version constant to a human-readable string.

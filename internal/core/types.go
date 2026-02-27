@@ -139,6 +139,157 @@ func (r *Result) MarshalJSON() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// AttemptResult holds the outcome of a single attempt in a --count N run.
+type AttemptResult struct {
+	Attempt   int                     `json:"attempt"`
+	StartedAt time.Time               `json:"started_at"`
+	Layers    map[string]*LayerResult `json:"layers"`
+	Summary   *Summary                `json:"summary"`
+}
+
+// MarshalJSON implements json.Marshaler to guarantee layers appear in execution
+// order (dns→tcp→tls→http).
+func (a *AttemptResult) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteString(`{"attempt":`)
+	b, err := marshalNoEscape(a.Attempt)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteString(`,"started_at":`)
+	b, err = marshalNoEscape(a.StartedAt)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteString(`,"layers":{`)
+	first := true
+	for _, name := range LayerOrder {
+		lr, ok := a.Layers[name]
+		if !ok {
+			continue
+		}
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		b, err = marshalNoEscape(name)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(b)
+		buf.WriteByte(':')
+		b, err = marshalNoEscape(lr)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(b)
+	}
+	buf.WriteByte('}')
+
+	buf.WriteString(`,"summary":`)
+	b, err = marshalNoEscape(a.Summary)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+// LayerStatistics holds aggregate statistics for a single layer across multiple attempts.
+type LayerStatistics struct {
+	P50MS        *float64 `json:"p50_ms,omitempty"`
+	P95MS        *float64 `json:"p95_ms,omitempty"`
+	SuccessCount int      `json:"success_count"`
+	FailCount    int      `json:"fail_count"`
+	SkipCount    int      `json:"skip_count"`
+	SampleCount  int      `json:"sample_count"`
+	LossRatio    float64  `json:"loss_ratio"`
+}
+
+// CountResult is the top-level output for --count N runs.
+type CountResult struct {
+	SchemaVersion string                      `json:"schema_version"`
+	Target        string                      `json:"target"`
+	Count         int                         `json:"count"`
+	ExitCode      int                         `json:"exit_code"`
+	Attempts      []*AttemptResult            `json:"attempts"`
+	Statistics    map[string]*LayerStatistics `json:"statistics"`
+}
+
+// MarshalJSON implements json.Marshaler to guarantee statistics keys appear in
+// execution order (dns→tcp→tls→http).
+func (c *CountResult) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.WriteString(`{"schema_version":`)
+	b, err := marshalNoEscape(c.SchemaVersion)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteString(`,"target":`)
+	b, err = marshalNoEscape(c.Target)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteString(`,"count":`)
+	b, err = marshalNoEscape(c.Count)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteString(`,"exit_code":`)
+	b, err = marshalNoEscape(c.ExitCode)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteString(`,"attempts":`)
+	b, err = marshalNoEscape(c.Attempts)
+	if err != nil {
+		return nil, err
+	}
+	buf.Write(b)
+
+	buf.WriteString(`,"statistics":{`)
+	first := true
+	for _, name := range LayerOrder {
+		ls, ok := c.Statistics[name]
+		if !ok {
+			continue
+		}
+		if !first {
+			buf.WriteByte(',')
+		}
+		first = false
+		b, err = marshalNoEscape(name)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(b)
+		buf.WriteByte(':')
+		b, err = marshalNoEscape(ls)
+		if err != nil {
+			return nil, err
+		}
+		buf.Write(b)
+	}
+	buf.WriteByte('}')
+
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
 // ProbeContext carries shared state through the layer execution pipeline.
 type ProbeContext struct {
 	Context     context.Context
@@ -148,6 +299,7 @@ type ProbeContext struct {
 	Redact      bool
 	Method      string
 	Headers     map[string]string
+	TLSScan     bool // --tls-scan: probe TLS version support
 }
 
 // Layer is the interface that each network layer must implement.

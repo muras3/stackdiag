@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"testing"
 	"time"
 )
@@ -96,4 +97,142 @@ func TestResult(t *testing.T) {
 	if r.Summary.ExitCode != 0 {
 		t.Errorf("ExitCode = %d, want 0", r.Summary.ExitCode)
 	}
+}
+
+func TestAttemptResultMarshalJSON(t *testing.T) {
+	ar := &AttemptResult{
+		Attempt:   1,
+		StartedAt: time.Date(2026, 2, 27, 8, 0, 0, 0, time.UTC),
+		Layers: map[string]*LayerResult{
+			"http": {Status: StatusOK, DurationMS: 57, Observations: map[string]any{}, Error: nil},
+			"dns":  {Status: StatusOK, DurationMS: 9, Observations: map[string]any{}, Error: nil},
+			"tls":  {Status: StatusOK, DurationMS: 31, Observations: map[string]any{}, Error: nil},
+			"tcp":  {Status: StatusOK, DurationMS: 16, Observations: map[string]any{}, Error: nil},
+		},
+		Summary: &Summary{WallClockMS: 122, ExitCode: 0},
+	}
+
+	b, err := json.Marshal(ar)
+	if err != nil {
+		t.Fatalf("MarshalJSON error: %v", err)
+	}
+
+	// Verify layer order: dns must come before tcp, tcp before tls, tls before http
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	s := string(b)
+	dnsIdx := indexOf(s, `"dns"`)
+	tcpIdx := indexOf(s, `"tcp"`)
+	tlsIdx := indexOf(s, `"tls"`)
+	httpIdx := indexOf(s, `"http"`)
+
+	if dnsIdx >= tcpIdx || tcpIdx >= tlsIdx || tlsIdx >= httpIdx {
+		t.Errorf("layers not in order dns→tcp→tls→http in JSON: %s", s)
+	}
+}
+
+func TestCountResultMarshalJSON(t *testing.T) {
+	p50 := 9.5
+	cr := &CountResult{
+		SchemaVersion: "v0.1",
+		Target:        "https://example.com",
+		Count:         1,
+		ExitCode:      0,
+		Attempts: []*AttemptResult{
+			{
+				Attempt:   1,
+				StartedAt: time.Date(2026, 2, 27, 8, 0, 0, 0, time.UTC),
+				Layers: map[string]*LayerResult{
+					"dns": {Status: StatusOK, DurationMS: 9, Observations: map[string]any{}, Error: nil},
+				},
+				Summary: &Summary{WallClockMS: 9, ExitCode: 0},
+			},
+		},
+		Statistics: map[string]*LayerStatistics{
+			"dns": {P50MS: &p50, SuccessCount: 1, SampleCount: 1},
+		},
+	}
+
+	b, err := json.Marshal(cr)
+	if err != nil {
+		t.Fatalf("MarshalJSON error: %v", err)
+	}
+
+	// Verify it contains expected fields
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(b, &raw); err != nil {
+		t.Fatalf("Unmarshal error: %v", err)
+	}
+
+	for _, key := range []string{"schema_version", "target", "count", "exit_code", "attempts", "statistics"} {
+		if _, ok := raw[key]; !ok {
+			t.Errorf("missing key %q in JSON output", key)
+		}
+	}
+}
+
+func TestCountResultStatisticsOrder(t *testing.T) {
+	cr := &CountResult{
+		SchemaVersion: "v0.1",
+		Target:        "https://example.com",
+		Count:         1,
+		ExitCode:      0,
+		Attempts:      []*AttemptResult{},
+		Statistics: map[string]*LayerStatistics{
+			"http": {SampleCount: 1},
+			"dns":  {SampleCount: 1},
+			"tls":  {SampleCount: 1},
+			"tcp":  {SampleCount: 1},
+		},
+	}
+
+	b, err := json.Marshal(cr)
+	if err != nil {
+		t.Fatalf("MarshalJSON error: %v", err)
+	}
+
+	s := string(b)
+	dnsIdx := indexOf(s, `"dns"`)
+	tcpIdx := indexOf(s, `"tcp"`)
+	tlsIdx := indexOf(s, `"tls"`)
+	httpIdx := indexOf(s, `"http"`)
+
+	if dnsIdx >= tcpIdx || tcpIdx >= tlsIdx || tlsIdx >= httpIdx {
+		t.Errorf("statistics not in order dns→tcp→tls→http in JSON: %s", s)
+	}
+}
+
+func TestLayerStatisticsOmitsNilPercentiles(t *testing.T) {
+	ls := &LayerStatistics{
+		SuccessCount: 0,
+		FailCount:    3,
+		SampleCount:  3,
+		LossRatio:    1.0,
+	}
+
+	b, err := json.Marshal(ls)
+	if err != nil {
+		t.Fatalf("MarshalJSON error: %v", err)
+	}
+
+	s := string(b)
+	if indexOf(s, "p50_ms") != -1 {
+		t.Errorf("nil p50_ms should be omitted, got: %s", s)
+	}
+	if indexOf(s, "p95_ms") != -1 {
+		t.Errorf("nil p95_ms should be omitted, got: %s", s)
+	}
+}
+
+// indexOf returns the position of substr in s, or -1 if not found.
+func indexOf(s, substr string) int {
+	for i := 0; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
 }

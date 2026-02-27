@@ -46,16 +46,15 @@ func Render(w io.Writer, r *core.Result, useColor bool) error {
 			continue
 		}
 
-		sym := statusSymbol(lr.Status, useColor)
-		dur := formatDuration(lr.DurationMS)
-		desc := layerDescription(name, lr, useColor)
-
-		// Right-align the duration field.
-		paddedDur := fmt.Sprintf("%*s", maxDurLen, dur)
-
-		line := fmt.Sprintf("  %-4s  %s  %s  %s", name, sym, paddedDur, desc)
-		if _, err := fmt.Fprintln(w, line); err != nil {
+		if err := renderLayerLine(w, name, lr, maxDurLen, useColor); err != nil {
 			return err
+		}
+
+		// Render TLS scan sub-line if present.
+		if name == "tls" {
+			if err := renderTLSScanLine(w, lr, useColor); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -248,6 +247,202 @@ func toInt(v any) int {
 	default:
 		return 0
 	}
+}
+
+// renderLayerLine writes a single layer line to w.
+func renderLayerLine(w io.Writer, name string, lr *core.LayerResult, maxDurLen int, useColor bool) error {
+	sym := statusSymbol(lr.Status, useColor)
+	dur := formatDuration(lr.DurationMS)
+	desc := layerDescription(name, lr, useColor)
+
+	// Right-align the duration field.
+	paddedDur := fmt.Sprintf("%*s", maxDurLen, dur)
+
+	line := fmt.Sprintf("  %-4s  %s  %s  %s", name, sym, paddedDur, desc)
+	_, err := fmt.Fprintln(w, line)
+	return err
+}
+
+// deprecatedVersions is the set of TLS versions considered deprecated.
+var deprecatedVersions = map[string]bool{
+	"TLSv1.0": true,
+	"TLSv1.1": true,
+}
+
+// renderTLSScanLine writes the TLS scan sub-line if tls_scan data is present.
+func renderTLSScanLine(w io.Writer, lr *core.LayerResult, useColor bool) error {
+	scanData, ok := lr.Observations["tls_scan"]
+	if !ok {
+		return nil
+	}
+	scanMap, ok := scanData.(map[string]any)
+	if !ok {
+		return nil
+	}
+	attemptsRaw := scanMap["attempts"]
+	if attemptsRaw == nil {
+		return nil
+	}
+
+	// Handle both []any (from JSON round-trip) and []map[string]any (from direct Probe).
+	var attemptMaps []map[string]any
+	switch a := attemptsRaw.(type) {
+	case []any:
+		for _, v := range a {
+			if m, ok := v.(map[string]any); ok {
+				attemptMaps = append(attemptMaps, m)
+			}
+		}
+	case []map[string]any:
+		attemptMaps = a
+	}
+	if len(attemptMaps) == 0 {
+		return nil
+	}
+
+	var parts []string
+	for _, am := range attemptMaps {
+		version, _ := am["version"].(string)
+		supported, _ := am["supported"].(bool)
+
+		var sym string
+		if supported && deprecatedVersions[version] {
+			sym = scanStatusSymbol(core.StatusWarn, useColor)
+		} else if supported {
+			sym = scanStatusSymbol(core.StatusOK, useColor)
+		} else {
+			sym = scanStatusSymbol(core.StatusFail, useColor)
+		}
+		parts = append(parts, fmt.Sprintf("%s %s", version, sym))
+	}
+
+	line := fmt.Sprintf("    scan: %s", strings.Join(parts, " | "))
+	if _, err := fmt.Fprintln(w, line); err != nil {
+		return err
+	}
+
+	// Show legend if any deprecated versions were found.
+	for _, am := range attemptMaps {
+		version, _ := am["version"].(string)
+		supported, _ := am["supported"].(bool)
+		if supported && deprecatedVersions[version] {
+			legend := "deprecated"
+			if useColor {
+				legend = colorYellow + "\u26a0" + colorReset + " = deprecated"
+			} else {
+				legend = "[!!] = deprecated"
+			}
+			if _, err := fmt.Fprintf(w, "           %s\n", legend); err != nil {
+				return err
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+// scanStatusSymbol returns a compact symbol for the scan sub-line.
+func scanStatusSymbol(s core.Status, useColor bool) string {
+	if useColor {
+		switch s {
+		case core.StatusOK:
+			return colorGreen + "\u2713" + colorReset
+		case core.StatusWarn:
+			return colorYellow + "\u26a0" + colorReset
+		case core.StatusFail:
+			return colorRed + "\u2717" + colorReset
+		default:
+			return "?"
+		}
+	}
+	switch s {
+	case core.StatusOK:
+		return "[ok]"
+	case core.StatusWarn:
+		return "[!!]"
+	case core.StatusFail:
+		return "[FAIL]"
+	default:
+		return "[??]"
+	}
+}
+
+// RenderCount writes the CountResult as a human-readable table to w.
+func RenderCount(w io.Writer, r *core.CountResult, useColor bool) error {
+	totalAttempts := len(r.Attempts)
+
+	for i, attempt := range r.Attempts {
+		// Blank line between attempts.
+		if i > 0 {
+			if _, err := fmt.Fprintln(w); err != nil {
+				return err
+			}
+		}
+
+		// Attempt header.
+		if _, err := fmt.Fprintf(w, "  Attempt %d/%d\n", attempt.Attempt, totalAttempts); err != nil {
+			return err
+		}
+
+		// Compute max duration width for this attempt.
+		maxDurLen := 0
+		for _, name := range layerOrder {
+			lr := attempt.Layers[name]
+			if lr == nil {
+				continue
+			}
+			dur := formatDuration(lr.DurationMS)
+			if len(dur) > maxDurLen {
+				maxDurLen = len(dur)
+			}
+		}
+
+		// Render layer lines.
+		for _, name := range layerOrder {
+			lr := attempt.Layers[name]
+			if lr == nil {
+				continue
+			}
+			if err := renderLayerLine(w, name, lr, maxDurLen, useColor); err != nil {
+				return err
+			}
+		}
+	}
+
+	// Statistics section.
+	if _, err := fmt.Fprintf(w, "\n  Statistics (%d attempts):\n", totalAttempts); err != nil {
+		return err
+	}
+
+	for _, name := range layerOrder {
+		ls := r.Statistics[name]
+		if ls == nil {
+			continue
+		}
+
+		p50Str := "-"
+		if ls.P50MS != nil {
+			p50Str = fmt.Sprintf("%.0fms", *ls.P50MS)
+		}
+		p95Str := "-"
+		if ls.P95MS != nil {
+			p95Str = fmt.Sprintf("%.0fms", *ls.P95MS)
+		}
+		lossStr := fmt.Sprintf("%.1f%%", ls.LossRatio*100)
+
+		line := fmt.Sprintf("    %-4s  p50: %5s  p95: %5s  loss: %s", name, p50Str, p95Str, lossStr)
+		if _, err := fmt.Fprintln(w, line); err != nil {
+			return err
+		}
+	}
+
+	// Exit code.
+	if _, err := fmt.Fprintf(w, "\n  exit %d\n", r.ExitCode); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // formatSummary builds the summary line.

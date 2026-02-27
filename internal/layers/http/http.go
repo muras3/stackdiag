@@ -30,7 +30,7 @@ func New(client *http.Client) *Layer {
 // NewDefault creates an HTTP Layer with a transport tuned for probing:
 // no keep-alives, no auto-redirect, configurable TLS.
 func NewDefault(insecure bool, serverName string) *Layer {
-	tlsCfg := &tls.Config{InsecureSkipVerify: insecure}
+	tlsCfg := &tls.Config{InsecureSkipVerify: insecure, MinVersion: tls.VersionTLS12}
 	// When dialing a resolved IP, set ServerName so TLS SNI and certificate
 	// verification use the original hostname instead of the IP address.
 	if serverName != "" {
@@ -99,6 +99,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		"method":          method,
 		"protocol":        resp.Proto,
 		"status_code":     resp.StatusCode,
+		"status_text":     http.StatusText(resp.StatusCode),
 		"request_headers": buildRequestHeaders(pctx.Headers, pctx.Redact),
 	}
 

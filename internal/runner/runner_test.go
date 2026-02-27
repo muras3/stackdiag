@@ -319,6 +319,198 @@ func TestRunEmptyLayers(t *testing.T) {
 	}
 }
 
+func TestRunCountBasic(t *testing.T) {
+	layers := []core.Layer{
+		&fakeLayer{name: "dns", result: okResult()},
+		&fakeLayer{name: "tcp", result: okResult()},
+		&fakeLayer{name: "tls", result: okResult()},
+		&fakeLayer{name: "http", result: okResult()},
+	}
+
+	r := New(layers)
+	cr := r.RunCount(3, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
+		return &core.ProbeContext{
+			Context: context.Background(),
+			Target:  core.Target{Original: "https://example.com", Scheme: "https", Host: "example.com", Port: 443, Path: "/"},
+		}, func() {}
+	})
+
+	if len(cr.Attempts) != 3 {
+		t.Fatalf("Attempts = %d, want 3", len(cr.Attempts))
+	}
+	if cr.Count != 3 {
+		t.Errorf("Count = %d, want 3", cr.Count)
+	}
+	if cr.ExitCode != 0 {
+		t.Errorf("ExitCode = %d, want 0", cr.ExitCode)
+	}
+	for i, a := range cr.Attempts {
+		if a.Attempt != i+1 {
+			t.Errorf("Attempt[%d].Attempt = %d, want %d", i, a.Attempt, i+1)
+		}
+	}
+	// All layers should have statistics with 0 loss
+	for _, name := range []string{"dns", "tcp", "tls", "http"} {
+		ls, ok := cr.Statistics[name]
+		if !ok {
+			t.Errorf("missing statistics for %q", name)
+			continue
+		}
+		if ls.SuccessCount != 3 {
+			t.Errorf("%s SuccessCount = %d, want 3", name, ls.SuccessCount)
+		}
+		if ls.LossRatio != 0.0 {
+			t.Errorf("%s LossRatio = %f, want 0", name, ls.LossRatio)
+		}
+		if ls.P50MS == nil {
+			t.Errorf("%s P50MS should not be nil", name)
+		}
+	}
+}
+
+func TestRunCountWithFailure(t *testing.T) {
+	callCount := 0
+	layers := []core.Layer{
+		&fakeLayer{name: "dns", result: okResult()},
+		&fakeLayerFunc{name: "tcp", fn: func() *core.LayerResult {
+			callCount++
+			if callCount == 2 {
+				return failResult("TCP_REFUSED")
+			}
+			return okResult()
+		}},
+		&fakeLayer{name: "tls", result: okResult()},
+		&fakeLayer{name: "http", result: okResult()},
+	}
+
+	r := New(layers)
+	cr := r.RunCount(3, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
+		return &core.ProbeContext{
+			Context: context.Background(),
+			Target:  core.Target{Original: "https://example.com", Scheme: "https", Host: "example.com", Port: 443, Path: "/"},
+		}, func() {}
+	})
+
+	if cr.ExitCode != 20 {
+		t.Errorf("ExitCode = %d, want 20 (worst)", cr.ExitCode)
+	}
+	tcpStats := cr.Statistics["tcp"]
+	if tcpStats.FailCount != 1 {
+		t.Errorf("tcp FailCount = %d, want 1", tcpStats.FailCount)
+	}
+	if tcpStats.SuccessCount != 2 {
+		t.Errorf("tcp SuccessCount = %d, want 2", tcpStats.SuccessCount)
+	}
+}
+
+func TestRunCountContinuesAfterFail(t *testing.T) {
+	attemptsSeen := 0
+	layers := []core.Layer{
+		&fakeLayerFunc{name: "dns", fn: func() *core.LayerResult {
+			attemptsSeen++
+			if attemptsSeen == 1 {
+				return failResult("DNS_NXDOMAIN")
+			}
+			return okResult()
+		}},
+		&fakeLayer{name: "tcp", result: okResult()},
+	}
+
+	r := New(layers)
+	cr := r.RunCount(2, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
+		return &core.ProbeContext{
+			Context: context.Background(),
+			Target:  core.Target{Original: "https://example.com", Scheme: "https", Host: "example.com", Port: 443, Path: "/"},
+		}, func() {}
+	})
+
+	if len(cr.Attempts) != 2 {
+		t.Fatalf("Attempts = %d, want 2", len(cr.Attempts))
+	}
+	if cr.Attempts[0].Layers["dns"].Status != core.StatusFail {
+		t.Errorf("attempt 1 dns should be fail")
+	}
+	if cr.Attempts[1].Layers["dns"].Status != core.StatusOK {
+		t.Errorf("attempt 2 dns should be ok")
+	}
+}
+
+func TestRunCountStatisticsP50P95(t *testing.T) {
+	// 5 attempts with known durations: 10, 20, 30, 40, 50
+	callIdx := 0
+	durations := []float64{10, 20, 30, 40, 50}
+	layers := []core.Layer{
+		&fakeLayerFunc{name: "dns", fn: func() *core.LayerResult {
+			d := durations[callIdx]
+			callIdx++
+			return &core.LayerResult{
+				Status:       core.StatusOK,
+				DurationMS:   d,
+				Observations: map[string]any{},
+			}
+		}},
+	}
+
+	r := New(layers)
+	cr := r.RunCount(5, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
+		return &core.ProbeContext{
+			Context: context.Background(),
+			Target:  core.Target{Original: "tcp://example.com:80", Scheme: "tcp", Host: "example.com", Port: 80},
+		}, func() {}
+	})
+
+	dns := cr.Statistics["dns"]
+	if dns.P50MS == nil {
+		t.Fatal("P50MS should not be nil")
+	}
+	// p50 of [10,20,30,40,50] = 30 (median, odd count)
+	if *dns.P50MS != 30 {
+		t.Errorf("P50MS = %f, want 30", *dns.P50MS)
+	}
+	// p95 of 5 values: index = ceil(0.95*5)-1 = 5-1 = 4 → value 50
+	if dns.P95MS == nil {
+		t.Fatal("P95MS should not be nil")
+	}
+	if *dns.P95MS != 50 {
+		t.Errorf("P95MS = %f, want 50", *dns.P95MS)
+	}
+}
+
+func TestRunCountNoSuccessOmitsPercentiles(t *testing.T) {
+	layers := []core.Layer{
+		&fakeLayer{name: "dns", result: failResult("DNS_NXDOMAIN")},
+		&fakeLayer{name: "tcp", result: okResult()},
+	}
+
+	r := New(layers)
+	cr := r.RunCount(3, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
+		return &core.ProbeContext{
+			Context: context.Background(),
+			Target:  core.Target{Original: "https://example.com", Scheme: "https", Host: "example.com", Port: 443, Path: "/"},
+		}, func() {}
+	})
+
+	dns := cr.Statistics["dns"]
+	if dns.P50MS != nil {
+		t.Errorf("dns P50MS should be nil when all fail, got %f", *dns.P50MS)
+	}
+	if dns.P95MS != nil {
+		t.Errorf("dns P95MS should be nil when all fail, got %f", *dns.P95MS)
+	}
+	if dns.FailCount != 3 {
+		t.Errorf("dns FailCount = %d, want 3", dns.FailCount)
+	}
+}
+
+// fakeLayerFunc allows per-call dynamic results.
+type fakeLayerFunc struct {
+	name string
+	fn   func() *core.LayerResult
+}
+
+func (f *fakeLayerFunc) Name() string                                 { return f.name }
+func (f *fakeLayerFunc) Probe(_ *core.ProbeContext) *core.LayerResult { return f.fn() }
+
 func TestRunStartedAtAndWallClock(t *testing.T) {
 	layers := []core.Layer{
 		&fakeLayer{name: "dns", result: okResult(), delay: 10 * time.Millisecond},

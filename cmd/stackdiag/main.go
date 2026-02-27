@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/muras3/stackdiag/internal/cli"
@@ -50,6 +52,45 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Auth header injection from environment variables.
+	if cfg.BearerEnv != "" {
+		envVal := os.Getenv(cfg.BearerEnv)
+		if envVal == "" {
+			if _, ok := os.LookupEnv(cfg.BearerEnv); !ok {
+				fmt.Fprintf(os.Stderr, "Error: environment variable %q is not set\n", cfg.BearerEnv)
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: environment variable %q is empty\n", cfg.BearerEnv)
+			}
+			os.Exit(1)
+		}
+		if strings.TrimSpace(envVal) == "" {
+			fmt.Fprintf(os.Stderr, "Error: environment variable %q contains only whitespace\n", cfg.BearerEnv)
+			os.Exit(1)
+		}
+		cfg.Headers["Authorization"] = "Bearer " + envVal
+	}
+	if cfg.BasicEnv != "" {
+		envVal := os.Getenv(cfg.BasicEnv)
+		if envVal == "" {
+			if _, ok := os.LookupEnv(cfg.BasicEnv); !ok {
+				fmt.Fprintf(os.Stderr, "Error: environment variable %q is not set\n", cfg.BasicEnv)
+			} else {
+				fmt.Fprintf(os.Stderr, "Error: environment variable %q is empty\n", cfg.BasicEnv)
+			}
+			os.Exit(1)
+		}
+		if strings.TrimSpace(envVal) == "" {
+			fmt.Fprintf(os.Stderr, "Error: environment variable %q contains only whitespace\n", cfg.BasicEnv)
+			os.Exit(1)
+		}
+		if !strings.Contains(envVal, ":") {
+			fmt.Fprintf(os.Stderr, "Error: environment variable %q must be in user:password format\n", cfg.BasicEnv)
+			os.Exit(1)
+		}
+		encoded := base64Encode(envVal)
+		cfg.Headers["Authorization"] = "Basic " + encoded
+	}
+
 	tgt, err := core.ParseTarget(cfg.Target)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -70,10 +111,44 @@ func main() {
 		Redact:   cfg.Redact,
 		Method:   cfg.Method,
 		Headers:  cfg.Headers,
+		TLSScan:  cfg.TLSScan,
 	}
 
 	// Run diagnostics.
 	r := runner.New(layers)
+
+	if cfg.Count > 0 {
+		// Repeated measurement mode.
+		countResult := r.RunCount(cfg.Count, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
+			attemptCtx, attemptCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Timeout)*time.Second)
+			return &core.ProbeContext{
+				Context:  attemptCtx,
+				Target:   tgt,
+				Insecure: cfg.Insecure,
+				Redact:   cfg.Redact,
+				Method:   cfg.Method,
+				Headers:  cfg.Headers,
+				TLSScan:  cfg.TLSScan,
+			}, attemptCancel
+		})
+
+		if cfg.JSON {
+			if err := renderjson.RenderCount(os.Stdout, countResult); err != nil {
+				fmt.Fprintf(os.Stderr, "Error rendering JSON: %v\n", err)
+				os.Exit(1)
+			}
+		} else {
+			useColor := isColorEnabled()
+			if err := table.RenderCount(os.Stdout, countResult, useColor); err != nil {
+				fmt.Fprintf(os.Stderr, "Error rendering table: %v\n", err)
+				os.Exit(1)
+			}
+		}
+
+		os.Exit(countResult.ExitCode)
+	}
+
+	// Single run mode.
 	result := r.Run(pctx)
 
 	// Render output: stdout = data, stderr = logs.
@@ -109,6 +184,11 @@ func buildLayers(tgt core.Target, insecure bool) []core.Layer {
 	}
 
 	return layers
+}
+
+// base64Encode returns the standard base64 encoding of s.
+func base64Encode(s string) string {
+	return base64.StdEncoding.EncodeToString([]byte(s))
 }
 
 // isColorEnabled checks if color output should be used.
