@@ -192,6 +192,68 @@ func TestParseArgsEmptyTarget(t *testing.T) {
 	}
 }
 
+func TestParseArgsRedactDefault(t *testing.T) {
+	cfg, err := ParseArgs([]string{"https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Redact {
+		t.Error("Redact should default to true")
+	}
+}
+
+func TestParseArgsNoRedact(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--no-redact", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Redact {
+		t.Error("Redact should be false with --no-redact")
+	}
+}
+
+func TestParseArgsExplicitRedact(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--redact", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.Redact {
+		t.Error("Redact should be true with explicit --redact")
+	}
+}
+
+func TestParseArgsNoRedactAfterTarget(t *testing.T) {
+	cfg, err := ParseArgs([]string{"https://example.com", "--no-redact"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Redact {
+		t.Error("Redact should be false with --no-redact after target")
+	}
+}
+
+func TestParseArgsRedactAndNoRedact(t *testing.T) {
+	// When both --redact and --no-redact are present, --no-redact wins.
+	cfg, err := ParseArgs([]string{"--redact", "--no-redact", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Redact {
+		t.Error("Redact should be false when --no-redact is present (overrides --redact)")
+	}
+}
+
+func TestParseArgsNoRedactThenRedact(t *testing.T) {
+	// Reverse order: --no-redact then --redact. --no-redact still wins.
+	cfg, err := ParseArgs([]string{"--no-redact", "--redact", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Redact {
+		t.Error("Redact should be false when --no-redact is present regardless of order")
+	}
+}
+
 func TestParseArgsErrorMessages(t *testing.T) {
 	tests := []struct {
 		name    string

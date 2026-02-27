@@ -444,6 +444,58 @@ func TestHTTPScheme(t *testing.T) {
 	}
 }
 
+func TestRedactFlagAccepted(t *testing.T) {
+	// --redact should be accepted without error and produce valid JSON.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, stderr, _ := runProbe(t, "--json", "--timeout", "3", "--redact",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	if strings.Contains(stderr, "unknown flag") || strings.Contains(stderr, "flag provided but not defined") {
+		t.Errorf("--redact flag not recognized: %s", stderr)
+	}
+
+	if len(stdout) == 0 {
+		t.Fatal("expected JSON output")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON with --redact: %v\n%s", err, stdout)
+	}
+}
+
+func TestNoRedactFlagAccepted(t *testing.T) {
+	// --no-redact should be accepted without error and produce valid JSON.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, stderr, _ := runProbe(t, "--json", "--timeout", "3", "--no-redact",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	if strings.Contains(stderr, "unknown flag") || strings.Contains(stderr, "flag provided but not defined") {
+		t.Errorf("--no-redact flag not recognized: %s", stderr)
+	}
+
+	if len(stdout) == 0 {
+		t.Fatal("expected JSON output")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON with --no-redact: %v\n%s", err, stdout)
+	}
+}
+
 func TestBareHostname(t *testing.T) {
 	skipIfUnreachable(t, "example.com")
 

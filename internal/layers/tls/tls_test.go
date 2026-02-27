@@ -532,3 +532,143 @@ func TestTLSCertExpiredLessThan24h(t *testing.T) {
 		t.Fatalf("error = %v, want TLS_CERT_EXPIRED", result.Error)
 	}
 }
+
+// =============================================================================
+// Test: Not-yet-valid cert via classifyTLSError — status=fail, code=TLS_CERT_NOT_YET_VALID
+// =============================================================================
+
+func TestTLSNotYetValidViaFake(t *testing.T) {
+	// Simulate the real Go x509 error message for not-yet-valid
+	layer := New(&fakeHandshaker{
+		durationMS: 4.0,
+		err:        errors.New("x509: certificate has expired or is not yet valid: current time 2026-02-27T00:00:00Z is before 2026-03-01T00:00:00Z"),
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_CERT_NOT_YET_VALID" {
+		t.Fatalf("error code = %q, want TLS_CERT_NOT_YET_VALID", result.Error.Code)
+	}
+}
+
+// Test: classifyTLSError with expired message (contains "is after") → TLS_CERT_EXPIRED
+func TestTLSExpiredMessageViaFake(t *testing.T) {
+	layer := New(&fakeHandshaker{
+		durationMS: 4.0,
+		err:        errors.New("x509: certificate has expired or is not yet valid: current time 2026-02-27T00:00:00Z is after 2026-02-01T00:00:00Z"),
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_CERT_EXPIRED" {
+		t.Fatalf("error code = %q, want TLS_CERT_EXPIRED", result.Error.Code)
+	}
+}
+
+// =============================================================================
+// Test: Insecure mode with not-yet-valid cert — status=warn, code=TLS_CERT_NOT_YET_VALID
+// (handshake succeeds because insecure, but NotBefore is in the future)
+// =============================================================================
+
+func TestTLSInsecureNotYetValidViaFake(t *testing.T) {
+	now := time.Now()
+	notBeforeFuture := now.Add(24 * time.Hour) // cert not valid until tomorrow
+
+	leaf := &x509.Certificate{
+		NotBefore: notBeforeFuture,
+		NotAfter:  notBeforeFuture.Add(365 * 24 * time.Hour),
+		DNSNames:  []string{"localhost"},
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	layer := New(&fakeHandshaker{
+		state:      state,
+		durationMS: 3.0,
+	})
+
+	pctx := makePctx("localhost", 443, "127.0.0.1", true) // insecure=true
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusWarn {
+		t.Errorf("status = %q, want warn (insecure mode with not-yet-valid cert)", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_CERT_NOT_YET_VALID" {
+		t.Errorf("error = %v, want TLS_CERT_NOT_YET_VALID warning", result.Error)
+	}
+}
+
+// =============================================================================
+// Test: Not-yet-valid cert via real TLS server — status=fail, code=TLS_CERT_NOT_YET_VALID
+// =============================================================================
+
+func TestTLSNotYetValidCert(t *testing.T) {
+	now := time.Now()
+	cert, pool := generateCert(t, certOpts{
+		hosts:     []string{"localhost"},
+		notBefore: now.Add(1 * time.Hour),          // not valid yet
+		notAfter:  now.Add(365 * 24 * time.Hour),
+	})
+
+	addr, cleanup := startTLSServer(t, cert)
+	defer cleanup()
+
+	host, portStr, _ := net.SplitHostPort(addr)
+	port := 0
+	for _, c := range portStr {
+		port = port*10 + int(c-'0')
+	}
+
+	handshaker := &realHandshakerWithRoots{roots: pool}
+	layer := New(handshaker)
+
+	pctx := makePctx("localhost", port, host, false)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_CERT_NOT_YET_VALID" {
+		t.Errorf("error = %v, want TLS_CERT_NOT_YET_VALID", result.Error)
+	}
+}
+
+// =============================================================================
+// Test: Insecure mode with not-yet-valid cert via real TLS server — status=warn
+// =============================================================================
+
+func TestTLSInsecureNotYetValidCert(t *testing.T) {
+	now := time.Now()
+	cert, _ := generateCert(t, certOpts{
+		hosts:     []string{"localhost"},
+		notBefore: now.Add(1 * time.Hour), // not valid yet
+		notAfter:  now.Add(365 * 24 * time.Hour),
+	})
+
+	addr, cleanup := startTLSServer(t, cert)
+	defer cleanup()
+
+	host, portStr, _ := net.SplitHostPort(addr)
+	port := 0
+	for _, c := range portStr {
+		port = port*10 + int(c-'0')
+	}
+
+	layer := NewDefault()
+	pctx := makePctx("localhost", port, host, true) // insecure=true
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusWarn {
+		t.Errorf("status = %q, want warn (insecure mode should report not-yet-valid); error = %v", result.Status, result.Error)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_CERT_NOT_YET_VALID" {
+		t.Errorf("error = %v, want TLS_CERT_NOT_YET_VALID", result.Error)
+	}
+}

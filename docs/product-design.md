@@ -71,6 +71,13 @@ Agentがツールに求める3つ：
 
 ## JSON Schema (v0.1)
 
+### Timing方針
+
+全レイヤー共通: `duration_ms`（float64、レイヤー実行時間）。
+HTTPレイヤーのみ追加で `timing.ttfb_ms` / `timing.total_ms` を返すことがある（任意拡張、v0.1では未実装）。
+
+### サンプル出力
+
 ```json
 {
   "schema_version": "v0.1",
@@ -101,7 +108,8 @@ Agentがツールに求める3つ：
       "observations": {
         "version": "TLSv1.3",
         "cipher_suite": "TLS_AES_256_GCM_SHA384",
-        "cert_days_until_expiry": 5
+        "cert_days_until_expiry": 5,
+        "cert_hostname_match": true
       },
       "error": {
         "code": "TLS_CERT_EXPIRING_SOON",
@@ -130,6 +138,24 @@ Agentがツールに求める3つ：
 }
 ```
 
+### Observations フィールド一覧
+
+各レイヤーの `observations` に含まれるフィールド（実装準拠）:
+
+| レイヤー | フィールド | 型 | 説明 |
+|---------|-----------|-----|------|
+| dns | `query_name` | string | 問い合わせホスト名 |
+| dns | `answers` | []string | 解決されたIPアドレス群 |
+| tcp | `remote_ip` | string | 接続先IPアドレス |
+| tcp | `remote_port` | int | 接続先ポート番号 |
+| tls | `version` | string | TLSバージョン（例: "TLSv1.3"） |
+| tls | `cipher_suite` | string | 使用された暗号スイート |
+| tls | `cert_days_until_expiry` | int | 証明書有効期限までの日数 |
+| tls | `cert_hostname_match` | bool | 証明書がホスト名と一致するか |
+| http | `method` | string | 使用されたHTTPメソッド |
+| http | `protocol` | string | HTTPプロトコル（例: "HTTP/2"） |
+| http | `status_code` | int | HTTPステータスコード |
+
 ### Schema Contract
 
 1. フィールドを削除しない
@@ -152,10 +178,18 @@ Agentがツールに求める3つ：
 | 0 | 正常 | — |
 | 1 | ツールエラー | `INVALID_TARGET`, `INVALID_ARGS` |
 | 2 | warn | `TLS_CERT_EXPIRING_SOON` |
-| 10 | DNS障害 | `DNS_NXDOMAIN`, `DNS_TIMEOUT` |
-| 20 | TCP障害 | `TCP_TIMEOUT`, `TCP_REFUSED` |
-| 30 | TLS障害 | `TLS_CERT_EXPIRED`, `TLS_HOSTNAME_MISMATCH` |
-| 40 | HTTP障害 | `HTTP_401`, `HTTP_503`, `HTTP_TIMEOUT` |
+| 10 | DNS障害 | `DNS_NXDOMAIN`, `DNS_TIMEOUT`, `DNS_ERROR` |
+| 20 | TCP障害 | `TCP_TIMEOUT`, `TCP_REFUSED`, `TCP_RESET`, `TCP_ERROR` |
+| 30 | TLS障害 | `TLS_CERT_EXPIRED`, `TLS_CERT_NOT_YET_VALID`, `TLS_HOSTNAME_MISMATCH`, `TLS_UNTRUSTED_CHAIN`, `TLS_HANDSHAKE_TIMEOUT`, `TLS_ERROR` |
+| 40 | HTTP障害 | `HTTP_401`, `HTTP_403`, `HTTP_404`, `HTTP_429`, `HTTP_500`, `HTTP_502`, `HTTP_503`, `HTTP_504`, `HTTP_TIMEOUT`, `HTTP_5XX`, `HTTP_ERROR` |
+
+### Error Code 正規化規則
+
+1. **既知の具体コード優先**: 上記テーブルの具体コード（例: `DNS_NXDOMAIN`, `HTTP_503`）が最優先
+2. **フォールバック**: 分類不能な場合は `*_ERROR`（`DNS_ERROR`, `TCP_ERROR`, `TLS_ERROR`, `HTTP_ERROR`）にフォールバック
+3. **HTTP固定集合**: 401, 403, 404, 429, 500, 502, 503, 504 は `HTTP_{N}` で個別コード化
+4. **未知の5xx**: 固定集合外の5xxは `HTTP_5XX` にフォールバック
+5. **未知の4xx**: 固定集合外の4xxは `HTTP_{N}`（実コード付き）を返す
 
 ### Success Conditions
 
@@ -165,21 +199,37 @@ Agentがツールに求める3つ：
 | `http://host/path` | dns + tcp + http 全てok |
 | `tcp://host:port` | dns + tcp がok |
 
-## MVP Scope (v0.1)
+## CLI機能スコープ
 
-### IN
+### MVP (v0.1)
 
 - `probe <url>`
 - DNS / TCP / TLS / HTTP レイヤー
 - `--json` / デフォルトtable
 - `--method`, `--header`, `--timeout`, `--insecure`
+- `--version`
+- `--redact`（デフォルトON — Authorization等の機密ヘッダをマスク）
 - exit code（大分類）
 - 色付き出力 + `NO_COLOR` 対応
 
-### OUT
+### v0.2
+
+- `--count N`（複数回プローブ）
+
+### Phase 1
+
+- `--verbose`（詳細出力）
+- `dns://` スキーム（DNS単独プローブ）
+
+### Phase 2
+
+- `--bearer-env`（環境変数からBearerトークン取得）
+- `--header-file`（ファイルからヘッダ読み込み）
+- `--netrc`（.netrcからの認証情報）
+
+### OUT (将来検討)
 
 - root_cause / failure_chain / next_actions（Phase 2）
-- 認証ヘルパー（Phase 1後半）
 - UDP / QUIC / gRPC（Phase 3）
 - MCP adapter（Phase 2）
 - 複数ターゲット並列
@@ -189,7 +239,8 @@ Agentがツールに求める3つ：
 
 | Phase | 内容 |
 |-------|------|
-| MVP (v0.1) | HTTPS中心レイヤー切り分け + --json + table |
-| 1後半 | 認証ヒント（--bearer-env等）、schema.md公開 |
-| 2 | Rule Engine（evaluations/root_cause/failure_chain）、MCP adapter |
+| MVP (v0.1) | HTTPS中心レイヤー切り分け + --json + table + --redact |
+| v0.2 | --count N |
+| 1 | --verbose, dns:// スキーム |
+| 2 | 認証ヘルパー（--bearer-env, --header-file, --netrc）、Rule Engine、MCP adapter |
 | 3 | UDP / Proxy / HTTP3 / gRPC |

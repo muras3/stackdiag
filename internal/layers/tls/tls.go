@@ -85,11 +85,30 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 
 	obs := buildObservations(state, pctx.Target.Host)
 
-	// Check certificate expiry and hostname even on successful handshake.
+	// Check certificate expiry, not-yet-valid, and hostname even on successful handshake.
 	if len(state.PeerCertificates) > 0 {
 		leaf := state.PeerCertificates[0]
+		now := time.Now()
 		timeUntilExpiry := time.Until(leaf.NotAfter)
 		daysUntilExpiry := int(timeUntilExpiry.Hours() / 24)
+
+		// Check not-yet-valid: NotBefore is in the future.
+		if now.Before(leaf.NotBefore) {
+			if pctx.Insecure {
+				return &core.LayerResult{
+					Status:       core.StatusWarn,
+					DurationMS:   durationMS,
+					Observations: obs,
+					Error:        &core.ProbeError{Code: "TLS_CERT_NOT_YET_VALID", Message: "certificate is not yet valid"},
+				}
+			}
+			return &core.LayerResult{
+				Status:       core.StatusFail,
+				DurationMS:   durationMS,
+				Observations: obs,
+				Error:        &core.ProbeError{Code: "TLS_CERT_NOT_YET_VALID", Message: "certificate is not yet valid"},
+			}
+		}
 
 		// Use raw duration for expired check to avoid truncation-to-zero
 		// when cert expired less than 24h ago (int(-0.5) == 0 in Go).
@@ -167,6 +186,8 @@ func classifyTLSError(err error) *core.ProbeError {
 	msg := err.Error()
 
 	switch {
+	case isCertNotYetValid(msg):
+		return &core.ProbeError{Code: "TLS_CERT_NOT_YET_VALID", Message: msg}
 	case isCertExpired(msg):
 		return &core.ProbeError{Code: "TLS_CERT_EXPIRED", Message: msg}
 	case isHostnameMismatch(msg):
@@ -178,6 +199,12 @@ func classifyTLSError(err error) *core.ProbeError {
 	default:
 		return &core.ProbeError{Code: "TLS_ERROR", Message: msg}
 	}
+}
+
+func isCertNotYetValid(msg string) bool {
+	// Go's x509 uses "certificate has expired or is not yet valid" for both cases.
+	// The disambiguator is "is before" (not-yet-valid) vs "is after" (expired).
+	return strings.Contains(msg, "is not yet valid") && strings.Contains(msg, "is before")
 }
 
 func isCertExpired(msg string) bool {

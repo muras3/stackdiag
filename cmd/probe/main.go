@@ -27,11 +27,11 @@ func main() {
 	cfg, err := cli.ParseArgs(os.Args[1:])
 	if err != nil {
 		if err.Error() == "flag: help requested" {
-			fmt.Fprintln(os.Stdout, "Usage: probe <url> [--json] [--method METHOD] [--header KEY:VALUE] [--timeout N] [--insecure]")
+			fmt.Fprintln(os.Stdout, "Usage: probe <url> [--json] [--method METHOD] [--header KEY:VALUE] [--timeout N] [--insecure] [--no-redact]")
 			os.Exit(0)
 		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		fmt.Fprintln(os.Stderr, "Usage: probe <url> [--json] [--method METHOD] [--header KEY:VALUE] [--timeout N] [--insecure]")
+		fmt.Fprintln(os.Stderr, "Usage: probe <url> [--json] [--method METHOD] [--header KEY:VALUE] [--timeout N] [--insecure] [--no-redact]")
 		os.Exit(1)
 	}
 
@@ -62,6 +62,7 @@ func main() {
 		Context:  ctx,
 		Target:   tgt,
 		Insecure: cfg.Insecure,
+		Redact:   cfg.Redact,
 		Method:   cfg.Method,
 		Headers:  cfg.Headers,
 	}
