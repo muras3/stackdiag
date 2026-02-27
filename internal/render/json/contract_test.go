@@ -340,6 +340,213 @@ func TestContractLayerOrder(t *testing.T) {
 	}
 }
 
+// contractCountResult returns a full CountResult with all layers for contract testing.
+func contractCountResult() *core.CountResult {
+	p50dns := 9.0
+	p95dns := 12.0
+	p50tcp := 16.0
+	p95tcp := 20.0
+	p50tls := 30.0
+	p95tls := 35.0
+	p50http := 55.0
+	p95http := 60.0
+	return &core.CountResult{
+		SchemaVersion: "v0.1",
+		Target:        "https://api.example.com/health",
+		Count:         2,
+		ExitCode:      1,
+		Attempts: []*core.AttemptResult{
+			{
+				Attempt:   1,
+				StartedAt: time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
+				Layers: map[string]*core.LayerResult{
+					"dns":  {Status: core.StatusOK, DurationMS: 9, Observations: map[string]any{"query_name": "api.example.com"}, Error: nil},
+					"tcp":  {Status: core.StatusOK, DurationMS: 16, Observations: map[string]any{"remote_ip": "203.0.113.10"}, Error: nil},
+					"tls":  {Status: core.StatusOK, DurationMS: 31, Observations: map[string]any{"version": "TLSv1.3"}, Error: nil},
+					"http": {Status: core.StatusFail, DurationMS: 57, Observations: map[string]any{"status_code": 503}, Error: &core.ProbeError{Code: "HTTP_503", Message: "503 Service Unavailable"}},
+				},
+				Summary: &core.Summary{WallClockMS: 122, FirstNonOKLayer: "http", ExitCode: 1},
+			},
+			{
+				Attempt:   2,
+				StartedAt: time.Date(2026, 2, 26, 18, 42, 4, 0, time.UTC),
+				Layers: map[string]*core.LayerResult{
+					"dns":  {Status: core.StatusOK, DurationMS: 12, Observations: map[string]any{"query_name": "api.example.com"}, Error: nil},
+					"tcp":  {Status: core.StatusOK, DurationMS: 20, Observations: map[string]any{"remote_ip": "203.0.113.10"}, Error: nil},
+					"tls":  {Status: core.StatusOK, DurationMS: 35, Observations: map[string]any{"version": "TLSv1.3"}, Error: nil},
+					"http": {Status: core.StatusOK, DurationMS: 60, Observations: map[string]any{"status_code": 200}, Error: nil},
+				},
+				Summary: &core.Summary{WallClockMS: 127, FirstNonOKLayer: "", ExitCode: 0},
+			},
+		},
+		Statistics: map[string]*core.LayerStatistics{
+			"dns":  {P50MS: &p50dns, P95MS: &p95dns, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
+			"tcp":  {P50MS: &p50tcp, P95MS: &p95tcp, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
+			"tls":  {P50MS: &p50tls, P95MS: &p95tls, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
+			"http": {P50MS: &p50http, P95MS: &p95http, SuccessCount: 1, FailCount: 1, SkipCount: 0, SampleCount: 2, LossRatio: 0.5},
+		},
+	}
+}
+
+func TestContractCountResultTopLevelFields(t *testing.T) {
+	var buf bytes.Buffer
+	if err := RenderCount(&buf, contractCountResult()); err != nil {
+		t.Fatalf("RenderCount error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	required := []string{"count", "exit_code", "attempts", "statistics"}
+	for _, key := range required {
+		if _, ok := m[key]; !ok {
+			t.Errorf("missing required top-level field: %q", key)
+		}
+	}
+}
+
+func TestContractCountResultAttemptFields(t *testing.T) {
+	var buf bytes.Buffer
+	if err := RenderCount(&buf, contractCountResult()); err != nil {
+		t.Fatalf("RenderCount error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	attempts, ok := m["attempts"].([]any)
+	if !ok {
+		t.Fatal("attempts is not an array")
+	}
+	if len(attempts) == 0 {
+		t.Fatal("attempts array is empty")
+	}
+
+	for i, raw := range attempts {
+		attempt, ok := raw.(map[string]any)
+		if !ok {
+			t.Errorf("attempt[%d] is not an object", i)
+			continue
+		}
+		for _, field := range []string{"attempt", "started_at", "layers", "summary"} {
+			if _, exists := attempt[field]; !exists {
+				t.Errorf("attempt[%d] missing field: %q", i, field)
+			}
+		}
+	}
+}
+
+func TestContractCountResultLayerOrder(t *testing.T) {
+	var buf bytes.Buffer
+	if err := RenderCount(&buf, contractCountResult()); err != nil {
+		t.Fatalf("RenderCount error: %v", err)
+	}
+
+	raw := buf.String()
+	// Find each attempt's layers and verify order.
+	expectedOrder := []string{"dns", "tcp", "tls", "http"}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	attempts := m["attempts"].([]any)
+	for i := range attempts {
+		// Find the i-th attempt block in raw JSON and check layer order within it.
+		searchFrom := raw
+		for skip := 0; skip <= i; skip++ {
+			idx := strings.Index(searchFrom, `"attempt"`)
+			if idx < 0 {
+				t.Fatalf("could not find attempt %d in JSON", i)
+			}
+			if skip < i {
+				searchFrom = searchFrom[idx+len(`"attempt"`):]
+			} else {
+				searchFrom = searchFrom[idx:]
+			}
+		}
+
+		lastIdx := -1
+		for _, name := range expectedOrder {
+			key := `"` + name + `"`
+			pos := strings.Index(searchFrom, key)
+			if pos < 0 {
+				t.Fatalf("attempt[%d]: layer %q not found", i, name)
+			}
+			if pos <= lastIdx {
+				t.Errorf("attempt[%d]: layer %q (pos %d) appears before previous layer (pos %d); want dns→tcp→tls→http", i, name, pos, lastIdx)
+			}
+			lastIdx = pos
+		}
+	}
+}
+
+func TestContractCountResultStatisticsFields(t *testing.T) {
+	var buf bytes.Buffer
+	if err := RenderCount(&buf, contractCountResult()); err != nil {
+		t.Fatalf("RenderCount error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	stats, ok := m["statistics"].(map[string]any)
+	if !ok {
+		t.Fatal("statistics is not an object")
+	}
+
+	requiredFields := []string{"p50_ms", "p95_ms", "success_count", "fail_count", "skip_count", "sample_count", "loss_ratio"}
+	for layerName, raw := range stats {
+		layer, ok := raw.(map[string]any)
+		if !ok {
+			t.Errorf("statistics[%q] is not an object", layerName)
+			continue
+		}
+		for _, field := range requiredFields {
+			if _, exists := layer[field]; !exists {
+				t.Errorf("statistics[%q] missing field: %q", layerName, field)
+			}
+		}
+	}
+}
+
+func TestContractCountResultStatisticsOrder(t *testing.T) {
+	var buf bytes.Buffer
+	if err := RenderCount(&buf, contractCountResult()); err != nil {
+		t.Fatalf("RenderCount error: %v", err)
+	}
+
+	raw := buf.String()
+	expectedOrder := []string{"dns", "tcp", "tls", "http"}
+
+	// Find the statistics section and verify key order.
+	statsIdx := strings.Index(raw, `"statistics"`)
+	if statsIdx < 0 {
+		t.Fatal("missing statistics key in JSON")
+	}
+	statsJSON := raw[statsIdx:]
+
+	lastIdx := -1
+	for _, name := range expectedOrder {
+		key := `"` + name + `"`
+		pos := strings.Index(statsJSON, key)
+		if pos < 0 {
+			t.Fatalf("statistics key %q not found", name)
+		}
+		if pos <= lastIdx {
+			t.Errorf("statistics key %q (pos %d) appears before previous key (pos %d); want dns→tcp→tls→http", name, pos, lastIdx)
+		}
+		lastIdx = pos
+	}
+}
+
 func TestContractObservations(t *testing.T) {
 	var buf bytes.Buffer
 	if err := Render(&buf, contractResult()); err != nil {

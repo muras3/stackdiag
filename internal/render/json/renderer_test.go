@@ -113,6 +113,73 @@ func TestRenderContainsRedactedTokenNotRawSecret(t *testing.T) {
 	}
 }
 
+func testCountResult() *core.CountResult {
+	p50dns := 9.0
+	p95dns := 12.0
+	p50tcp := 16.0
+	p95tcp := 20.0
+	return &core.CountResult{
+		SchemaVersion: "v0.1",
+		Target:        "https://api.example.com/health",
+		Count:         2,
+		ExitCode:      1,
+		Attempts: []*core.AttemptResult{
+			{
+				Attempt:   1,
+				StartedAt: time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
+				Layers: map[string]*core.LayerResult{
+					"dns": {Status: core.StatusOK, DurationMS: 9, Observations: map[string]any{"query_name": "api.example.com"}, Error: nil},
+					"tcp": {Status: core.StatusOK, DurationMS: 16, Observations: map[string]any{"remote_ip": "203.0.113.10"}, Error: nil},
+				},
+				Summary: &core.Summary{WallClockMS: 25, FirstNonOKLayer: "", ExitCode: 0},
+			},
+			{
+				Attempt:   2,
+				StartedAt: time.Date(2026, 2, 26, 18, 42, 4, 0, time.UTC),
+				Layers: map[string]*core.LayerResult{
+					"dns": {Status: core.StatusOK, DurationMS: 12, Observations: map[string]any{"query_name": "api.example.com"}, Error: nil},
+					"tcp": {Status: core.StatusFail, DurationMS: 20, Observations: map[string]any{}, Error: &core.ProbeError{Code: "TCP_TIMEOUT", Message: "connection timed out"}},
+				},
+				Summary: &core.Summary{WallClockMS: 32, FirstNonOKLayer: "tcp", ExitCode: 1},
+			},
+		},
+		Statistics: map[string]*core.LayerStatistics{
+			"dns": {P50MS: &p50dns, P95MS: &p95dns, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
+			"tcp": {P50MS: &p50tcp, P95MS: &p95tcp, SuccessCount: 1, FailCount: 1, SkipCount: 0, SampleCount: 2, LossRatio: 0.5},
+		},
+	}
+}
+
+func TestRenderCount(t *testing.T) {
+	var buf bytes.Buffer
+	err := RenderCount(&buf, testCountResult())
+	if err != nil {
+		t.Fatalf("RenderCount error: %v", err)
+	}
+
+	// Must be valid JSON.
+	var raw json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON output: %v\n%s", err, buf.String())
+	}
+
+	// Must be indented (contains newlines).
+	if !bytes.Contains(buf.Bytes(), []byte("\n")) {
+		t.Error("expected indented JSON output")
+	}
+
+	// Must have expected top-level structure.
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+	for _, key := range []string{"schema_version", "target", "count", "exit_code", "attempts", "statistics"} {
+		if _, ok := m[key]; !ok {
+			t.Errorf("missing top-level field: %q", key)
+		}
+	}
+}
+
 func TestRenderNoHTMLEscape(t *testing.T) {
 	r := testResult()
 	r.Target = "https://example.com?a=1&b=2"
