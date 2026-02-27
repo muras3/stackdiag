@@ -245,6 +245,50 @@ func (d *capturingDialer) DialContext(ctx context.Context, network, address stri
 	return d.inner.DialContext(ctx, network, address)
 }
 
+func TestTCPHostUnreachable(t *testing.T) {
+	hostUnreachErr := &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: &os.SyscallError{
+			Syscall: "connect",
+			Err:     syscall.EHOSTUNREACH,
+		},
+	}
+	layer := New(&testkit.FakeDialer{Err: hostUnreachErr})
+	pctx := makeCtx("192.0.2.1", 443, []string{"192.0.2.1"})
+
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TCP_HOST_UNREACHABLE" {
+		t.Errorf("error code = %v, want TCP_HOST_UNREACHABLE", result.Error)
+	}
+}
+
+func TestTCPNetworkUnreachable(t *testing.T) {
+	netUnreachErr := &net.OpError{
+		Op:  "dial",
+		Net: "tcp",
+		Err: &os.SyscallError{
+			Syscall: "connect",
+			Err:     syscall.ENETUNREACH,
+		},
+	}
+	layer := New(&testkit.FakeDialer{Err: netUnreachErr})
+	pctx := makeCtx("192.0.2.1", 443, []string{"192.0.2.1"})
+
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TCP_NETWORK_UNREACHABLE" {
+		t.Errorf("error code = %v, want TCP_NETWORK_UNREACHABLE", result.Error)
+	}
+}
+
 func TestTCPEmptyObservationsOnFailure(t *testing.T) {
 	layer := New(&testkit.FakeDialer{Err: errors.New("connection failed")})
 	pctx := makeCtx("192.0.2.1", 443, []string{"192.0.2.1"})

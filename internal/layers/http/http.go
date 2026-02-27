@@ -93,9 +93,10 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	defer resp.Body.Close()
 
 	obs := map[string]any{
-		"method":      method,
-		"protocol":    resp.Proto,
-		"status_code": resp.StatusCode,
+		"method":          method,
+		"protocol":        resp.Proto,
+		"status_code":     resp.StatusCode,
+		"request_headers": buildRequestHeaders(pctx.Headers, pctx.Redact),
 	}
 
 	if resp.StatusCode >= 400 {
@@ -158,6 +159,30 @@ func isTimeout(err error) bool {
 		return true
 	}
 	return false
+}
+
+// buildRequestHeaders returns a copy of the request headers with sensitive
+// values masked when redact is true.
+func buildRequestHeaders(headers map[string]string, redact bool) map[string]string {
+	out := make(map[string]string, len(headers))
+	for k, v := range headers {
+		if redact && isSensitiveHeader(k) {
+			out[k] = "[REDACTED]"
+		} else {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// isSensitiveHeader returns true for headers whose values should be redacted.
+func isSensitiveHeader(name string) bool {
+	switch strings.ToLower(name) {
+	case "authorization", "cookie", "proxy-authorization":
+		return true
+	default:
+		return false
+	}
 }
 
 func classifyStatusCode(code int) *core.ProbeError {

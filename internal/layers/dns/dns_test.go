@@ -140,6 +140,45 @@ func TestDNSMultipleIPs(t *testing.T) {
 	}
 }
 
+func TestDNSSERVFAIL(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "server misbehaving", Name: "fail.example.com"}
+	layer := New(&testkit.FakeResolver{Err: dnsErr})
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "DNS_SERVFAIL" {
+		t.Errorf("error code = %v, want DNS_SERVFAIL", result.Error)
+	}
+}
+
+func TestDNSRefused(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "connection refused", Name: "refused.example.com"}
+	layer := New(&testkit.FakeResolver{Err: dnsErr})
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "DNS_REFUSED" {
+		t.Errorf("error code = %v, want DNS_REFUSED", result.Error)
+	}
+}
+
+func TestDNSNoAnswer(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "no answer from DNS server", Name: "empty.example.com"}
+	layer := New(&testkit.FakeResolver{Err: dnsErr})
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "DNS_NO_ANSWER" {
+		t.Errorf("error code = %v, want DNS_NO_ANSWER", result.Error)
+	}
+}
+
 func TestDNSQueryNameOnFailure(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "no such host", Name: "bad.example.com", IsNotFound: true}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})

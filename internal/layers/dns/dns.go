@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/muras3/probe/internal/core"
@@ -73,6 +74,12 @@ func classifyDNSError(err error) *core.ProbeError {
 		return &core.ProbeError{Code: "DNS_NXDOMAIN", Message: dnsErr.Error()}
 	case dnsErr.IsTimeout:
 		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: dnsErr.Error()}
+	case strings.Contains(dnsErr.Err, "server misbehaving"):
+		return &core.ProbeError{Code: "DNS_SERVFAIL", Message: dnsErr.Error()}
+	case strings.Contains(dnsErr.Err, "refused"):
+		return &core.ProbeError{Code: "DNS_REFUSED", Message: dnsErr.Error()}
+	case strings.Contains(dnsErr.Err, "no answer"):
+		return &core.ProbeError{Code: "DNS_NO_ANSWER", Message: dnsErr.Error()}
 	default:
 		return &core.ProbeError{Code: "DNS_ERROR", Message: dnsErr.Error()}
 	}

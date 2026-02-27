@@ -99,6 +99,12 @@ func classifyTCPError(err error) *core.ProbeError {
 			if errors.Is(sysErr.Err, syscall.ECONNREFUSED) {
 				return &core.ProbeError{Code: "TCP_REFUSED", Message: err.Error()}
 			}
+			if errors.Is(sysErr.Err, syscall.EHOSTUNREACH) {
+				return &core.ProbeError{Code: "TCP_HOST_UNREACHABLE", Message: err.Error()}
+			}
+			if errors.Is(sysErr.Err, syscall.ENETUNREACH) {
+				return &core.ProbeError{Code: "TCP_NETWORK_UNREACHABLE", Message: err.Error()}
+			}
 		}
 	}
 
