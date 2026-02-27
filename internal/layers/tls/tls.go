@@ -88,9 +88,12 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	// Check certificate expiry and hostname even on successful handshake.
 	if len(state.PeerCertificates) > 0 {
 		leaf := state.PeerCertificates[0]
-		daysUntilExpiry := int(time.Until(leaf.NotAfter).Hours() / 24)
+		timeUntilExpiry := time.Until(leaf.NotAfter)
+		daysUntilExpiry := int(timeUntilExpiry.Hours() / 24)
 
-		if daysUntilExpiry < 0 {
+		// Use raw duration for expired check to avoid truncation-to-zero
+		// when cert expired less than 24h ago (int(-0.5) == 0 in Go).
+		if timeUntilExpiry < 0 {
 			return &core.LayerResult{
 				Status:       core.StatusFail,
 				DurationMS:   durationMS,
@@ -186,6 +189,9 @@ func isUntrustedChain(msg string) bool {
 }
 
 func isHandshakeTimeout(err error) bool {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
 		return true

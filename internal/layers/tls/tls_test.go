@@ -385,6 +385,21 @@ func TestTLSUntrustedChainViaFakeHandshaker(t *testing.T) {
 	}
 }
 
+func TestTLSContextDeadlineExceededViaFakeHandshaker(t *testing.T) {
+	layer := New(&fakeHandshaker{
+		durationMS: 5.0,
+		err:        context.DeadlineExceeded,
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_HANDSHAKE_TIMEOUT" {
+		t.Fatalf("error = %v, want TLS_HANDSHAKE_TIMEOUT", result.Error)
+	}
+}
+
 func TestTLSHandshakeTimeoutViaFakeHandshaker(t *testing.T) {
 	layer := New(&fakeHandshaker{
 		durationMS: 12.3,
@@ -402,5 +417,38 @@ func TestTLSHandshakeTimeoutViaFakeHandshaker(t *testing.T) {
 	}
 	if result.DurationMS != 12.3 {
 		t.Fatalf("duration_ms = %v, want 12.3", result.DurationMS)
+	}
+}
+
+// Test: Cert expired less than 24h ago — must be EXPIRED, not EXPIRING_SOON.
+// Regression test for int truncation: int(-0.04) == 0 in Go.
+func TestTLSCertExpiredLessThan24h(t *testing.T) {
+	now := time.Now()
+	expiredAt := now.Add(-1 * time.Hour) // expired 1 hour ago
+
+	leaf := &x509.Certificate{
+		NotAfter: expiredAt,
+		DNSNames: []string{"localhost"},
+	}
+	certDER := []byte("fake") // not used by fake handshaker
+
+	_ = certDER
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	layer := New(&fakeHandshaker{
+		state:      state,
+		durationMS: 3.0,
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_CERT_EXPIRED" {
+		t.Fatalf("error = %v, want TLS_CERT_EXPIRED", result.Error)
 	}
 }

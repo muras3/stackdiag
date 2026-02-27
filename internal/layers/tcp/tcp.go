@@ -6,7 +6,7 @@ import (
 	"net"
 	"os"
 	"strconv"
-	"strings"
+	"syscall"
 	"time"
 
 	"github.com/muras3/probe/internal/core"
@@ -88,28 +88,18 @@ func classifyTCPError(err error) *core.ProbeError {
 		return &core.ProbeError{Code: "TCP_TIMEOUT", Message: err.Error()}
 	}
 
-	if strings.Contains(strings.ToLower(err.Error()), "connection reset") {
-		return &core.ProbeError{Code: "TCP_RESET", Message: err.Error()}
-	}
-
-	// Check for connection refused via OpError wrapping a SyscallError.
+	// Use syscall errno for robust, OS-independent classification.
 	var opErr *net.OpError
 	if errors.As(err, &opErr) {
 		var sysErr *os.SyscallError
 		if errors.As(opErr.Err, &sysErr) {
-			if strings.Contains(sysErr.Err.Error(), "connection refused") {
+			if errors.Is(sysErr.Err, syscall.ECONNRESET) {
+				return &core.ProbeError{Code: "TCP_RESET", Message: err.Error()}
+			}
+			if errors.Is(sysErr.Err, syscall.ECONNREFUSED) {
 				return &core.ProbeError{Code: "TCP_REFUSED", Message: err.Error()}
 			}
 		}
-		// Also check the raw error string for "connection refused" (varies by OS).
-		if strings.Contains(err.Error(), "connection refused") {
-			return &core.ProbeError{Code: "TCP_REFUSED", Message: err.Error()}
-		}
-	}
-
-	// Fallback: check error string for connection refused (covers edge cases).
-	if strings.Contains(err.Error(), "connection refused") {
-		return &core.ProbeError{Code: "TCP_REFUSED", Message: err.Error()}
 	}
 
 	return &core.ProbeError{Code: "TCP_ERROR", Message: err.Error()}

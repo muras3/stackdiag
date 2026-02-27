@@ -99,6 +99,19 @@ func TestDNSGenericError(t *testing.T) {
 	}
 }
 
+func TestDNSContextCanceled(t *testing.T) {
+	// Verify that context.DeadlineExceeded is classified as DNS_TIMEOUT.
+	layer := New(&testkit.FakeResolver{Err: context.DeadlineExceeded})
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "DNS_TIMEOUT" {
+		t.Errorf("error code = %v, want DNS_TIMEOUT", result.Error)
+	}
+}
+
 func TestDNSName(t *testing.T) {
 	layer := New(&testkit.FakeResolver{IPs: []string{"1.2.3.4"}})
 	if layer.Name() != "dns" {

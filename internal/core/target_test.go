@@ -117,6 +117,32 @@ func TestParseTarget(t *testing.T) {
 			input:   "https://example.com:70000",
 			wantErr: true,
 		},
+		{
+			name:    "tcp with path rejected",
+			input:   "tcp://example.com:5432/db",
+			wantErr: true,
+		},
+		{
+			name:    "tcp with query rejected",
+			input:   "tcp://example.com:5432?x=1",
+			wantErr: true,
+		},
+		{
+			name:  "whitespace trimmed",
+			input: "  https://example.com  ",
+			want: Target{
+				Original: "https://example.com",
+				Scheme:   "https",
+				Host:     "example.com",
+				Port:     443,
+				Path:     "/",
+			},
+		},
+		{
+			name:    "whitespace only",
+			input:   "   ",
+			wantErr: true,
+		},
 	}
 
 	for _, tt := range tests {

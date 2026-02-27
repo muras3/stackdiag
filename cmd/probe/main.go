@@ -95,7 +95,7 @@ func buildLayers(tgt core.Target, insecure bool) []core.Layer {
 	}
 
 	if tgt.NeedsHTTP() {
-		layers = append(layers, layerhttp.NewDefault(insecure))
+		layers = append(layers, layerhttp.NewDefault(insecure, tgt.Host))
 	}
 
 	return layers

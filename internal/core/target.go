@@ -20,6 +20,7 @@ type Target struct {
 // ParseTarget parses a raw target string into a Target.
 // Supported schemes: https, http, tcp. Bare hostnames default to https.
 func ParseTarget(raw string) (Target, error) {
+	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return Target{}, fmt.Errorf("empty target")
 	}
@@ -51,6 +52,11 @@ func ParseTarget(raw string) (Target, error) {
 	port, err := resolvePort(u.Port(), scheme)
 	if err != nil {
 		return Target{}, err
+	}
+
+	// tcp:// targets must not have path, query, or fragment.
+	if scheme == "tcp" && (u.Path != "" || u.RawQuery != "" || u.Fragment != "") {
+		return Target{}, fmt.Errorf("tcp target must be tcp://host:port")
 	}
 
 	path := u.Path

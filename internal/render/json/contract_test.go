@@ -134,6 +134,82 @@ func TestContractStatusValues(t *testing.T) {
 	}
 }
 
+// contractResultWithSkip returns a Result with skipped layers for contract testing.
+func contractResultWithSkip() *core.Result {
+	return &core.Result{
+		SchemaVersion: "v0.1",
+		StartedAt:     time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
+		Target:        "tcp://db.example.com:5432",
+		Layers: map[string]*core.LayerResult{
+			"dns": {
+				Status:       core.StatusOK,
+				DurationMS:   9,
+				Observations: map[string]any{"query_name": "db.example.com", "answers": []string{"203.0.113.10"}},
+				Error:        nil,
+			},
+			"tcp": {
+				Status:       core.StatusOK,
+				DurationMS:   16,
+				Observations: map[string]any{"remote_ip": "203.0.113.10", "remote_port": 5432},
+				Error:        nil,
+			},
+			"tls": {
+				Status:       core.StatusSkip,
+				DurationMS:   0,
+				Observations: map[string]any{},
+				Error:        nil,
+			},
+			"http": {
+				Status:       core.StatusSkip,
+				DurationMS:   0,
+				Observations: map[string]any{},
+				Error:        nil,
+			},
+		},
+		Summary: &core.Summary{
+			WallClockMS:     25,
+			FirstNonOKLayer: "",
+			ExitCode:        0,
+		},
+	}
+}
+
+func TestContractSkipLayerShape(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResultWithSkip()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	layers := m["layers"].(map[string]any)
+
+	// Schema contract rule 2: skip uses status:"skip", not null.
+	for _, name := range []string{"tls", "http"} {
+		layer, ok := layers[name].(map[string]any)
+		if !ok {
+			t.Fatalf("skipped layer %q is missing or null (schema contract rule 2 violation)", name)
+		}
+		status, ok := layer["status"].(string)
+		if !ok || status != "skip" {
+			t.Errorf("skipped layer %q status = %v, want \"skip\" (schema contract rule 2)", name, layer["status"])
+		}
+		// Skipped layers must still have all required fields.
+		for _, field := range []string{"status", "duration_ms", "observations", "error"} {
+			if _, exists := layer[field]; !exists {
+				t.Errorf("skipped layer %q missing field %q (schema contract rule 4: same structure even on skip)", name, field)
+			}
+		}
+		// duration_ms should be 0 for skipped layers.
+		if dur, ok := layer["duration_ms"].(float64); ok && dur != 0 {
+			t.Errorf("skipped layer %q duration_ms = %v, want 0", name, dur)
+		}
+	}
+}
+
 func TestContractSummaryFields(t *testing.T) {
 	var buf bytes.Buffer
 	if err := Render(&buf, contractResult()); err != nil {

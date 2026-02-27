@@ -27,10 +27,16 @@ func New(client *http.Client) *Layer {
 
 // NewDefault creates an HTTP Layer with a transport tuned for probing:
 // no keep-alives, no auto-redirect, configurable TLS.
-func NewDefault(insecure bool) *Layer {
+func NewDefault(insecure bool, serverName string) *Layer {
+	tlsCfg := &tls.Config{InsecureSkipVerify: insecure}
+	// When dialing a resolved IP, set ServerName so TLS SNI and certificate
+	// verification use the original hostname instead of the IP address.
+	if serverName != "" {
+		tlsCfg.ServerName = serverName
+	}
 	transport := &http.Transport{
 		DisableKeepAlives: true,
-		TLSClientConfig:   &tls.Config{InsecureSkipVerify: insecure},
+		TLSClientConfig:   tlsCfg,
 	}
 	client := &http.Client{
 		Transport: transport,
@@ -167,6 +173,8 @@ func classifyStatusCode(code int) *core.ProbeError {
 		return &core.ProbeError{Code: "HTTP_404", Message: msg}
 	case 429:
 		return &core.ProbeError{Code: "HTTP_429", Message: msg}
+	case 500:
+		return &core.ProbeError{Code: "HTTP_500", Message: msg}
 	case 502:
 		return &core.ProbeError{Code: "HTTP_502", Message: msg}
 	case 503:

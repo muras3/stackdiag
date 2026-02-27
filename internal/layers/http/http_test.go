@@ -23,7 +23,7 @@ func makePctx(url string) *core.ProbeContext {
 }
 
 func TestHTTPName(t *testing.T) {
-	layer := NewDefault(false)
+	layer := NewDefault(false, "")
 	if layer.Name() != "http" {
 		t.Errorf("Name() = %q, want http", layer.Name())
 	}
@@ -156,8 +156,8 @@ func TestHTTP500(t *testing.T) {
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	if result.Error == nil || result.Error.Code != "HTTP_5XX" {
-		t.Errorf("error = %v, want HTTP_5XX", result.Error)
+	if result.Error == nil || result.Error.Code != "HTTP_500" {
+		t.Errorf("error = %v, want HTTP_500", result.Error)
 	}
 }
 

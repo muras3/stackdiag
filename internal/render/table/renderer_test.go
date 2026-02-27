@@ -284,7 +284,7 @@ func TestRenderASCIIFallback(t *testing.T) {
 	}
 
 	// Must NOT contain Unicode symbols.
-	if strings.Contains(out, "\u2713") || strings.Contains(out, "\u26a0") || strings.Contains(out, "\u2717") {
+	if strings.Contains(out, "\u2713") || strings.Contains(out, "\u26a0") || strings.Contains(out, "\u2717") || strings.Contains(out, "\u2192") {
 		t.Error("ASCII mode must not contain Unicode symbols")
 	}
 
@@ -318,6 +318,20 @@ func TestRenderASCIIFallbackSkip(t *testing.T) {
 	for _, i := range []int{1, 2, 3} {
 		assertContains(t, lines[i], "[skip]")
 	}
+}
+
+func TestRenderASCIIArrowFallback(t *testing.T) {
+	var buf bytes.Buffer
+	err := Render(&buf, allOKResult(), false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+
+	// DNS line should use ASCII arrow "->", not Unicode "→".
+	assertContains(t, lines[0], "->")
 }
 
 func TestRenderLayerOrder(t *testing.T) {
