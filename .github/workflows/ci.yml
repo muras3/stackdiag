@@ -1,0 +1,43 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.24.x"
+
+      - name: Install gofumpt
+        run: go install mvdan.cc/gofumpt@latest
+
+      - name: Lint
+        run: make lint
+
+      - name: Test (race detector)
+        run: make test-race
+
+      - name: Build
+        run: make build
+
+      - name: Check binary size
+        run: |
+          size=$(stat --format=%s bin/probe)
+          echo "Binary size: $((size / 1024 / 1024))MB (${size} bytes)"
+          max=$((5 * 1024 * 1024))
+          if [ "$size" -ge "$max" ]; then
+            echo "::error::Binary size ${size} bytes exceeds 5MB limit"
+            exit 1
+          fi
