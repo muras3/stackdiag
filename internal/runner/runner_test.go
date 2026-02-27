@@ -328,11 +328,11 @@ func TestRunCountBasic(t *testing.T) {
 	}
 
 	r := New(layers)
-	cr := r.RunCount(3, func(attempt int) *core.ProbeContext {
+	cr := r.RunCount(3, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
 		return &core.ProbeContext{
 			Context: context.Background(),
 			Target:  core.Target{Original: "https://example.com", Scheme: "https", Host: "example.com", Port: 443, Path: "/"},
-		}
+		}, func() {}
 	})
 
 	if len(cr.Attempts) != 3 {
@@ -384,11 +384,11 @@ func TestRunCountWithFailure(t *testing.T) {
 	}
 
 	r := New(layers)
-	cr := r.RunCount(3, func(attempt int) *core.ProbeContext {
+	cr := r.RunCount(3, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
 		return &core.ProbeContext{
 			Context: context.Background(),
 			Target:  core.Target{Original: "https://example.com", Scheme: "https", Host: "example.com", Port: 443, Path: "/"},
-		}
+		}, func() {}
 	})
 
 	if cr.ExitCode != 20 {
@@ -417,11 +417,11 @@ func TestRunCountContinuesAfterFail(t *testing.T) {
 	}
 
 	r := New(layers)
-	cr := r.RunCount(2, func(attempt int) *core.ProbeContext {
+	cr := r.RunCount(2, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
 		return &core.ProbeContext{
 			Context: context.Background(),
 			Target:  core.Target{Original: "https://example.com", Scheme: "https", Host: "example.com", Port: 443, Path: "/"},
-		}
+		}, func() {}
 	})
 
 	if len(cr.Attempts) != 2 {
@@ -452,11 +452,11 @@ func TestRunCountStatisticsP50P95(t *testing.T) {
 	}
 
 	r := New(layers)
-	cr := r.RunCount(5, func(attempt int) *core.ProbeContext {
+	cr := r.RunCount(5, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
 		return &core.ProbeContext{
 			Context: context.Background(),
 			Target:  core.Target{Original: "tcp://example.com:80", Scheme: "tcp", Host: "example.com", Port: 80},
-		}
+		}, func() {}
 	})
 
 	dns := cr.Statistics["dns"]
@@ -483,11 +483,11 @@ func TestRunCountNoSuccessOmitsPercentiles(t *testing.T) {
 	}
 
 	r := New(layers)
-	cr := r.RunCount(3, func(attempt int) *core.ProbeContext {
+	cr := r.RunCount(3, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
 		return &core.ProbeContext{
 			Context: context.Background(),
 			Target:  core.Target{Original: "https://example.com", Scheme: "https", Host: "example.com", Port: 443, Path: "/"},
-		}
+		}, func() {}
 	})
 
 	dns := cr.Statistics["dns"]

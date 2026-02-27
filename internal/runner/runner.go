@@ -1,6 +1,7 @@
 package runner
 
 import (
+	"context"
 	"math"
 	"sort"
 	"time"
@@ -91,7 +92,9 @@ func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 
 // RunCount executes the layer pipeline n times, building a CountResult with
 // per-layer statistics (p50, p95, loss ratio).
-func (r *Runner) RunCount(n int, factory func(attempt int) *core.ProbeContext) *core.CountResult {
+// The factory must return a ProbeContext and its CancelFunc. RunCount calls
+// cancel after each attempt to prevent context/timer goroutine leaks.
+func (r *Runner) RunCount(n int, factory func(attempt int) (*core.ProbeContext, context.CancelFunc)) *core.CountResult {
 	cr := &core.CountResult{
 		SchemaVersion: "v0.1",
 		Count:         n,
@@ -111,12 +114,13 @@ func (r *Runner) RunCount(n int, factory func(attempt int) *core.ProbeContext) *
 	}
 
 	for i := 1; i <= n; i++ {
-		pctx := factory(i)
+		pctx, cancel := factory(i)
 		if cr.Target == "" {
 			cr.Target = pctx.Target.Original
 		}
 
 		result := r.RunOnce(pctx)
+		cancel() // Clean up context to prevent timer goroutine leaks.
 		exitCodes = append(exitCodes, result.Summary.ExitCode)
 
 		attempt := &core.AttemptResult{

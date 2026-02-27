@@ -119,9 +119,8 @@ func main() {
 
 	if cfg.Count > 0 {
 		// Repeated measurement mode.
-		countResult := r.RunCount(cfg.Count, func(attempt int) *core.ProbeContext {
+		countResult := r.RunCount(cfg.Count, func(attempt int) (*core.ProbeContext, context.CancelFunc) {
 			attemptCtx, attemptCancel := context.WithTimeout(context.Background(), time.Duration(cfg.Timeout)*time.Second)
-			_ = attemptCancel // deferred in RunCount per attempt
 			return &core.ProbeContext{
 				Context:  attemptCtx,
 				Target:   tgt,
@@ -130,7 +129,7 @@ func main() {
 				Method:   cfg.Method,
 				Headers:  cfg.Headers,
 				TLSScan:  cfg.TLSScan,
-			}
+			}, attemptCancel
 		})
 
 		if cfg.JSON {
