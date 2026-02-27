@@ -26,13 +26,14 @@ var (
 func main() {
 	cfg, err := cli.ParseArgs(os.Args[1:])
 	if err != nil {
-		if err.Error() == "flag: help requested" {
-			fmt.Fprintln(os.Stdout, "Usage: probe <url> [--json] [--method METHOD] [--header KEY:VALUE] [--timeout N] [--insecure] [--no-redact]")
-			os.Exit(0)
-		}
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		fmt.Fprintln(os.Stderr, "Usage: probe <url> [--json] [--method METHOD] [--header KEY:VALUE] [--timeout N] [--insecure] [--no-redact]")
+		fmt.Fprintln(os.Stderr, "\n"+cli.HelpText())
 		os.Exit(1)
+	}
+
+	if cfg.Help {
+		fmt.Fprintln(os.Stdout, cli.HelpText())
+		os.Exit(0)
 	}
 
 	if cfg.Version {

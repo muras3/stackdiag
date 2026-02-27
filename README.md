@@ -45,9 +45,6 @@ sudo mv probe /usr/local/bin/
 # Download binary (macOS Apple Silicon)
 curl -sL https://github.com/muras3/probe/releases/latest/download/probe_darwin_arm64.tar.gz | tar xz
 sudo mv probe /usr/local/bin/
-
-# Homebrew (macOS / Linux)
-brew install muras3/tap/probe
 ```
 
 <details>
@@ -64,8 +61,6 @@ cd probe && make build
 ```
 
 </details>
-
-<!-- TODO: goreleaser + Homebrew tap setup before v0.1 GA -->
 
 ## Quick Start
 

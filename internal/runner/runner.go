@@ -20,7 +20,7 @@ func New(layers []core.Layer) *Runner {
 // Run executes layers sequentially, stopping on fail, continuing on warn.
 func (r *Runner) Run(pctx *core.ProbeContext) *core.Result {
 	start := time.Now()
-	allLayerNames := []string{"dns", "tcp", "tls", "http"}
+	allLayerNames := core.LayerOrder
 	result := &core.Result{
 		SchemaVersion: "v0.1",
 		StartedAt:     start.UTC(),

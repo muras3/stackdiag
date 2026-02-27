@@ -17,6 +17,44 @@ type Config struct {
 	Insecure bool
 	Redact   bool
 	Version  bool
+	Help     bool
+}
+
+// HelpText returns the full help message for probe.
+func HelpText() string {
+	return `probe - structured network diagnostics for AI agents and humans
+
+USAGE:
+  probe <url> [options]
+
+TARGETS:
+  https://host/path     Full HTTPS check (DNS → TCP → TLS → HTTP)
+  http://host/path      HTTP check (DNS → TCP → HTTP, no TLS)
+  tcp://host:port       TCP connectivity only (DNS → TCP)
+  host                  Bare hostname defaults to https://
+
+OPTIONS:
+  --json                Output as JSON (default: table)
+  --method METHOD       HTTP method (default: GET)
+  --header KEY:VALUE    HTTP header (repeatable)
+  --timeout N           Timeout in seconds (default: 10)
+  --insecure            Skip TLS certificate verification
+  --no-redact           Show sensitive header values (default: redacted)
+  --version             Show version
+
+EXIT CODES:
+  0   All layers passed
+  1   Tool error
+  2   Warning (e.g. certificate expiring soon)
+  10  DNS failure
+  20  TCP failure
+  30  TLS failure
+  40  HTTP failure
+
+EXAMPLES:
+  probe https://example.com
+  probe --json https://api.example.com/health
+  probe tcp://db.internal:5432`
 }
 
 // headerList collects multiple --header flags.
@@ -75,6 +113,9 @@ func ParseArgs(args []string) (*Config, error) {
 	fs.BoolVar(&cfg.Version, "version", false, "show version")
 
 	if err := fs.Parse(flagArgs); err != nil {
+		if err.Error() == "flag: help requested" {
+			return &Config{Help: true}, nil
+		}
 		return nil, err
 	}
 
