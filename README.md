@@ -35,8 +35,26 @@ Debugging "HTTPS isn't working" today means running 4 commands: `dig`, `nc`, `op
 
 ## Install
 
+**No runtime dependencies required.** probe is a single static binary.
+
 ```bash
-# Go
+# Download binary (Linux amd64)
+curl -sL https://github.com/muras3/probe/releases/latest/download/probe_linux_amd64.tar.gz | tar xz
+sudo mv probe /usr/local/bin/
+
+# Download binary (macOS Apple Silicon)
+curl -sL https://github.com/muras3/probe/releases/latest/download/probe_darwin_arm64.tar.gz | tar xz
+sudo mv probe /usr/local/bin/
+
+# Homebrew (macOS / Linux)
+brew install muras3/tap/probe
+```
+
+<details>
+<summary>Other methods</summary>
+
+```bash
+# Go (requires Go 1.21+)
 go install github.com/muras3/probe/cmd/probe@latest
 
 # From source
@@ -45,7 +63,9 @@ cd probe && make build
 # Binary at ./bin/probe
 ```
 
-<!-- TODO: Homebrew and binary releases will be added after v0.1 GA -->
+</details>
+
+<!-- TODO: goreleaser + Homebrew tap setup before v0.1 GA -->
 
 ## Quick Start
 
