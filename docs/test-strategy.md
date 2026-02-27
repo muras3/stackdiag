@@ -1,8 +1,8 @@
-# probe — Test Strategy
+# stackdiag — Test Strategy
 
 ## 設計思想
 
-probeは障害を診断するツール。**障害テストが成功テストより重要。**
+stackdiagは障害を診断するツール。**障害テストが成功テストより重要。**
 
 品質担保の3本柱：
 1. **テストピラミッド** — Smallが大多数、Largeは少数
@@ -52,7 +52,7 @@ probeは障害を診断するツール。**障害テストが成功テストよ�
 
 ## 障害マトリクス（Failure-Matrix Testing）
 
-Netflix chaos engineeringの応用。probeでは「決定的障害注入」として実装。
+Netflix chaos engineeringの応用。stackdiagでは「決定的障害注入」として実装。
 
 ### レイヤー別障害パターン
 
@@ -90,7 +90,7 @@ Netflix chaos engineeringの応用。probeでは「決定的障害注入」と�
 | Timeout | handler内sleep超過 | `http.status=fail`, `error.code=HTTP_TIMEOUT` |
 | Reset mid-response | hijack→partial write→close | `http.status=fail` |
 
-### 部分障害シナリオ（probeのコアテスト）
+### 部分障害シナリオ（stackdiagのコアテスト）
 
 | シナリオ | dns | tcp | tls | http | exit |
 |---------|-----|-----|-----|------|------|
@@ -173,7 +173,7 @@ docker-compose.yml
 
 ```yaml
 - name: canary-ok
-  url: https://ok.probe-test.local
+  url: https://ok.stackdiag-test.local
   dns:
     compare_with: dig
     exact_answer: true
@@ -188,7 +188,7 @@ docker-compose.yml
   require_consensus: 2
 
 - name: canary-expired-cert
-  url: https://expired.probe-test.local
+  url: https://expired.stackdiag-test.local
   tls:
     expected_status: fail
     expected_error_code: TLS_CERT_EXPIRED
@@ -197,7 +197,7 @@ docker-compose.yml
 
 ### Acceptance Test 実行フロー
 
-1. `probe --json <url>` → JSON取得
+1. `stackdiag --json <url>` → JSON取得
 2. `dig` / `openssl` / `curl` を同じターゲットに実行
 3. 正規化して比較
    - 事実（IP, cert, status） → 厳密一致

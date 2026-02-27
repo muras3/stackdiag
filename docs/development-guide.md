@@ -1,4 +1,4 @@
-# probe — Development Guide
+# stackdiag — Development Guide
 
 ## Team Structure
 
@@ -80,7 +80,7 @@ Phase 3
 ## Directory Structure
 
 ```
-cmd/probe/main.go
+cmd/stackdiag/main.go
 internal/
   core/           # types, config, result, Layer interface
   runner/         # orchestration
@@ -114,7 +114,7 @@ lint:        go vet ./... && gofumpt -l -d . (差分あればfail)
 test:        go test ./...
 test-race:   go test -race ./...
 test-fuzz:   go test -fuzz=. -fuzztime=30s ./internal/core/...
-build:       CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/probe ./cmd/probe
+build:       CGO_ENABLED=0 go build -trimpath -ldflags "-s -w" -o bin/stackdiag ./cmd/stackdiag
 e2e:         build → go test ./test/e2e/...
 acceptance:  docker compose -f docker-compose.test.yml up -d → go test ./test/acceptance/... → down
 ```

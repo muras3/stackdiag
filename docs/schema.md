@@ -1,8 +1,8 @@
-# probe JSON Schema Reference
+# stackdiag JSON Schema Reference
 
 > Schema version: **v0.1**
 
-This document is the complete specification for probe's `--json` output.
+This document is the complete specification for stackdiag's `--json` output.
 
 ## Top-Level Structure
 
@@ -19,10 +19,10 @@ This document is the complete specification for probe's `--json` output.
 | Field | Type | Description |
 |-------|------|-------------|
 | `schema_version` | string | Schema version identifier (currently `"v0.1"`) |
-| `started_at` | string | ISO 8601 UTC timestamp of probe start |
+| `started_at` | string | ISO 8601 UTC timestamp of stackdiag start |
 | `target` | string | Original target as provided by the user |
 | `layers` | object | Per-layer results (see below) |
-| `summary` | object | Aggregate probe information |
+| `summary` | object | Aggregate stackdiag information |
 
 ## Layers
 
@@ -332,23 +332,23 @@ These guarantees hold across all versions:
 
 ```bash
 # Get the status of a specific layer
-probe --json https://example.com 2>/dev/null | jq -r '.layers.tls.status'
+stackdiag --json https://example.com 2>/dev/null | jq -r '.layers.tls.status'
 
 # Extract the first failing layer
-probe --json https://example.com 2>/dev/null | jq -r '.summary.first_non_ok_layer'
+stackdiag --json https://example.com 2>/dev/null | jq -r '.summary.first_non_ok_layer'
 
 # Get all error codes
-probe --json https://example.com 2>/dev/null | jq '[.layers[] | select(.error != null) | .error.code]'
+stackdiag --json https://example.com 2>/dev/null | jq '[.layers[] | select(.error != null) | .error.code]'
 
 # Check if all layers passed
-probe --json https://example.com 2>/dev/null | jq '.summary.exit_code == 0'
+stackdiag --json https://example.com 2>/dev/null | jq '.summary.exit_code == 0'
 ```
 
 ### Use in scripts
 
 ```bash
 #!/bin/bash
-RESULT=$(probe --json "$TARGET" 2>/dev/null)
+RESULT=$(stackdiag --json "$TARGET" 2>/dev/null)
 EXIT=$?
 
 case $EXIT in
@@ -364,7 +364,7 @@ esac
 
 ### Wrap as an MCP tool
 
-probe is stateless and writes structured JSON to stdout — it can be wrapped directly as a tool in any MCP server:
+stackdiag is stateless and writes structured JSON to stdout — it can be wrapped directly as a tool in any MCP server:
 
 ```json
 {
@@ -380,4 +380,4 @@ probe is stateless and writes structured JSON to stdout — it can be wrapped di
 }
 ```
 
-Execute: `probe --json <target> 2>/dev/null`
+Execute: `stackdiag --json <target> 2>/dev/null`

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/muras3/probe/internal/core"
+	"github.com/muras3/stackdiag/internal/core"
 )
 
 // expiringThresholdDays defines the number of days before expiry at which
@@ -150,7 +150,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	}
 }
 
-// buildAddr constructs the dial address from the probe context.
+// buildAddr constructs the dial address from the stackdiag context.
 func buildAddr(pctx *core.ProbeContext) string {
 	host := pctx.Target.Host
 	if len(pctx.ResolvedIPs) > 0 {

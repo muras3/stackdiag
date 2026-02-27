@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/muras3/probe/internal/core"
+	"github.com/muras3/stackdiag/internal/core"
 )
 
 type Resolver interface {

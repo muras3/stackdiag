@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/muras3/probe/internal/core"
-	"github.com/muras3/probe/internal/testkit"
+	"github.com/muras3/stackdiag/internal/core"
+	"github.com/muras3/stackdiag/internal/testkit"
 )
 
 func makeCtx(timeout time.Duration) *core.ProbeContext {

@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Target represents a parsed probe target.
+// Target represents a parsed stackdiag target.
 type Target struct {
 	Original string
 	Scheme   string

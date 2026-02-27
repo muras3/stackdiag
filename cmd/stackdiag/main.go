@@ -6,15 +6,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/muras3/probe/internal/cli"
-	"github.com/muras3/probe/internal/core"
-	"github.com/muras3/probe/internal/layers/dns"
-	layerhttp "github.com/muras3/probe/internal/layers/http"
-	"github.com/muras3/probe/internal/layers/tcp"
-	layertls "github.com/muras3/probe/internal/layers/tls"
-	renderjson "github.com/muras3/probe/internal/render/json"
-	"github.com/muras3/probe/internal/render/table"
-	"github.com/muras3/probe/internal/runner"
+	"github.com/muras3/stackdiag/internal/cli"
+	"github.com/muras3/stackdiag/internal/core"
+	"github.com/muras3/stackdiag/internal/layers/dns"
+	layerhttp "github.com/muras3/stackdiag/internal/layers/http"
+	"github.com/muras3/stackdiag/internal/layers/tcp"
+	layertls "github.com/muras3/stackdiag/internal/layers/tls"
+	renderjson "github.com/muras3/stackdiag/internal/render/json"
+	"github.com/muras3/stackdiag/internal/render/table"
+	"github.com/muras3/stackdiag/internal/runner"
 )
 
 // Set via -ldflags at build time.
@@ -37,7 +37,7 @@ func main() {
 	}
 
 	if cfg.Version {
-		fmt.Printf("probe %s (%s)\n", version, commit)
+		fmt.Printf("stackdiag %s (%s)\n", version, commit)
 		os.Exit(0)
 	}
 
@@ -72,7 +72,7 @@ func main() {
 		Headers:  cfg.Headers,
 	}
 
-	// Run probe.
+	// Run diagnostics.
 	r := runner.New(layers)
 	result := r.Run(pctx)
 

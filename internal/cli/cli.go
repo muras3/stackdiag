@@ -25,12 +25,12 @@ type Config struct {
 	Help     bool
 }
 
-// HelpText returns the full help message for probe.
+// HelpText returns the full help message for stackdiag.
 func HelpText() string {
-	return `probe - structured network diagnostics for AI agents and humans
+	return `stackdiag - structured diagnostics for AI agents and humans
 
 USAGE:
-  probe <url> [options]
+  stackdiag <url> [options]
 
 TARGETS:
   https://host/path     Full HTTPS check (DNS → TCP → TLS → HTTP)
@@ -57,9 +57,9 @@ EXIT CODES:
   40  HTTP failure
 
 EXAMPLES:
-  probe https://example.com
-  probe --json https://api.example.com/health
-  probe tcp://db.internal:5432`
+  stackdiag https://example.com
+  stackdiag --json https://api.example.com/health
+  stackdiag tcp://db.internal:5432`
 }
 
 // headerList collects multiple --header flags.
@@ -96,8 +96,8 @@ func ParseArgs(args []string) (*Config, error) {
 		}
 	}
 
-	fs := flag.NewFlagSet("probe", flag.ContinueOnError)
-	fs.SetOutput(io.Discard) // Suppress Go's default usage output; probe shows its own.
+	fs := flag.NewFlagSet("stackdiag", flag.ContinueOnError)
+	fs.SetOutput(io.Discard) // Suppress Go's default usage output; stackdiag shows its own.
 
 	cfg := &Config{
 		Method:  "GET",

@@ -6,7 +6,7 @@ import (
 	"math"
 	"strings"
 
-	"github.com/muras3/probe/internal/core"
+	"github.com/muras3/stackdiag/internal/core"
 )
 
 // ANSI escape codes for colored output.

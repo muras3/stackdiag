@@ -11,15 +11,15 @@ touch "${RUN_DIR}/implementation.log" "${RUN_DIR}/security-review.log" "${RUN_DI
 printf '%s\n' "${RUN_DIR}" >"${LATEST_FILE}"
 
 if command -v tmux >/dev/null 2>&1; then
-  if tmux has-session -t probe-agents 2>/dev/null; then
-    tmux kill-session -t probe-agents
+  if tmux has-session -t stackdiag-agents 2>/dev/null; then
+    tmux kill-session -t stackdiag-agents
   fi
-  tmux new-session -d -s probe-agents "tail -F '${RUN_DIR}/implementation.log'"
-  tmux split-window -h -t probe-agents "tail -F '${RUN_DIR}/security-review.log'"
-  tmux split-window -v -t probe-agents "tail -F '${RUN_DIR}/code-review.log'"
-  tmux select-layout -t probe-agents tiled
+  tmux new-session -d -s stackdiag-agents "tail -F '${RUN_DIR}/implementation.log'"
+  tmux split-window -h -t stackdiag-agents "tail -F '${RUN_DIR}/security-review.log'"
+  tmux split-window -v -t stackdiag-agents "tail -F '${RUN_DIR}/code-review.log'"
+  tmux select-layout -t stackdiag-agents tiled
   echo "Dashboard started."
-  echo "Attach with: tmux attach -t probe-agents"
+  echo "Attach with: tmux attach -t stackdiag-agents"
 else
   echo "tmux not found. Tail logs manually:"
   echo "tail -F '${RUN_DIR}/implementation.log'"

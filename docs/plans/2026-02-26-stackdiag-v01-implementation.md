@@ -1,8 +1,8 @@
-# probe v0.1 実装計画
+# stackdiag v0.1 実装計画
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement this plan task-by-task. Use Agent Teams (TeamCreate → TaskCreate → Task with team_name). Max 2 parallel subagents.
 
-**ゴール:** `probe` — DNS→TCP→TLS→HTTPをレイヤーごとに診断するGo CLI。構造化JSON + 人間向けテーブル出力。
+**ゴール:** `stackdiag` — DNS→TCP→TLS→HTTPをレイヤーごとに診断するGo CLI。構造化JSON + 人間向けテーブル出力。
 
 **アーキテクチャ:** Runnerがレイヤーを順次実行し、型付きResult構造体を生成。2つのレンダラー（JSON, table）が同じ構造体を消費。各レイヤーはインターフェース経由でテスタブル。
 
@@ -23,14 +23,14 @@
 ### Task 1: プロジェクト雛形 + Goモジュール
 
 **ファイル:**
-- 作成: `go.mod`, `cmd/probe/main.go`, `Makefile`, `.gitignore`
+- 作成: `go.mod`, `cmd/stackdiag/main.go`, `Makefile`, `.gitignore`
 
 **手順:**
-1. `go mod init github.com/muras3/probe`
+1. `go mod init github.com/muras3/stackdiag`
 2. 最小限のmain.go作成（`--version`フラグのみ対応するスタブ）
 3. Makefile作成（`docs/development-guide.md`のCI/CDセクション準拠）
 4. .gitignore作成（`bin/`, `*.exe`, `.DS_Store`）
-5. `make build && ./bin/probe --version` で動作確認
+5. `make build && ./bin/stackdiag --version` で動作確認
 6. コミット: `feat: project scaffolding with Go module, Makefile, and main stub`
 
 ---
@@ -77,13 +77,13 @@
 
 **ファイル:**
 - 作成: `internal/cli/cli.go`, `internal/cli/cli_test.go`
-- 変更: `cmd/probe/main.go`
+- 変更: `cmd/stackdiag/main.go`
 
 **手順:**
 1. ParseArgs関数のテストを書く（基本、--json、引数なしエラー、--header複数） → 失敗確認
 2. cli.go実装（flag.FlagSet使用、Config構造体） → テスト通過
 3. main.goをcliパッケージ使用に更新（パース → ターゲット解析 → スタブ出力）
-4. `make build && ./bin/probe https://example.com` で動作確認
+4. `make build && ./bin/stackdiag https://example.com` で動作確認
 5. コミット: `feat: CLI skeleton with flag parsing (--json, --method, --header, --timeout, --insecure)`
 
 **対応フラグ:** `--json`, `--method`, `--header`（複数可）, `--timeout`, `--insecure`, `--version`
@@ -237,7 +237,7 @@
 ### Task 12: main.goの結合
 
 **ファイル:**
-- 変更: `cmd/probe/main.go`
+- 変更: `cmd/stackdiag/main.go`
 
 **結合:** CLI → Targetパーサー → Runner（実レイヤー） → レンダラー → 終了コード
 **分離:** stdout = データ、stderr = エラー/ログ
@@ -254,10 +254,10 @@
 - 作成: `test/e2e/probe_test.go`
 
 **テスト（ビルド済みバイナリをexec.Commandで実行）:**
-- `probe https://example.com --json` → 有効JSON、exit 0
-- `probe tcp://localhost:閉じポート` → exit 20
-- `probe`（引数なし） → exit 1、stderrにusage
-- `probe --version` → バージョン文字列
+- `stackdiag https://example.com --json` → 有効JSON、exit 0
+- `stackdiag tcp://localhost:閉じポート` → exit 20
+- `stackdiag`（引数なし） → exit 1、stderrにusage
+- `stackdiag --version` → バージョン文字列
 
 コミット: `feat: E2E tests against built binary`
 
@@ -298,7 +298,7 @@
 ## Agent Teams設定
 
 ```
-チーム: probe-dev
+チーム: stackdiag-dev
 
 ロール → エージェント割り当て:
 - architect:     Claude（メインコンテキスト）
@@ -334,8 +334,8 @@ Phase 0はTask間の依存が強く逐次。Phase 1以降で段階的に並列�
 1. `make lint` → クリーン
 2. `make test-race` → 全パス
 3. `make build` → バイナリ5MB以下
-4. `./bin/probe https://example.com` → ✓/⚠/✗付きテーブル出力
-5. `./bin/probe https://example.com --json` → スキーマ準拠の有効なJSON
-6. `./bin/probe tcp://localhost:1` → exit code 20（TCP拒否）
-7. `./bin/probe --version` → バージョン文字列
+4. `./bin/stackdiag https://example.com` → ✓/⚠/✗付きテーブル出力
+5. `./bin/stackdiag https://example.com --json` → スキーマ準拠の有効なJSON
+6. `./bin/stackdiag tcp://localhost:1` → exit code 20（TCP拒否）
+7. `./bin/stackdiag --version` → バージョン文字列
 8. `make e2e` → 全パス

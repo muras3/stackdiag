@@ -1,4 +1,4 @@
-// Package exitcode maps a probe Result to a process exit code.
+// Package exitcode maps a stackdiag Result to a process exit code.
 //
 // Exit code semantics (from product-design.md):
 //
@@ -11,7 +11,7 @@
 //	40 = HTTP failure
 package exitcode
 
-import "github.com/muras3/probe/internal/core"
+import "github.com/muras3/stackdiag/internal/core"
 
 // layerOrder defines the evaluation order for layers.
 // The first failing layer in this order determines the exit code.

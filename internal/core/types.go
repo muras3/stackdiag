@@ -12,7 +12,7 @@ import (
 // JSON output must always follow this order.
 var LayerOrder = []string{"dns", "tcp", "tls", "http"}
 
-// Status represents the outcome of a layer probe.
+// Status represents the outcome of a layer check.
 type Status string
 
 const (
@@ -38,7 +38,7 @@ func (e *ProbeError) Error() string {
 	return fmt.Sprintf("%s: %s", e.Code, e.Message)
 }
 
-// LayerResult holds the outcome of a single layer probe.
+// LayerResult holds the outcome of a single layer check.
 type LayerResult struct {
 	Status       Status         `json:"status"`
 	DurationMS   float64        `json:"duration_ms"`
@@ -46,14 +46,14 @@ type LayerResult struct {
 	Error        *ProbeError    `json:"error"`
 }
 
-// Summary holds aggregate information about the probe run.
+// Summary holds aggregate information about the stackdiag run.
 type Summary struct {
 	WallClockMS     float64 `json:"wall_clock_ms"`
 	FirstNonOKLayer string  `json:"first_non_ok_layer"`
 	ExitCode        int     `json:"exit_code"`
 }
 
-// Result is the top-level probe output. Internal data model = JSON output.
+// Result is the top-level stackdiag output. Internal data model = JSON output.
 type Result struct {
 	SchemaVersion string                  `json:"schema_version"`
 	StartedAt     time.Time               `json:"started_at"`

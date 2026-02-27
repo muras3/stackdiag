@@ -13,20 +13,20 @@ import (
 	"testing"
 )
 
-// binaryPath returns the path to the built probe binary.
+// binaryPath returns the path to the built stackdiag binary.
 func binaryPath(t *testing.T) string {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
 	projectRoot := filepath.Join(filepath.Dir(file), "..", "..")
-	bin := filepath.Join(projectRoot, "bin", "probe")
+	bin := filepath.Join(projectRoot, "bin", "stackdiag")
 	if _, err := os.Stat(bin); os.IsNotExist(err) {
 		t.Fatalf("binary not found at %s — run 'make build' first", bin)
 	}
 	return bin
 }
 
-// runProbe runs probe with separate stdout/stderr capture.
-func runProbe(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
+// runStackdiag runs stackdiag with separate stdout/stderr capture.
+func runStackdiag(t *testing.T, args ...string) (stdout, stderr string, exitCode int) {
 	t.Helper()
 	bin := binaryPath(t)
 	cmd := exec.Command(bin, args...)
@@ -65,17 +65,17 @@ func TestVersionFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("--version failed: %v\n%s", err, out)
 	}
-	if !strings.Contains(string(out), "probe") {
-		t.Errorf("--version output missing 'probe': %s", out)
+	if !strings.Contains(string(out), "stackdiag") {
+		t.Errorf("--version output missing 'stackdiag': %s", out)
 	}
 }
 
 func TestNoArgsExitsWithError(t *testing.T) {
-	_, stderr, exitCode := runProbe(t)
+	_, stderr, exitCode := runStackdiag(t)
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1", exitCode)
 	}
-	if !strings.Contains(stderr, "Usage") {
+	if !strings.Contains(stderr, "USAGE:") {
 		t.Errorf("expected usage in stderr: %s", stderr)
 	}
 }
@@ -150,11 +150,11 @@ func TestJSONOutputStructure(t *testing.T) {
 // --- New E2E tests ---
 
 func TestHelpFlag(t *testing.T) {
-	stdout, stderr, exitCode := runProbe(t, "--help")
+	stdout, stderr, exitCode := runStackdiag(t, "--help")
 	if exitCode != 0 {
 		t.Errorf("exit code = %d, want 0", exitCode)
 	}
-	if !strings.Contains(stdout, "Usage") {
+	if !strings.Contains(stdout, "USAGE:") {
 		t.Errorf("expected usage info on stdout, got: %s", stdout)
 	}
 	if len(stderr) > 0 {
@@ -163,7 +163,7 @@ func TestHelpFlag(t *testing.T) {
 }
 
 func TestInvalidTarget(t *testing.T) {
-	_, _, exitCode := runProbe(t, "ftp://example.com")
+	_, _, exitCode := runStackdiag(t, "ftp://example.com")
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1 for invalid target", exitCode)
 	}
@@ -178,7 +178,7 @@ func TestJSONOnError(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	ln.Close() // close so connection fails
 
-	stdout, _, exitCode := runProbe(t, "--json", "--timeout", "3",
+	stdout, _, exitCode := runStackdiag(t, "--json", "--timeout", "3",
 		fmt.Sprintf("tcp://127.0.0.1:%d", port))
 	if exitCode == 0 {
 		t.Fatal("expected non-zero exit for closed port")
@@ -210,7 +210,7 @@ func TestTableOutputDefault(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 	ln.Close()
 
-	stdout, _, _ := runProbe(t, "--timeout", "3",
+	stdout, _, _ := runStackdiag(t, "--timeout", "3",
 		fmt.Sprintf("tcp://127.0.0.1:%d", port))
 
 	// Table output should contain status symbols or text indicators.
@@ -238,7 +238,7 @@ func TestStdoutStderrSeparation(t *testing.T) {
 	defer ln.Close()
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	stdout, stderr, _ := runProbe(t, "--json", "--timeout", "3",
+	stdout, stderr, _ := runStackdiag(t, "--json", "--timeout", "3",
 		fmt.Sprintf("tcp://127.0.0.1:%d", port))
 
 	// stdout must contain valid JSON data.
@@ -263,7 +263,7 @@ func TestStdoutStderrSeparation(t *testing.T) {
 func TestTimeoutFlag(t *testing.T) {
 	skipIfUnreachable(t, "example.com")
 
-	stdout, _, exitCode := runProbe(t, "https://example.com", "--timeout", "10", "--json")
+	stdout, _, exitCode := runStackdiag(t, "https://example.com", "--timeout", "10", "--json")
 	if exitCode != 0 {
 		t.Errorf("exit code = %d, want 0", exitCode)
 	}
@@ -277,7 +277,7 @@ func TestTimeoutFlag(t *testing.T) {
 func TestInsecureFlag(t *testing.T) {
 	skipIfUnreachable(t, "self-signed.badssl.com")
 
-	stdout, _, exitCode := runProbe(t, "https://self-signed.badssl.com", "--insecure", "--json", "--timeout", "10")
+	stdout, _, exitCode := runStackdiag(t, "https://self-signed.badssl.com", "--insecure", "--json", "--timeout", "10")
 
 	// With --insecure, TLS should not fail even for self-signed certs.
 	if exitCode == 30 {
@@ -304,7 +304,7 @@ func TestInsecureFlag(t *testing.T) {
 func TestMethodFlag(t *testing.T) {
 	skipIfUnreachable(t, "example.com")
 
-	stdout, _, exitCode := runProbe(t, "https://example.com", "--method", "HEAD", "--json", "--timeout", "10")
+	stdout, _, exitCode := runStackdiag(t, "https://example.com", "--method", "HEAD", "--json", "--timeout", "10")
 	if exitCode != 0 {
 		t.Errorf("exit code = %d, want 0", exitCode)
 	}
@@ -327,7 +327,7 @@ func TestMethodFlag(t *testing.T) {
 func TestHeaderFlag(t *testing.T) {
 	skipIfUnreachable(t, "example.com")
 
-	stdout, _, exitCode := runProbe(t, "https://example.com", "--header", "X-Test: value", "--json", "--timeout", "10")
+	stdout, _, exitCode := runStackdiag(t, "https://example.com", "--header", "X-Test: value", "--json", "--timeout", "10")
 	if exitCode != 0 {
 		t.Errorf("exit code = %d, want 0", exitCode)
 	}
@@ -352,7 +352,7 @@ func TestExitCodeWarn(t *testing.T) {
 }
 
 func TestExitCodeDNSFailure(t *testing.T) {
-	_, _, exitCode := runProbe(t, "https://this-domain-does-not-exist-xyz123.example", "--json", "--timeout", "5")
+	_, _, exitCode := runStackdiag(t, "https://this-domain-does-not-exist-xyz123.example", "--json", "--timeout", "5")
 	if exitCode != 10 {
 		t.Errorf("exit code = %d, want 10 (DNS failure)", exitCode)
 	}
@@ -361,7 +361,7 @@ func TestExitCodeDNSFailure(t *testing.T) {
 func TestExitCodeTLSFailure(t *testing.T) {
 	skipIfUnreachable(t, "expired.badssl.com")
 
-	stdout, _, exitCode := runProbe(t, "https://expired.badssl.com", "--json", "--timeout", "10")
+	stdout, _, exitCode := runStackdiag(t, "https://expired.badssl.com", "--json", "--timeout", "10")
 	if exitCode != 30 {
 		t.Errorf("exit code = %d, want 30 (TLS failure)", exitCode)
 	}
@@ -385,7 +385,7 @@ func TestExitCodeHTTPFailure(t *testing.T) {
 	// Use http:// (not https://) to avoid TLS layer interfering.
 	skipIfUnreachable(t, "httpstat.us")
 
-	stdout, _, exitCode := runProbe(t, "http://httpstat.us/500", "--json", "--timeout", "10")
+	stdout, _, exitCode := runStackdiag(t, "http://httpstat.us/500", "--json", "--timeout", "10")
 	if exitCode != 40 {
 		t.Errorf("exit code = %d, want 40 (HTTP failure)", exitCode)
 	}
@@ -408,7 +408,7 @@ func TestFlagsAfterTarget(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 
 	// Place --json AFTER the target.
-	stdout, _, _ := runProbe(t, fmt.Sprintf("tcp://127.0.0.1:%d", port), "--json", "--timeout", "3")
+	stdout, _, _ := runStackdiag(t, fmt.Sprintf("tcp://127.0.0.1:%d", port), "--json", "--timeout", "3")
 
 	if len(stdout) == 0 {
 		t.Fatal("expected JSON output when --json comes after target")
@@ -423,7 +423,7 @@ func TestFlagsAfterTarget(t *testing.T) {
 func TestHTTPScheme(t *testing.T) {
 	skipIfUnreachable(t, "example.com")
 
-	stdout, _, exitCode := runProbe(t, "http://example.com", "--json", "--timeout", "10")
+	stdout, _, exitCode := runStackdiag(t, "http://example.com", "--json", "--timeout", "10")
 	if exitCode != 0 {
 		t.Errorf("exit code = %d, want 0", exitCode)
 	}
@@ -453,7 +453,7 @@ func TestRedactFlagAccepted(t *testing.T) {
 	defer ln.Close()
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	stdout, stderr, _ := runProbe(t, "--json", "--timeout", "3", "--redact",
+	stdout, stderr, _ := runStackdiag(t, "--json", "--timeout", "3", "--redact",
 		fmt.Sprintf("tcp://127.0.0.1:%d", port))
 
 	if strings.Contains(stderr, "unknown flag") || strings.Contains(stderr, "flag provided but not defined") {
@@ -479,7 +479,7 @@ func TestNoRedactFlagAccepted(t *testing.T) {
 	defer ln.Close()
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	stdout, stderr, _ := runProbe(t, "--json", "--timeout", "3", "--no-redact",
+	stdout, stderr, _ := runStackdiag(t, "--json", "--timeout", "3", "--no-redact",
 		fmt.Sprintf("tcp://127.0.0.1:%d", port))
 
 	if strings.Contains(stderr, "unknown flag") || strings.Contains(stderr, "flag provided but not defined") {
@@ -500,7 +500,7 @@ func TestRedactMasksAuthorizationHeader(t *testing.T) {
 	skipIfUnreachable(t, "example.com")
 	secret := "Bearer secret-token-e2e-test"
 
-	stdout, _, exitCode := runProbe(t, "https://example.com", "--json", "--timeout", "10",
+	stdout, _, exitCode := runStackdiag(t, "https://example.com", "--json", "--timeout", "10",
 		"--header", "Authorization: "+secret)
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
@@ -532,7 +532,7 @@ func TestNoRedactShowsRawAuthorizationHeader(t *testing.T) {
 	skipIfUnreachable(t, "example.com")
 	secret := "Bearer secret-token-e2e-noredact"
 
-	stdout, _, exitCode := runProbe(t, "https://example.com", "--json", "--timeout", "10",
+	stdout, _, exitCode := runStackdiag(t, "https://example.com", "--json", "--timeout", "10",
 		"--no-redact", "--header", "Authorization: "+secret)
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
@@ -558,7 +558,7 @@ func TestNoRedactShowsRawAuthorizationHeader(t *testing.T) {
 func TestNonSensitiveHeaderShownWithRedact(t *testing.T) {
 	skipIfUnreachable(t, "example.com")
 
-	stdout, _, exitCode := runProbe(t, "https://example.com", "--json", "--timeout", "10",
+	stdout, _, exitCode := runStackdiag(t, "https://example.com", "--json", "--timeout", "10",
 		"--header", "X-Request-Id: abc123")
 	if exitCode != 0 {
 		t.Fatalf("exit code = %d, want 0", exitCode)
@@ -584,7 +584,7 @@ func TestNonSensitiveHeaderShownWithRedact(t *testing.T) {
 func TestBareHostname(t *testing.T) {
 	skipIfUnreachable(t, "example.com")
 
-	stdout, _, exitCode := runProbe(t, "example.com", "--json", "--timeout", "10")
+	stdout, _, exitCode := runStackdiag(t, "example.com", "--json", "--timeout", "10")
 	if exitCode != 0 {
 		t.Errorf("exit code = %d, want 0", exitCode)
 	}

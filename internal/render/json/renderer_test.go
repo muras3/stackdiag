@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/muras3/probe/internal/core"
+	"github.com/muras3/stackdiag/internal/core"
 )
 
 func testResult() *core.Result {

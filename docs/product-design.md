@@ -1,6 +1,6 @@
-# probe — Product Design
+# stackdiag — Product Design
 
-> **probe** — structured network diagnostics for AI agents and humans.
+> **stackdiag** — structured network diagnostics for AI agents and humans.
 
 ## Problem
 
@@ -12,7 +12,7 @@
 1コマンドでDNS→TCP→TLS→HTTPの全レイヤーを切り分ける。
 
 ```
-$ probe https://api.example.com/health
+$ stackdiag https://api.example.com/health
 
   dns   ✓   9ms   api.example.com → 203.0.113.10
   tcp   ✓  16ms   :443
@@ -54,7 +54,7 @@ Agent-friendlyとは「`--json`がある」ことではない。「安定した�
 
 Agentがツールに求める3つ：
 
-| 問い | probeの答え方 |
+| 問い | stackdiagの答え方 |
 |------|-------------|
 | 何が起きた？ | `layers.tls.status: "warn"` |
 | なぜ？ | `error.code: "TLS_CERT_EXPIRING_SOON"` |
@@ -203,7 +203,7 @@ HTTPレイヤーのみ追加で `timing.ttfb_ms` / `timing.total_ms` を返す�
 
 ### MVP (v0.1)
 
-- `probe <url>`
+- `stackdiag <url>`
 - DNS / TCP / TLS / HTTP レイヤー
 - `--json` / デフォルトtable
 - `--method`, `--header`, `--timeout`, `--insecure`
