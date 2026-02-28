@@ -194,3 +194,21 @@ func (r *recordingPinger) Ping(ctx context.Context, addr string) (time.Duration,
 	*r.addrRef = addr
 	return r.FakePinger.Ping(ctx, addr)
 }
+
+func TestIsIPv6(t *testing.T) {
+	tests := []struct {
+		addr string
+		want bool
+	}{
+		{"203.0.113.10", false},
+		{"::1", true},
+		{"2001:db8::1", true},
+		{"example.com", false},
+		{"127.0.0.1", false},
+	}
+	for _, tt := range tests {
+		if got := isIPv6(tt.addr); got != tt.want {
+			t.Errorf("isIPv6(%q) = %v, want %v", tt.addr, got, tt.want)
+		}
+	}
+}

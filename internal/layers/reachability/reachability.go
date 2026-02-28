@@ -114,6 +114,15 @@ func skipReason(err error) string {
 	return ""
 }
 
+// isIPv6 returns true if addr is an IPv6 address.
+func isIPv6(addr string) bool {
+	ip := net.ParseIP(addr)
+	if ip == nil {
+		return false
+	}
+	return ip.To4() == nil
+}
+
 // icmpPinger sends ICMP echo requests using raw sockets.
 type icmpPinger struct{}
 
