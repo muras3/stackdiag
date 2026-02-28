@@ -65,8 +65,8 @@ fi
       echo ""
     fi
 
-    echo "=== curl -sv ${TARGET} ==="
-    curl -sv "${TARGET}" 2>&1 || true
+    echo "=== curl -sv --max-redirs 0 ${TARGET} ==="
+    curl -sv --max-redirs 0 "${TARGET}" 2>&1 || true
   fi
 } > "${OUTDIR}/manual.txt"
 

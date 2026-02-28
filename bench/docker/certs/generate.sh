@@ -21,7 +21,7 @@ sign_cert() {
 
 echo "==> Generating valid cert (nginx-healthy + shared services)..."
 sign_cert valid nginx-healthy \
-  "DNS:nginx-healthy,DNS:nginx-tls12,DNS:nginx-503,DNS:nginx-403,DNS:nginx-500"
+  "DNS:nginx-healthy,DNS:nginx-tls12,DNS:nginx-503,DNS:nginx-403,DNS:nginx-500,DNS:nginx-429,DNS:nginx-redirect"
 
 echo "==> Generating expired cert (nginx-expired)..."
 # Create with -days 1; then re-sign backdated via explicit start/end dates
@@ -45,6 +45,9 @@ fi
 
 echo "==> Generating wrong-host cert (CN=wrong.host.example.com)..."
 sign_cert wronghost wrong.host.example.com "DNS:wrong.host.example.com"
+
+echo "==> Generating expiring-soon cert (nginx-expiring, expires in 7 days)..."
+sign_cert expiring nginx-expiring "DNS:nginx-expiring" 7
 
 echo "==> Generating self-signed cert (nginx-selfsigned, not CA-signed)..."
 openssl genrsa -out selfsigned.key 2048 2>/dev/null

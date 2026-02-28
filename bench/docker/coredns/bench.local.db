@@ -1,6 +1,6 @@
 $ORIGIN bench.local.
 @       IN SOA  ns.bench.local. admin.bench.local. (
-        2024010101 ; serial
+        2024010102 ; serial
         3600       ; refresh
         600        ; retry
         86400      ; expire
@@ -20,5 +20,8 @@ nginx-expired   IN A    172.28.0.14
 nginx-wronghost IN A    172.28.0.15
 nginx-selfsigned IN A   172.28.0.16
 nginx-tls12     IN A    172.28.0.17
+nginx-expiring  IN A    172.28.0.18
+nginx-429       IN A    172.28.0.19
+nginx-redirect  IN A    172.28.0.20
 
 ; nonexistent.bench.local is NOT listed → NXDOMAIN

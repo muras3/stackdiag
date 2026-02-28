@@ -89,6 +89,36 @@ services:
       bench:
         ipv4_address: 172.28.0.17
 
+  nginx-expiring:
+    <<: *nginx-build
+    hostname: nginx-expiring
+    volumes:
+      - ./docker/nginx/expiring.conf:/etc/nginx/conf.d/expiring.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.18
+
+  nginx-429:
+    <<: *nginx-build
+    hostname: nginx-429
+    volumes:
+      - ./docker/nginx/error-429.conf:/etc/nginx/conf.d/error-429.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.19
+
+  nginx-redirect:
+    <<: *nginx-build
+    hostname: nginx-redirect
+    volumes:
+      - ./docker/nginx/redirect.conf:/etc/nginx/conf.d/redirect.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.20
+
   coredns:
     image: coredns/coredns:latest
     hostname: coredns
@@ -114,6 +144,9 @@ services:
       - nginx-wronghost
       - nginx-selfsigned
       - nginx-tls12
+      - nginx-expiring
+      - nginx-429
+      - nginx-redirect
       - coredns
     volumes:
       - ./capture.sh:/bench/capture.sh:ro

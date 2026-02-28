@@ -10,12 +10,14 @@ from pathlib import Path
 MANUAL_KEYWORDS = {
     "DNS_NXDOMAIN": ["NXDOMAIN", "name not found"],
     "TLS_CERT_EXPIRED": ["certificate has expired", "expired"],
+    "TLS_CERT_EXPIRING_SOON": ["certificate will expire", "expiring soon"],
     "TLS_HOSTNAME_MISMATCH": ["hostname mismatch", "does not match"],
     "TLS_UNTRUSTED_CHAIN": ["self-signed", "unable to verify"],
     "TCP_REFUSED": ["Connection refused"],
     "HTTP_503": ["503"],
     "HTTP_403": ["403"],
     "HTTP_500": ["500"],
+    "HTTP_429": ["429"],
 }
 
 # Keywords that indicate an error in manual output (for healthy scenarios)
@@ -30,11 +32,20 @@ def evaluate_stdiag_diagnosis(stdiag: dict, scenario: dict) -> bool:
     layers = stdiag.get("layers", {})
 
     if ground_truth is None:
-        # Healthy scenario: all layers should be ok or skip
+        # Healthy scenario: all layers should be ok, skip, or warn
         return all(
-            layer.get("status") in ("ok", "skip")
+            layer.get("status") in ("ok", "skip", "warn")
             for layer in layers.values()
         )
+
+    # Warning scenario (e.g. TLS_CERT_EXPIRING_SOON): check warn status + code
+    if ground_truth in ("TLS_CERT_EXPIRING_SOON",):
+        for layer in layers.values():
+            if layer.get("status") == "warn":
+                error = layer.get("error")
+                if error and error.get("code") == ground_truth:
+                    return True
+        return False
 
     # Error scenario: find a layer with matching error code
     for layer in layers.values():

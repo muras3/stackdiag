@@ -11,12 +11,17 @@
       "remote_port",
       "version",
       "cipher_suite",
+      "cert_verified",
+      "cert_subject",
+      "cert_issuer",
+      "cert_not_after",
       "cert_days_until_expiry",
       "cert_hostname_match",
       "method",
       "protocol",
       "status_code",
-      "status_text"
+      "status_text",
+      "response_headers"
     ],
     "docker_service": "nginx-healthy"
   },
@@ -42,6 +47,10 @@
     "ground_truth": "TLS_CERT_EXPIRED",
     "required_evidence": [
       "version",
+      "cert_verified",
+      "cert_subject",
+      "cert_issuer",
+      "cert_not_after",
       "cert_days_until_expiry"
     ],
     "docker_service": "nginx-expired"
@@ -52,6 +61,10 @@
     "ground_truth": "TLS_HOSTNAME_MISMATCH",
     "required_evidence": [
       "version",
+      "cert_verified",
+      "cert_subject",
+      "cert_issuer",
+      "cert_not_after",
       "cert_hostname_match"
     ],
     "docker_service": "nginx-wronghost"
@@ -61,9 +74,28 @@
     "target": "https://nginx-selfsigned",
     "ground_truth": "TLS_UNTRUSTED_CHAIN",
     "required_evidence": [
-      "version"
+      "version",
+      "cert_verified",
+      "cert_subject",
+      "cert_issuer",
+      "cert_not_after"
     ],
     "docker_service": "nginx-selfsigned"
+  },
+  {
+    "name": "cert_expiring_soon",
+    "target": "https://nginx-expiring",
+    "ground_truth": "TLS_CERT_EXPIRING_SOON",
+    "required_evidence": [
+      "version",
+      "cert_verified",
+      "cert_subject",
+      "cert_issuer",
+      "cert_not_after",
+      "cert_days_until_expiry",
+      "cert_hostname_match"
+    ],
+    "docker_service": "nginx-expiring"
   },
   {
     "name": "http_503",
@@ -72,7 +104,8 @@
     "required_evidence": [
       "method",
       "status_code",
-      "status_text"
+      "status_text",
+      "response_headers"
     ],
     "docker_service": "nginx-503"
   },
@@ -83,7 +116,8 @@
     "required_evidence": [
       "method",
       "status_code",
-      "status_text"
+      "status_text",
+      "response_headers"
     ],
     "docker_service": "nginx-403"
   },
@@ -94,9 +128,35 @@
     "required_evidence": [
       "method",
       "status_code",
-      "status_text"
+      "status_text",
+      "response_headers"
     ],
     "docker_service": "nginx-500"
+  },
+  {
+    "name": "http_429",
+    "target": "https://nginx-429",
+    "ground_truth": "HTTP_429",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-429"
+  },
+  {
+    "name": "http_redirect",
+    "target": "https://nginx-redirect",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-redirect"
   },
   {
     "name": "tls12_only",
@@ -105,7 +165,11 @@
     "ground_truth_label": "all_ok",
     "required_evidence": [
       "version",
-      "cipher_suite"
+      "cipher_suite",
+      "cert_verified",
+      "cert_subject",
+      "cert_issuer",
+      "cert_not_after"
     ],
     "docker_service": "nginx-tls12"
   }
