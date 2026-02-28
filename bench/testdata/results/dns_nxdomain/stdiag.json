@@ -1,0 +1,17 @@
+{
+  "schema_version": "v0.1",
+  "started_at": "2026-02-28T00:00:00Z",
+  "target": "https://nonexistent.bench.local",
+  "layers": {
+    "dns": {
+      "status": "fail",
+      "duration_ms": 3.0,
+      "observations": {"query_name": "nonexistent.bench.local"},
+      "error": {"code": "DNS_NXDOMAIN", "message": "NXDOMAIN"}
+    },
+    "tcp": {"status": "skip", "duration_ms": 0, "observations": {}, "error": null},
+    "tls": {"status": "skip", "duration_ms": 0, "observations": {}, "error": null},
+    "http": {"status": "skip", "duration_ms": 0, "observations": {}, "error": null}
+  },
+  "summary": {"wall_clock_ms": 3.0, "first_non_ok_layer": "dns", "exit_code": 10}
+}
