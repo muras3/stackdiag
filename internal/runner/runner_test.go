@@ -535,8 +535,9 @@ func TestRunStartedAtAndWallClock(t *testing.T) {
 	})
 	after := time.Now()
 
-	if result.StartedAt.Before(before) || result.StartedAt.After(after) {
-		t.Errorf("StartedAt = %v, expected between %v and %v", result.StartedAt, before, after)
+	// StartedAt is truncated to second precision, so compare with truncated bounds.
+	if result.StartedAt.Before(before.Truncate(time.Second)) || result.StartedAt.After(after) {
+		t.Errorf("StartedAt = %v, expected between %v and %v", result.StartedAt, before.Truncate(time.Second), after)
 	}
 	if result.Summary.WallClockMS <= 0 {
 		t.Errorf("WallClockMS = %v, want > 0", result.Summary.WallClockMS)

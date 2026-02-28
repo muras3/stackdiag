@@ -71,24 +71,24 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 
 func classifyDNSError(err error) (*core.ProbeError, any) {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: err.Error()}, nil
+		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: "DNS resolution timed out"}, nil
 	}
 
 	var dnsErr *net.DNSError
 	if !errors.As(err, &dnsErr) {
-		return &core.ProbeError{Code: "DNS_ERROR", Message: err.Error()}, nil
+		return &core.ProbeError{Code: "DNS_ERROR", Message: "DNS resolution failed"}, nil
 	}
 
 	if dnsErr.IsNotFound {
-		return &core.ProbeError{Code: "DNS_NXDOMAIN", Message: err.Error()}, nil
+		return &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "domain not found"}, nil
 	}
 	if dnsErr.IsTimeout {
-		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: err.Error()}, nil
+		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: "DNS resolution timed out"}, nil
 	}
 
 	// Best-effort hint (not contract code)
 	hint := inferDNSHint(dnsErr)
-	return &core.ProbeError{Code: "DNS_ERROR", Message: err.Error()}, hint
+	return &core.ProbeError{Code: "DNS_ERROR", Message: "DNS resolution failed"}, hint
 }
 
 func inferDNSHint(dnsErr *net.DNSError) any {

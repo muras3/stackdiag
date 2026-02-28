@@ -32,7 +32,7 @@ func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 	allLayerNames := core.LayerOrder
 	result := &core.Result{
 		SchemaVersion: core.SchemaVersion,
-		StartedAt:     start.UTC(),
+		StartedAt:     start.UTC().Truncate(time.Second),
 		Target:        pctx.Target.Original,
 		Layers:        make(map[string]*core.LayerResult),
 		Summary:       &core.Summary{},

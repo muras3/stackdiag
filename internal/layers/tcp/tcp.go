@@ -85,7 +85,7 @@ func classifyTCPError(err error) *core.ProbeError {
 	// Check for timeout via net.Error interface.
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
-		return &core.ProbeError{Code: "TCP_TIMEOUT", Message: err.Error()}
+		return &core.ProbeError{Code: "TCP_TIMEOUT", Message: "connection timed out"}
 	}
 
 	// Use syscall errno for robust, OS-independent classification.
@@ -94,13 +94,13 @@ func classifyTCPError(err error) *core.ProbeError {
 		var sysErr *os.SyscallError
 		if errors.As(opErr.Err, &sysErr) {
 			if errors.Is(sysErr.Err, syscall.ECONNREFUSED) {
-				return &core.ProbeError{Code: "TCP_REFUSED", Message: err.Error()}
+				return &core.ProbeError{Code: "TCP_REFUSED", Message: "connection refused"}
 			}
 			if errors.Is(sysErr.Err, syscall.EHOSTUNREACH) {
-				return &core.ProbeError{Code: "TCP_HOST_UNREACHABLE", Message: err.Error()}
+				return &core.ProbeError{Code: "TCP_HOST_UNREACHABLE", Message: "host unreachable"}
 			}
 			if errors.Is(sysErr.Err, syscall.ENETUNREACH) {
-				return &core.ProbeError{Code: "TCP_NETWORK_UNREACHABLE", Message: err.Error()}
+				return &core.ProbeError{Code: "TCP_NETWORK_UNREACHABLE", Message: "network unreachable"}
 			}
 		}
 	}

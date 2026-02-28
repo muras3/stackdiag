@@ -53,9 +53,10 @@ func TestRender(t *testing.T) {
 		t.Fatalf("invalid JSON output: %v\n%s", err, buf.String())
 	}
 
-	// Must be indented (contains newlines).
-	if !bytes.Contains(buf.Bytes(), []byte("\n")) {
-		t.Error("expected indented JSON output")
+	// Must be compact (single line + trailing newline).
+	lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+	if len(lines) != 1 {
+		t.Errorf("expected compact single-line JSON, got %d lines", len(lines))
 	}
 }
 
@@ -163,9 +164,10 @@ func TestRenderCount(t *testing.T) {
 		t.Fatalf("invalid JSON output: %v\n%s", err, buf.String())
 	}
 
-	// Must be indented (contains newlines).
-	if !bytes.Contains(buf.Bytes(), []byte("\n")) {
-		t.Error("expected indented JSON output")
+	// Must be compact (single line + trailing newline).
+	lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+	if len(lines) != 1 {
+		t.Errorf("expected compact single-line JSON, got %d lines", len(lines))
 	}
 
 	// Must have expected top-level structure.
