@@ -180,6 +180,26 @@ func TestDNSRefusedBecomesErrorWithHint(t *testing.T) {
 	}
 }
 
+func TestDNSNoAnswerBecomesErrorWithHint(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "no answer from DNS server", Name: "empty.example.com"}
+	layer := New(&testkit.FakeResolver{Err: dnsErr})
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "DNS_ERROR" {
+		t.Errorf("error code = %v, want DNS_ERROR", result.Error)
+	}
+	hint, ok := result.Observations["dns_error_hint"]
+	if !ok {
+		t.Fatal("missing dns_error_hint observation")
+	}
+	if hint != "no_answer" {
+		t.Errorf("dns_error_hint = %v, want no_answer", hint)
+	}
+}
+
 func TestDNSNxdomainUnchanged(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "no such host", Name: "nx.example.com", IsNotFound: true}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})

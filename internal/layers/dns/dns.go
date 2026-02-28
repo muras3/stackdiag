@@ -98,6 +98,8 @@ func inferDNSHint(dnsErr *net.DNSError) any {
 		return "servfail"
 	case strings.Contains(msg, "refused"):
 		return "refused"
+	case strings.Contains(msg, "no answer"):
+		return "no_answer"
 	default:
 		return nil
 	}
