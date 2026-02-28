@@ -49,6 +49,15 @@ type toolError struct {
 
 // RenderToolError writes a structured JSON error for argument/target parse failures.
 func RenderToolError(w io.Writer, code, message string, exitCode int) error {
+	return renderToolError(w, code, message, exitCode, false)
+}
+
+// RenderToolErrorPretty writes a structured JSON error with indentation.
+func RenderToolErrorPretty(w io.Writer, code, message string, exitCode int) error {
+	return renderToolError(w, code, message, exitCode, true)
+}
+
+func renderToolError(w io.Writer, code, message string, exitCode int, pretty bool) error {
 	e := toolError{
 		SchemaVersion: core.SchemaVersion,
 		Error:         &core.ProbeError{Code: code, Message: message},
@@ -56,5 +65,8 @@ func RenderToolError(w io.Writer, code, message string, exitCode int) error {
 	}
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
+	if pretty {
+		enc.SetIndent("", "  ")
+	}
 	return enc.Encode(e)
 }

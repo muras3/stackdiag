@@ -950,6 +950,45 @@ func TestJSONPrettyImpliesJSON(t *testing.T) {
 	}
 }
 
+func TestJSONPrettyParseErrorIsIndented(t *testing.T) {
+	// --json-pretty with invalid args should produce indented JSON error.
+	stdout, _, exitCode := runStackdiag(t, "--json-pretty", "ftp://example.com")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("expected valid JSON: %v\n%s", err, stdout)
+	}
+
+	// Must be multi-line (indented).
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	if len(lines) <= 1 {
+		t.Error("--json-pretty parse error should produce indented JSON")
+	}
+
+	errObj, ok := result["error"].(map[string]any)
+	if !ok {
+		t.Fatal("missing error object")
+	}
+	if errObj["code"] != "INVALID_TARGET" {
+		t.Errorf("error code = %v, want INVALID_TARGET", errObj["code"])
+	}
+}
+
+func TestJSONFalseDoesNotForceJSON(t *testing.T) {
+	// --json=false with invalid args should NOT produce JSON output.
+	_, stderr, exitCode := runStackdiag(t, "--json=false")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+	// stderr should have plain text error, not JSON.
+	if !strings.Contains(stderr, "Error:") && !strings.Contains(stderr, "USAGE:") {
+		t.Errorf("expected plain text error on stderr with --json=false, got: %s", stderr)
+	}
+}
+
 func TestJSONPrettyWithCount(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

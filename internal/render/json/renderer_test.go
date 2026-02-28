@@ -220,6 +220,24 @@ func TestRenderCountPretty(t *testing.T) {
 	}
 }
 
+func TestRenderToolErrorPretty(t *testing.T) {
+	var buf bytes.Buffer
+	err := RenderToolErrorPretty(&buf, "INVALID_ARGS", "missing target", 1)
+	if err != nil {
+		t.Fatalf("RenderToolErrorPretty error: %v", err)
+	}
+
+	var raw json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, buf.String())
+	}
+
+	lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+	if len(lines) <= 1 {
+		t.Error("expected multi-line pretty-printed tool error JSON")
+	}
+}
+
 func TestRenderNoHTMLEscape(t *testing.T) {
 	r := testResult()
 	r.Target = "https://example.com?a=1&b=2"

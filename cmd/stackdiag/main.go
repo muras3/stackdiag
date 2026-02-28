@@ -29,7 +29,9 @@ var (
 func main() {
 	cfg, err := cli.ParseArgs(os.Args[1:])
 	if err != nil {
-		if hasJSONFlag(os.Args[1:]) {
+		if hasJSONPrettyFlag(os.Args[1:]) {
+			renderjson.RenderToolErrorPretty(os.Stdout, "INVALID_ARGS", err.Error(), 1)
+		} else if hasJSONFlag(os.Args[1:]) {
 			renderjson.RenderToolError(os.Stdout, "INVALID_ARGS", err.Error(), 1)
 		} else {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
@@ -62,13 +64,13 @@ func main() {
 		envVal := os.Getenv(cfg.BearerEnv)
 		if envVal == "" {
 			if _, ok := os.LookupEnv(cfg.BearerEnv); !ok {
-				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is not set", cfg.BearerEnv))
+				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is not set", cfg.BearerEnv), cfg.JSONPretty)
 			} else {
-				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is empty", cfg.BearerEnv))
+				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is empty", cfg.BearerEnv), cfg.JSONPretty)
 			}
 		}
 		if strings.TrimSpace(envVal) == "" {
-			exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q contains only whitespace", cfg.BearerEnv))
+			exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q contains only whitespace", cfg.BearerEnv), cfg.JSONPretty)
 		}
 		cfg.Headers["Authorization"] = "Bearer " + envVal
 	}
@@ -76,16 +78,16 @@ func main() {
 		envVal := os.Getenv(cfg.BasicEnv)
 		if envVal == "" {
 			if _, ok := os.LookupEnv(cfg.BasicEnv); !ok {
-				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is not set", cfg.BasicEnv))
+				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is not set", cfg.BasicEnv), cfg.JSONPretty)
 			} else {
-				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is empty", cfg.BasicEnv))
+				exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q is empty", cfg.BasicEnv), cfg.JSONPretty)
 			}
 		}
 		if strings.TrimSpace(envVal) == "" {
-			exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q contains only whitespace", cfg.BasicEnv))
+			exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q contains only whitespace", cfg.BasicEnv), cfg.JSONPretty)
 		}
 		if !strings.Contains(envVal, ":") {
-			exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q must be in user:password format", cfg.BasicEnv))
+			exitToolError(cfg.JSON, "INVALID_ARGS", fmt.Sprintf("environment variable %q must be in user:password format", cfg.BasicEnv), cfg.JSONPretty)
 		}
 		encoded := base64Encode(envVal)
 		cfg.Headers["Authorization"] = "Basic " + encoded
@@ -93,7 +95,7 @@ func main() {
 
 	tgt, err := core.ParseTarget(cfg.Target)
 	if err != nil {
-		exitToolError(cfg.JSON, "INVALID_TARGET", err.Error())
+		exitToolError(cfg.JSON, "INVALID_TARGET", err.Error(), cfg.JSONPretty)
 	}
 
 	// Build layers based on target scheme.
@@ -199,6 +201,22 @@ func base64Encode(s string) string {
 	return base64.StdEncoding.EncodeToString([]byte(s))
 }
 
+// hasJSONPrettyFlag scans raw args for --json-pretty before full parsing.
+func hasJSONPrettyFlag(args []string) bool {
+	for _, a := range args {
+		if a == "--json-pretty" {
+			return true
+		}
+		if strings.HasPrefix(a, "--json-pretty=") {
+			val := strings.ToLower(a[len("--json-pretty="):])
+			if val == "true" || val == "1" || val == "t" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // hasJSONFlag scans raw args for --json before full parsing (used when ParseArgs fails).
 func hasJSONFlag(args []string) bool {
 	for _, a := range args {
@@ -219,9 +237,14 @@ func hasJSONFlag(args []string) bool {
 
 // exitToolError outputs a structured error and exits with code 1.
 // When jsonMode is true, writes JSON to stdout; otherwise writes plain text to stderr.
-func exitToolError(jsonMode bool, code, message string) {
+func exitToolError(jsonMode bool, code, message string, prettyMode ...bool) {
+	pretty := len(prettyMode) > 0 && prettyMode[0]
 	if jsonMode {
-		renderjson.RenderToolError(os.Stdout, code, message, 1)
+		if pretty {
+			renderjson.RenderToolErrorPretty(os.Stdout, code, message, 1)
+		} else {
+			renderjson.RenderToolError(os.Stdout, code, message, 1)
+		}
 	} else {
 		fmt.Fprintf(os.Stderr, "Error: %v\n", message)
 	}
