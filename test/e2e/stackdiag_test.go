@@ -893,6 +893,63 @@ func TestJSONNoArgsStructuredError(t *testing.T) {
 	}
 }
 
+func TestJSONPrettyOutputIsIndented(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, _, _ := runStackdiag(t, "--json-pretty", "--timeout", "3",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	if len(stdout) == 0 {
+		t.Fatal("expected JSON output on stdout")
+	}
+
+	// Must be valid JSON.
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+
+	// Must be multi-line (pretty-printed).
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	if len(lines) <= 1 {
+		t.Error("--json-pretty should produce multi-line indented output")
+	}
+
+	// Must contain indentation.
+	if !strings.Contains(stdout, "  ") {
+		t.Error("--json-pretty output should be indented with spaces")
+	}
+}
+
+func TestJSONPrettyImpliesJSON(t *testing.T) {
+	// --json-pretty without --json should still produce JSON.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, _, _ := runStackdiag(t, "--json-pretty", "--timeout", "3",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("--json-pretty should produce valid JSON without --json: %v", err)
+	}
+
+	for _, key := range []string{"schema_version", "target", "layers", "summary"} {
+		if _, ok := result[key]; !ok {
+			t.Errorf("missing required field: %q", key)
+		}
+	}
+}
+
 func TestBearerEnvNoRedactShowsRaw(t *testing.T) {
 	srv, _ := headerCaptureServer(t)
 

@@ -202,7 +202,8 @@ func base64Encode(s string) string {
 // hasJSONFlag scans raw args for --json before full parsing (used when ParseArgs fails).
 func hasJSONFlag(args []string) bool {
 	for _, a := range args {
-		if a == "--json" || a == "--json-pretty" {
+		if a == "--json" || a == "--json-pretty" ||
+			strings.HasPrefix(a, "--json=") || strings.HasPrefix(a, "--json-pretty=") {
 			return true
 		}
 	}
