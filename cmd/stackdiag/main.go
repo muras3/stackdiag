@@ -132,7 +132,11 @@ func main() {
 		})
 
 		if cfg.JSON {
-			if err := renderjson.RenderCount(os.Stdout, countResult); err != nil {
+			renderCountFn := renderjson.RenderCount
+			if cfg.JSONPretty {
+				renderCountFn = renderjson.RenderCountPretty
+			}
+			if err := renderCountFn(os.Stdout, countResult); err != nil {
 				fmt.Fprintf(os.Stderr, "Error rendering JSON: %v\n", err)
 				os.Exit(1)
 			}
@@ -152,7 +156,11 @@ func main() {
 
 	// Render output: stdout = data, stderr = logs.
 	if cfg.JSON {
-		if err := renderjson.Render(os.Stdout, result); err != nil {
+		renderFn := renderjson.Render
+		if cfg.JSONPretty {
+			renderFn = renderjson.RenderPretty
+		}
+		if err := renderFn(os.Stdout, result); err != nil {
 			fmt.Fprintf(os.Stderr, "Error rendering JSON: %v\n", err)
 			os.Exit(1)
 		}
@@ -194,7 +202,7 @@ func base64Encode(s string) string {
 // hasJSONFlag scans raw args for --json before full parsing (used when ParseArgs fails).
 func hasJSONFlag(args []string) bool {
 	for _, a := range args {
-		if a == "--json" {
+		if a == "--json" || a == "--json-pretty" {
 			return true
 		}
 	}

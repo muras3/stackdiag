@@ -513,6 +513,32 @@ func TestHelpTextContainsDiagnosticsSection(t *testing.T) {
 	}
 }
 
+func TestParseArgsJSONPretty(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--json-pretty", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.JSON {
+		t.Error("JSON should be true when --json-pretty is used")
+	}
+	if !cfg.JSONPretty {
+		t.Error("JSONPretty should be true")
+	}
+}
+
+func TestParseArgsJSONPrettyDefault(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--json", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.JSON {
+		t.Error("JSON should be true")
+	}
+	if cfg.JSONPretty {
+		t.Error("JSONPretty should default to false")
+	}
+}
+
 func TestParseArgsTimeoutRange(t *testing.T) {
 	tests := []struct {
 		name    string

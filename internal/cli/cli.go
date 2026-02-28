@@ -16,8 +16,9 @@ const (
 // Config holds parsed CLI options.
 type Config struct {
 	Target    string
-	JSON      bool
-	Method    string
+	JSON       bool
+	JSONPretty bool
+	Method     string
 	Headers   map[string]string
 	Timeout   int
 	Insecure  bool
@@ -46,6 +47,7 @@ TARGETS:
 
 OPTIONS:
   --json                Output as JSON (default: table)
+  --json-pretty         Output as pretty-printed JSON
   --method METHOD       HTTP method (default: GET)
   --header KEY:VALUE    HTTP header (repeatable)
   --timeout N           Timeout in seconds (1-300, default: 10)
@@ -127,6 +129,7 @@ func ParseArgs(args []string) (*Config, error) {
 	var countStr string
 
 	fs.BoolVar(&cfg.JSON, "json", false, "output as JSON")
+	fs.BoolVar(&cfg.JSONPretty, "json-pretty", false, "output as pretty-printed JSON")
 	fs.StringVar(&cfg.Method, "method", "GET", "HTTP method")
 	fs.Var(&headers, "header", "HTTP header (repeatable, format: Key: Value)")
 	fs.IntVar(&cfg.Timeout, "timeout", 10, "timeout in seconds")
@@ -144,6 +147,11 @@ func ParseArgs(args []string) (*Config, error) {
 			return &Config{Help: true}, nil
 		}
 		return nil, err
+	}
+
+	// --json-pretty implies --json.
+	if cfg.JSONPretty {
+		cfg.JSON = true
 	}
 
 	// --no-redact is the canonical toggle; --redact is just sugar.

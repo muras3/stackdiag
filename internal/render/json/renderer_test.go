@@ -182,6 +182,44 @@ func TestRenderCount(t *testing.T) {
 	}
 }
 
+func TestRenderPretty(t *testing.T) {
+	var buf bytes.Buffer
+	err := RenderPretty(&buf, testResult())
+	if err != nil {
+		t.Fatalf("RenderPretty error: %v", err)
+	}
+
+	// Must be valid JSON.
+	var raw json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON output: %v\n%s", err, buf.String())
+	}
+
+	// Must be multi-line (indented).
+	lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+	if len(lines) <= 1 {
+		t.Error("expected multi-line pretty-printed JSON")
+	}
+}
+
+func TestRenderCountPretty(t *testing.T) {
+	var buf bytes.Buffer
+	err := RenderCountPretty(&buf, testCountResult())
+	if err != nil {
+		t.Fatalf("RenderCountPretty error: %v", err)
+	}
+
+	var raw json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON output: %v\n%s", err, buf.String())
+	}
+
+	lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+	if len(lines) <= 1 {
+		t.Error("expected multi-line pretty-printed JSON")
+	}
+}
+
 func TestRenderNoHTMLEscape(t *testing.T) {
 	r := testResult()
 	r.Target = "https://example.com?a=1&b=2"

@@ -16,11 +16,27 @@ func Render(w io.Writer, r *core.Result) error {
 	return enc.Encode(r)
 }
 
+// RenderPretty writes the Result as indented JSON to w.
+func RenderPretty(w io.Writer, r *core.Result) error {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
+	return enc.Encode(r)
+}
+
 // RenderCount writes the CountResult as compact JSON to w.
 // HTML escaping is disabled to keep URLs readable.
 func RenderCount(w io.Writer, r *core.CountResult) error {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
+	return enc.Encode(r)
+}
+
+// RenderCountPretty writes the CountResult as indented JSON to w.
+func RenderCountPretty(w io.Writer, r *core.CountResult) error {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", "  ")
 	return enc.Encode(r)
 }
 
