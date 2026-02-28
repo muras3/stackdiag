@@ -29,7 +29,8 @@ const (
 func (s Status) IsOK() bool { return s == StatusOK }
 
 // ShouldContinue returns true if the runner should proceed to the next layer.
-func (s Status) ShouldContinue() bool { return s == StatusOK || s == StatusWarn }
+// ok, warn, and skip all allow continuation; only fail stops the pipeline.
+func (s Status) ShouldContinue() bool { return s != StatusFail }
 
 // ProbeError is a structured error with a machine-readable code.
 type ProbeError struct {

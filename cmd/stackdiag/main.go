@@ -12,6 +12,7 @@ import (
 	"github.com/muras3/stackdiag/internal/core"
 	"github.com/muras3/stackdiag/internal/layers/dns"
 	layerhttp "github.com/muras3/stackdiag/internal/layers/http"
+	"github.com/muras3/stackdiag/internal/layers/reachability"
 	"github.com/muras3/stackdiag/internal/layers/tcp"
 	layertls "github.com/muras3/stackdiag/internal/layers/tls"
 	renderjson "github.com/muras3/stackdiag/internal/render/json"
@@ -171,6 +172,7 @@ func buildLayers(tgt core.Target, insecure bool) []core.Layer {
 	var layers []core.Layer
 
 	layers = append(layers, dns.NewDefault())
+	layers = append(layers, reachability.NewDefault())
 	layers = append(layers, tcp.NewDefault())
 
 	if tgt.NeedsTLS() {

@@ -145,8 +145,56 @@ func TestJSONOutputStructure(t *testing.T) {
 		}
 	}
 
-	if v, ok := result["schema_version"].(string); !ok || v != "v0.1" {
-		t.Errorf("schema_version = %v, want v0.1", result["schema_version"])
+	if v, ok := result["schema_version"].(string); !ok || v != "v0.2" {
+		t.Errorf("schema_version = %v, want v0.2", result["schema_version"])
+	}
+}
+
+func TestJSONOutputContainsReachabilityLayer(t *testing.T) {
+	// Verify reachability layer appears in JSON output between dns and tcp.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, _, _ := runStackdiag(t, "--json", "--timeout", "3",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	if len(stdout) == 0 {
+		t.Fatal("expected JSON output on stdout")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON output: %v\n%s", err, stdout)
+	}
+
+	layers, ok := result["layers"].(map[string]any)
+	if !ok {
+		t.Fatal("missing or invalid layers field")
+	}
+
+	// Reachability layer must be present.
+	reach, ok := layers["reachability"].(map[string]any)
+	if !ok {
+		t.Fatal("missing reachability layer in JSON output")
+	}
+
+	// Verify structure: must have status, duration_ms, observations.
+	for _, key := range []string{"status", "duration_ms", "observations"} {
+		if _, ok := reach[key]; !ok {
+			t.Errorf("reachability layer missing field: %q", key)
+		}
+	}
+
+	// In CI/test environments, reachability will likely be "skip" (no ICMP permission).
+	// Accept ok, skip, or fail — just verify it's a valid status.
+	status, _ := reach["status"].(string)
+	validStatuses := map[string]bool{"ok": true, "warn": true, "fail": true, "skip": true}
+	if !validStatuses[status] {
+		t.Errorf("reachability status = %q, want one of ok/warn/fail/skip", status)
 	}
 }
 
@@ -216,13 +264,17 @@ func TestTableOutputDefault(t *testing.T) {
 	stdout, _, _ := runStackdiag(t, "--timeout", "3",
 		fmt.Sprintf("tcp://127.0.0.1:%d", port))
 
-	// Table output should contain status symbols or text indicators.
-	hasSymbol := strings.ContainsAny(stdout, "✓⚠✗") ||
+	// Table output should contain status indicators (brackets or symbols).
+	hasIndicator := strings.ContainsAny(stdout, "✓⚠✗") ||
+		strings.Contains(stdout, "[ok]") ||
+		strings.Contains(stdout, "[skip]") ||
+		strings.Contains(stdout, "[fail]") ||
+		strings.Contains(stdout, "[warn]") ||
 		strings.Contains(stdout, "OK") ||
 		strings.Contains(stdout, "WARN") ||
 		strings.Contains(stdout, "FAIL")
-	if !hasSymbol {
-		t.Errorf("table output missing status symbols, got:\n%s", stdout)
+	if !hasIndicator {
+		t.Errorf("table output missing status indicators, got:\n%s", stdout)
 	}
 
 	// Should NOT be valid JSON.

@@ -48,8 +48,8 @@ func TestStatusShouldContinue(t *testing.T) {
 	if StatusFail.ShouldContinue() {
 		t.Error("StatusFail should not continue")
 	}
-	if StatusSkip.ShouldContinue() {
-		t.Error("StatusSkip should not continue")
+	if !StatusSkip.ShouldContinue() {
+		t.Error("StatusSkip should continue (skip is non-blocking)")
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 
@@ -45,7 +46,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	durationMS := float64(time.Since(start).Microseconds()) / 1000.0
 
 	if err != nil {
-		if isPermissionError(err) {
+		if reason := skipReason(err); reason != "" {
 			return &core.LayerResult{
 				Status:     core.StatusSkip,
 				DurationMS: durationMS,
@@ -53,7 +54,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 					"probe_method": "none",
 					"reachable":    nil,
 					"rtt_ms":       nil,
-					"skip_reason":  "permission_denied",
+					"skip_reason":  reason,
 				},
 			}
 		}
@@ -89,15 +90,28 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	}
 }
 
-func isPermissionError(err error) bool {
+// skipReason returns a non-empty reason string if the error indicates the
+// reachability probe should be skipped (non-blocking). Returns "" if the
+// error represents a genuine reachability failure.
+func skipReason(err error) string {
 	if errors.Is(err, syscall.EPERM) || errors.Is(err, syscall.EACCES) {
-		return true
+		return "permission_denied"
 	}
 	var opErr *os.PathError
 	if errors.As(err, &opErr) {
-		return errors.Is(opErr.Err, syscall.EPERM) || errors.Is(opErr.Err, syscall.EACCES)
+		if errors.Is(opErr.Err, syscall.EPERM) || errors.Is(opErr.Err, syscall.EACCES) {
+			return "permission_denied"
+		}
 	}
-	return false
+	// IPv6 addresses with ip4:icmp dial produce "no suitable address found".
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		return "unsupported_address"
+	}
+	if strings.Contains(err.Error(), "no suitable address found") {
+		return "unsupported_address"
+	}
+	return ""
 }
 
 // icmpPinger sends ICMP echo requests using raw sockets.
