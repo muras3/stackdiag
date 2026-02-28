@@ -11,9 +11,10 @@ import (
 	"github.com/muras3/stackdiag/internal/testkit"
 )
 
-func makeCtx(timeout time.Duration) *core.ProbeContext {
+func makeCtx(t *testing.T, timeout time.Duration) *core.ProbeContext {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	_ = cancel
+	t.Cleanup(cancel)
 	return &core.ProbeContext{
 		Context: ctx,
 		Target:  core.Target{Host: "example.com", Port: 443, Scheme: "https"},
@@ -29,7 +30,7 @@ func TestReachabilityName(t *testing.T) {
 
 func TestReachabilityOK(t *testing.T) {
 	layer := New(&testkit.FakePinger{RTT: 12 * time.Millisecond})
-	pctx := makeCtx(5 * time.Second)
+	pctx := makeCtx(t, 5*time.Second)
 	result := layer.Probe(pctx)
 
 	if result.Status != core.StatusOK {
@@ -67,7 +68,7 @@ func TestReachabilityOK(t *testing.T) {
 
 func TestReachabilityTimeout(t *testing.T) {
 	layer := New(&testkit.FakePinger{Err: context.DeadlineExceeded})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -87,7 +88,7 @@ func TestReachabilityTimeout(t *testing.T) {
 
 func TestReachabilityPermissionDenied(t *testing.T) {
 	layer := New(&testkit.FakePinger{Err: syscall.EPERM})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusSkip {
 		t.Errorf("status = %q, want skip", result.Status)
@@ -120,7 +121,7 @@ func TestReachabilityPermissionDenied(t *testing.T) {
 
 func TestReachabilityError(t *testing.T) {
 	layer := New(&testkit.FakePinger{Err: errors.New("network unreachable")})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -145,7 +146,7 @@ func TestReachabilityUsesResolvedIPs(t *testing.T) {
 		addrRef:    &pingedAddr,
 	}
 	layer := New(pinger)
-	pctx := makeCtx(5 * time.Second)
+	pctx := makeCtx(t, 5*time.Second)
 	pctx.ResolvedIPs = []string{"203.0.113.10", "203.0.113.11"}
 	layer.Probe(pctx)
 
@@ -161,7 +162,7 @@ func TestReachabilityUsesHostWhenNoResolvedIPs(t *testing.T) {
 		addrRef:    &pingedAddr,
 	}
 	layer := New(pinger)
-	pctx := makeCtx(5 * time.Second)
+	pctx := makeCtx(t, 5*time.Second)
 	// No ResolvedIPs set
 	layer.Probe(pctx)
 
@@ -172,7 +173,7 @@ func TestReachabilityUsesHostWhenNoResolvedIPs(t *testing.T) {
 
 func TestReachabilityPermissionDeniedEACCES(t *testing.T) {
 	layer := New(&testkit.FakePinger{Err: syscall.EACCES})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusSkip {
 		t.Errorf("status = %q, want skip", result.Status)
