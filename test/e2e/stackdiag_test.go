@@ -989,6 +989,29 @@ func TestJSONFalseDoesNotForceJSON(t *testing.T) {
 	}
 }
 
+func TestJSONFlagOverrideLastWins(t *testing.T) {
+	// --json followed by --json=false should NOT produce JSON.
+	_, stderr, exitCode := runStackdiag(t, "--json", "--json=false")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+	if !strings.Contains(stderr, "Error:") && !strings.Contains(stderr, "USAGE:") {
+		t.Errorf("expected plain text error with --json --json=false, got stderr: %s", stderr)
+	}
+}
+
+func TestJSONPrettyFlagOverrideLastWins(t *testing.T) {
+	// --json-pretty followed by --json-pretty=false should NOT produce pretty JSON.
+	stdout, stderr, exitCode := runStackdiag(t, "--json-pretty", "--json-pretty=false")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+	// Should fall back to plain text since pretty is disabled.
+	if !strings.Contains(stderr, "Error:") && !strings.Contains(stderr, "USAGE:") {
+		t.Errorf("expected plain text error with --json-pretty --json-pretty=false, stdout: %s, stderr: %s", stdout, stderr)
+	}
+}
+
 func TestJSONPrettyWithCount(t *testing.T) {
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {

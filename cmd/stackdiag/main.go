@@ -202,37 +202,42 @@ func base64Encode(s string) string {
 }
 
 // hasJSONPrettyFlag scans raw args for --json-pretty before full parsing.
+// Uses last-flag-wins semantics to handle --json-pretty --json-pretty=false.
 func hasJSONPrettyFlag(args []string) bool {
+	result := false
 	for _, a := range args {
 		if a == "--json-pretty" {
-			return true
-		}
-		if strings.HasPrefix(a, "--json-pretty=") {
-			val := strings.ToLower(a[len("--json-pretty="):])
-			if val == "true" || val == "1" || val == "t" {
-				return true
-			}
+			result = true
+		} else if strings.HasPrefix(a, "--json-pretty=") {
+			result = parseBoolValue(a[len("--json-pretty="):])
 		}
 	}
-	return false
+	return result
 }
 
-// hasJSONFlag scans raw args for --json before full parsing (used when ParseArgs fails).
+// hasJSONFlag scans raw args for --json or --json-pretty before full parsing.
+// Uses last-flag-wins semantics to handle conflicting repeated flags.
 func hasJSONFlag(args []string) bool {
+	jsonFlag := false
+	prettyFlag := false
 	for _, a := range args {
-		if a == "--json" || a == "--json-pretty" {
-			return true
-		}
-		for _, prefix := range []string{"--json=", "--json-pretty="} {
-			if strings.HasPrefix(a, prefix) {
-				val := strings.ToLower(a[len(prefix):])
-				if val == "true" || val == "1" || val == "t" {
-					return true
-				}
-			}
+		if a == "--json" {
+			jsonFlag = true
+		} else if strings.HasPrefix(a, "--json=") {
+			jsonFlag = parseBoolValue(a[len("--json="):])
+		} else if a == "--json-pretty" {
+			prettyFlag = true
+		} else if strings.HasPrefix(a, "--json-pretty=") {
+			prettyFlag = parseBoolValue(a[len("--json-pretty="):])
 		}
 	}
-	return false
+	return jsonFlag || prettyFlag
+}
+
+// parseBoolValue returns true for "true", "1", "t" (case-insensitive).
+func parseBoolValue(s string) bool {
+	v := strings.ToLower(s)
+	return v == "true" || v == "1" || v == "t"
 }
 
 // exitToolError outputs a structured error and exits with code 1.
