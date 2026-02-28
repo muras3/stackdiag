@@ -373,7 +373,10 @@ func TestIsLinkLocalNameserver(t *testing.T) {
 }
 
 func TestTrackingResolverSkipsLinkLocalAddress(t *testing.T) {
-	// Verify that resolver_address is NOT set when the Dial hook skips a link-local server.
+	// Integration test: verify the Dial hook in trackingResolver correctly
+	// skips link-local and does not store it as resolver_address.
+	// Accesses tr.inner.Dial directly because the Dial hook is the unit under test;
+	// the pure detection logic is tested separately in TestIsLinkLocalNameserver.
 	tr := newTrackingResolver()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	t.Cleanup(cancel)
@@ -391,6 +394,29 @@ func TestTrackingResolverSkipsLinkLocalAddress(t *testing.T) {
 	addr := tr.ResolverAddress()
 	if addr != "" {
 		t.Errorf("ResolverAddress() = %q, want empty for skipped link-local", addr)
+	}
+}
+
+func TestDNSAllLinkLocalServersProduceDNSError(t *testing.T) {
+	// When all nameservers are link-local, the resolver fails with a generic
+	// DNS error. The Probe layer should classify this as DNS_ERROR with
+	// resolver_address nil (no server was actually used).
+	dnsErr := &net.DNSError{
+		Err:  "dial udp [fe80::1%en0]:53: skipping link-local nameserver [fe80::1%en0]:53",
+		Name: "example.com",
+	}
+	layer := New(&testkit.FakeResolver{Err: dnsErr})
+	result := layer.Probe(makeCtx(t, 5*time.Second))
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "DNS_ERROR" {
+		t.Errorf("error = %v, want DNS_ERROR", result.Error)
+	}
+	addr := result.Observations["resolver_address"]
+	if addr != nil {
+		t.Errorf("resolver_address = %v, want nil when all servers are link-local", addr)
 	}
 }
 

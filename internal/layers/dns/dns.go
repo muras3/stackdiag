@@ -76,6 +76,8 @@ func newTrackingResolver() *trackingResolver {
 // isLinkLocalNameserver reports whether address (host:port) is a link-local
 // unicast address. Handles IPv6 zone IDs (e.g. "fe80::1%en0") which
 // net.ParseIP cannot parse directly.
+// Note: returns false if SplitHostPort fails. Go's net.Resolver always passes
+// host:port format to the Dial hook, so this is safe.
 func isLinkLocalNameserver(address string) bool {
 	host, _, err := net.SplitHostPort(address)
 	if err != nil {
