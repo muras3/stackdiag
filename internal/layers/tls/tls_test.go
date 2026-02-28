@@ -1035,3 +1035,128 @@ func TestTLSInsecureNotYetValidCert(t *testing.T) {
 		t.Errorf("error = %v, want TLS_CERT_NOT_YET_VALID", result.Error)
 	}
 }
+
+// =============================================================================
+// Tests: Cert error scenarios should still return observations (2-phase handshake)
+// =============================================================================
+
+// assertHasObservations checks that result.Observations contains the key TLS fields
+// even when the overall status is fail.
+func assertHasObservations(t *testing.T, result *core.LayerResult) {
+	t.Helper()
+
+	if _, ok := result.Observations["version"]; !ok {
+		t.Error("missing 'version' in observations")
+	}
+	if _, ok := result.Observations["cipher_suite"]; !ok {
+		t.Error("missing 'cipher_suite' in observations")
+	}
+	if _, ok := result.Observations["cert_days_until_expiry"]; !ok {
+		t.Error("missing 'cert_days_until_expiry' in observations")
+	}
+	if _, ok := result.Observations["cert_hostname_match"]; !ok {
+		t.Error("missing 'cert_hostname_match' in observations")
+	}
+}
+
+func TestTLSExpiredCertHasObservations(t *testing.T) {
+	now := time.Now()
+	cert, pool := generateCert(t, certOpts{
+		hosts:     []string{"localhost"},
+		notBefore: now.Add(-48 * time.Hour),
+		notAfter:  now.Add(-1 * time.Hour), // expired
+	})
+
+	addr, cleanup := startTLSServer(t, cert)
+	defer cleanup()
+
+	host, portStr, _ := net.SplitHostPort(addr)
+	port := 0
+	for _, c := range portStr {
+		port = port*10 + int(c-'0')
+	}
+
+	handshaker := &realHandshakerWithRoots{roots: pool}
+	layer := New(handshaker)
+
+	pctx := makePctx("localhost", port, host, false)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_CERT_EXPIRED" {
+		t.Errorf("error = %v, want TLS_CERT_EXPIRED", result.Error)
+	}
+
+	// Key assertion: even on cert error, observations must be populated
+	assertHasObservations(t, result)
+}
+
+func TestTLSHostnameMismatchHasObservations(t *testing.T) {
+	now := time.Now()
+	cert, pool := generateCert(t, certOpts{
+		hosts:     []string{"other.example.com"}, // SAN does not match "localhost"
+		notBefore: now.Add(-1 * time.Hour),
+		notAfter:  now.Add(365 * 24 * time.Hour),
+	})
+
+	addr, cleanup := startTLSServer(t, cert)
+	defer cleanup()
+
+	host, portStr, _ := net.SplitHostPort(addr)
+	port := 0
+	for _, c := range portStr {
+		port = port*10 + int(c-'0')
+	}
+
+	handshaker := &realHandshakerWithRoots{roots: pool}
+	layer := New(handshaker)
+
+	pctx := makePctx("localhost", port, host, false)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_HOSTNAME_MISMATCH" {
+		t.Errorf("error = %v, want TLS_HOSTNAME_MISMATCH", result.Error)
+	}
+
+	// Key assertion: even on cert error, observations must be populated
+	assertHasObservations(t, result)
+}
+
+func TestTLSUntrustedChainHasObservations(t *testing.T) {
+	now := time.Now()
+	cert, _ := generateCert(t, certOpts{
+		hosts:     []string{"localhost"},
+		notBefore: now.Add(-1 * time.Hour),
+		notAfter:  now.Add(365 * 24 * time.Hour),
+	})
+
+	addr, cleanup := startTLSServer(t, cert)
+	defer cleanup()
+
+	host, portStr, _ := net.SplitHostPort(addr)
+	port := 0
+	for _, c := range portStr {
+		port = port*10 + int(c-'0')
+	}
+
+	// Use DefaultHandshaker (no custom root pool) → untrusted chain
+	layer := NewDefault()
+
+	pctx := makePctx("localhost", port, host, false)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_UNTRUSTED_CHAIN" {
+		t.Errorf("error = %v, want TLS_UNTRUSTED_CHAIN", result.Error)
+	}
+
+	// Key assertion: even on cert error, observations must be populated
+	assertHasObservations(t, result)
+}
