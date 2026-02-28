@@ -15,6 +15,12 @@ fi
 SCENARIOS_FILE="scenarios.json"
 RESULTS_DIR="results"
 
+# Activate venv if present (for tiktoken / anthropic dependencies)
+if [ -f "${SCRIPT_DIR}/.venv/bin/activate" ]; then
+  # shellcheck disable=SC1091
+  source "${SCRIPT_DIR}/.venv/bin/activate"
+fi
+
 # Read scenario names and targets from scenarios.json.
 # Uses python3 for JSON parsing (portable, no jq dependency).
 read_scenarios() {
@@ -60,7 +66,7 @@ fi
 log "Running capture for each scenario..."
 while IFS=$'\t' read -r NAME TARGET; do
   log "  -> ${NAME}: ${TARGET}"
-  run_cmd docker compose exec runner ./capture.sh "${NAME}" "${TARGET}" /bench/results
+  run_cmd docker compose exec -T runner ./capture.sh "${NAME}" "${TARGET}" /bench/results </dev/null
 done <<< "${SCENARIO_LIST}"
 
 log "Copying results from container..."
