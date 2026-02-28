@@ -14,6 +14,12 @@ type Resolver interface {
 	LookupHost(ctx context.Context, host string) ([]string, error)
 }
 
+// ResolverWithAddress is an optional interface for resolvers that can report
+// the DNS resolver address used.
+type ResolverWithAddress interface {
+	ResolverAddress() string
+}
+
 // Layer performs DNS resolution.
 type Layer struct {
 	resolver Resolver
@@ -26,7 +32,34 @@ func New(resolver Resolver) *Layer {
 
 // NewDefault creates a DNS Layer using the system resolver.
 func NewDefault() *Layer {
-	return &Layer{resolver: net.DefaultResolver}
+	return &Layer{resolver: newTrackingResolver()}
+}
+
+// trackingResolver wraps net.Resolver with a Dial hook to capture resolver address.
+type trackingResolver struct {
+	inner   *net.Resolver
+	address string
+}
+
+func newTrackingResolver() *trackingResolver {
+	tr := &trackingResolver{}
+	tr.inner = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			tr.address = address
+			var d net.Dialer
+			return d.DialContext(ctx, network, address)
+		},
+	}
+	return tr
+}
+
+func (tr *trackingResolver) LookupHost(ctx context.Context, host string) ([]string, error) {
+	return tr.inner.LookupHost(ctx, host)
+}
+
+func (tr *trackingResolver) ResolverAddress() string {
+	return tr.address
 }
 
 func (l *Layer) Name() string { return "dns" }
@@ -36,13 +69,21 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	ips, err := l.resolver.LookupHost(pctx.Context, pctx.Target.Host)
 	durationMS := float64(time.Since(start).Microseconds()) / 1000.0
 
+	// Check if resolver reports its address.
+	var resolverAddr any
+	if ra, ok := l.resolver.(ResolverWithAddress); ok {
+		if addr := ra.ResolverAddress(); addr != "" {
+			resolverAddr = addr
+		}
+	}
+
 	if err != nil {
 		probeErr, hint := classifyDNSError(err)
 		obs := map[string]any{
 			"query_name":       pctx.Target.Host,
 			"dns_error_hint":   hint,
 			"ttl":              nil,
-			"resolver_address": nil,
+			"resolver_address": resolverAddr,
 		}
 		return &core.LayerResult{
 			Status:       core.StatusFail,
@@ -63,7 +104,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 			"answers":          ips,
 			"dns_error_hint":   nil,
 			"ttl":              nil,
-			"resolver_address": nil,
+			"resolver_address": resolverAddr,
 		},
 		Error: nil,
 	}

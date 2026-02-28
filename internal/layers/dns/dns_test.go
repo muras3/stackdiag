@@ -281,6 +281,39 @@ func TestDNSObservationsHaveTTLAndResolver(t *testing.T) {
 	}
 }
 
+func TestDNSResolverAddressReturned(t *testing.T) {
+	resolver := &testkit.FakeResolver{
+		IPs:          []string{"203.0.113.10"},
+		ResolverAddr: "192.168.1.1:53",
+	}
+	layer := New(resolver)
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusOK {
+		t.Fatalf("status = %q, want ok", result.Status)
+	}
+	addr := result.Observations["resolver_address"]
+	if addr != "192.168.1.1:53" {
+		t.Errorf("resolver_address = %v, want 192.168.1.1:53", addr)
+	}
+}
+
+func TestDNSResolverAddressNilWhenEmpty(t *testing.T) {
+	resolver := &testkit.FakeResolver{
+		IPs: []string{"203.0.113.10"},
+	}
+	layer := New(resolver)
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusOK {
+		t.Fatalf("status = %q, want ok", result.Status)
+	}
+	addr := result.Observations["resolver_address"]
+	if addr != nil {
+		t.Errorf("resolver_address = %v, want nil", addr)
+	}
+}
+
 func TestDNSQueryNameOnFailure(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "no such host", Name: "bad.example.com", IsNotFound: true}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
