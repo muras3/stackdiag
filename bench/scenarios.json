@@ -1,0 +1,112 @@
+[
+  {
+    "name": "healthy_https",
+    "target": "https://nginx-healthy",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "required_evidence": [
+      "query_name",
+      "answers",
+      "remote_ip",
+      "remote_port",
+      "version",
+      "cipher_suite",
+      "cert_days_until_expiry",
+      "cert_hostname_match",
+      "method",
+      "protocol",
+      "status_code",
+      "status_text"
+    ],
+    "docker_service": "nginx-healthy"
+  },
+  {
+    "name": "tcp_refused",
+    "target": "tcp://nginx-healthy:9999",
+    "ground_truth": "TCP_REFUSED",
+    "required_evidence": [],
+    "docker_service": "nginx-healthy"
+  },
+  {
+    "name": "dns_nxdomain",
+    "target": "https://nonexistent.bench.local",
+    "ground_truth": "DNS_NXDOMAIN",
+    "required_evidence": [
+      "query_name"
+    ],
+    "docker_service": "coredns"
+  },
+  {
+    "name": "cert_expired",
+    "target": "https://nginx-expired",
+    "ground_truth": "TLS_CERT_EXPIRED",
+    "required_evidence": [
+      "version",
+      "cert_days_until_expiry"
+    ],
+    "docker_service": "nginx-expired"
+  },
+  {
+    "name": "hostname_mismatch",
+    "target": "https://nginx-wronghost",
+    "ground_truth": "TLS_HOSTNAME_MISMATCH",
+    "required_evidence": [
+      "version",
+      "cert_hostname_match"
+    ],
+    "docker_service": "nginx-wronghost"
+  },
+  {
+    "name": "self_signed",
+    "target": "https://nginx-selfsigned",
+    "ground_truth": "TLS_UNTRUSTED_CHAIN",
+    "required_evidence": [
+      "version"
+    ],
+    "docker_service": "nginx-selfsigned"
+  },
+  {
+    "name": "http_503",
+    "target": "https://nginx-503",
+    "ground_truth": "HTTP_503",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text"
+    ],
+    "docker_service": "nginx-503"
+  },
+  {
+    "name": "http_403",
+    "target": "https://nginx-403",
+    "ground_truth": "HTTP_403",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text"
+    ],
+    "docker_service": "nginx-403"
+  },
+  {
+    "name": "http_500",
+    "target": "https://nginx-500",
+    "ground_truth": "HTTP_500",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text"
+    ],
+    "docker_service": "nginx-500"
+  },
+  {
+    "name": "tls12_only",
+    "target": "https://nginx-tls12",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "required_evidence": [
+      "version",
+      "cipher_suite"
+    ],
+    "docker_service": "nginx-tls12"
+  }
+]
