@@ -19,7 +19,7 @@ const (
 )
 
 // layerOrder defines the fixed display order for layers.
-var layerOrder = []string{"dns", "tcp", "tls", "http"}
+var layerOrder = []string{"dns", "reachability", "tcp", "tls", "http"}
 
 // Render writes the Result as a human-readable table to w.
 // When useColor is true, output uses ANSI escape codes and Unicode symbols.
@@ -258,7 +258,7 @@ func renderLayerLine(w io.Writer, name string, lr *core.LayerResult, maxDurLen i
 	// Right-align the duration field.
 	paddedDur := fmt.Sprintf("%*s", maxDurLen, dur)
 
-	line := fmt.Sprintf("  %-4s  %s  %s  %s", name, sym, paddedDur, desc)
+	line := fmt.Sprintf("  %-12s  %s  %s  %s", name, sym, paddedDur, desc)
 	_, err := fmt.Fprintln(w, line)
 	return err
 }
@@ -431,7 +431,7 @@ func RenderCount(w io.Writer, r *core.CountResult, useColor bool) error {
 		}
 		lossStr := fmt.Sprintf("%.1f%%", ls.LossRatio*100)
 
-		line := fmt.Sprintf("    %-4s  p50: %5s  p95: %5s  loss: %s", name, p50Str, p95Str, lossStr)
+		line := fmt.Sprintf("    %-12s  p50: %5s  p95: %5s  loss: %s", name, p50Str, p95Str, lossStr)
 		if _, err := fmt.Fprintln(w, line); err != nil {
 			return err
 		}

@@ -8,9 +8,12 @@ import (
 	"time"
 )
 
+// SchemaVersion is the current schema version for stackdiag output.
+const SchemaVersion = "v0.2"
+
 // LayerOrder defines the canonical execution order for layers.
 // JSON output must always follow this order.
-var LayerOrder = []string{"dns", "tcp", "tls", "http"}
+var LayerOrder = []string{"dns", "reachability", "tcp", "tls", "http"}
 
 // Status represents the outcome of a layer check.
 type Status string

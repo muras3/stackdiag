@@ -31,7 +31,7 @@ func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 	start := time.Now()
 	allLayerNames := core.LayerOrder
 	result := &core.Result{
-		SchemaVersion: "v0.1",
+		SchemaVersion: core.SchemaVersion,
 		StartedAt:     start.UTC(),
 		Target:        pctx.Target.Original,
 		Layers:        make(map[string]*core.LayerResult),
@@ -96,7 +96,7 @@ func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 // cancel after each attempt to prevent context/timer goroutine leaks.
 func (r *Runner) RunCount(n int, factory func(attempt int) (*core.ProbeContext, context.CancelFunc)) *core.CountResult {
 	cr := &core.CountResult{
-		SchemaVersion: "v0.1",
+		SchemaVersion: core.SchemaVersion,
 		Count:         n,
 		Attempts:      make([]*core.AttemptResult, 0, n),
 		Statistics:    make(map[string]*core.LayerStatistics),
