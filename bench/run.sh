@@ -67,13 +67,13 @@ run_cmd docker compose cp runner:/bench/results "${RESULTS_DIR}/"
 log "Counting tokens..."
 while IFS=$'\t' read -r NAME _TARGET; do
   if [ "${DRY_RUN}" = true ]; then
-    echo "[dry-run] python3 count_tokens.py ${RESULTS_DIR}/${NAME}/stdiag.json > ${RESULTS_DIR}/${NAME}/stdiag_tokens.json" >&2
-    echo "[dry-run] python3 count_tokens.py ${RESULTS_DIR}/${NAME}/manual.txt > ${RESULTS_DIR}/${NAME}/manual_tokens.json" >&2
+    echo "[dry-run] python3 count_tokens.py ${RESULTS_DIR}/${NAME}/stdiag.json > ${RESULTS_DIR}/${NAME}/stdiag.tokens.json" >&2
+    echo "[dry-run] python3 count_tokens.py ${RESULTS_DIR}/${NAME}/manual.txt > ${RESULTS_DIR}/${NAME}/manual.tokens.json" >&2
   else
     python3 count_tokens.py "${RESULTS_DIR}/${NAME}/stdiag.json" \
-      > "${RESULTS_DIR}/${NAME}/stdiag_tokens.json"
+      > "${RESULTS_DIR}/${NAME}/stdiag.tokens.json"
     python3 count_tokens.py "${RESULTS_DIR}/${NAME}/manual.txt" \
-      > "${RESULTS_DIR}/${NAME}/manual_tokens.json"
+      > "${RESULTS_DIR}/${NAME}/manual.tokens.json"
   fi
 done <<< "${SCENARIO_LIST}"
 
