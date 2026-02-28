@@ -370,7 +370,7 @@ func (e *fakeTimeoutError) Unwrap() error { return e.wrapped }
 func TestTLSUntrustedChainViaFakeHandshaker(t *testing.T) {
 	layer := New(&fakeHandshaker{
 		durationMS: 4.5,
-		err:        errors.New("x509: certificate signed by unknown authority"),
+		err:        x509.UnknownAuthorityError{Cert: &x509.Certificate{}},
 	})
 
 	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
@@ -938,7 +938,7 @@ func TestTLSScanNotPerformedByDefault(t *testing.T) {
 func TestTLSScanWithFailedNormalProbe(t *testing.T) {
 	h := &scanHandshaker{
 		normalDur: 5.0,
-		normalErr: errors.New("x509: certificate signed by unknown authority"),
+		normalErr: x509.UnknownAuthorityError{Cert: &x509.Certificate{}},
 		versionResults: map[uint16]struct {
 			state *tls.ConnectionState
 			dur   float64
@@ -1155,6 +1155,244 @@ func TestTLSHostnameMismatchHasObservations(t *testing.T) {
 
 	// Key assertion: even on cert error, observations must be populated
 	assertHasObservations(t, result)
+}
+
+// =============================================================================
+// V0.2 Tests: TLS observations expansion and error classification
+// =============================================================================
+
+func TestTLSObservationsV02(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		Subject:   pkix.Name{CommonName: "example.com"},
+		Issuer:    pkix.Name{CommonName: "Test CA"},
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  []string{"example.com", "www.example.com"},
+	}
+	intermediate := &x509.Certificate{
+		Subject:  pkix.Name{CommonName: "Intermediate CA"},
+		Issuer:   pkix.Name{CommonName: "Root CA"},
+		NotAfter: now.Add(10 * 365 * 24 * time.Hour),
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf, intermediate},
+	}
+
+	obs := buildObservations(state, "example.com", true)
+
+	// Existing fields
+	if obs["version"] != "TLSv1.3" {
+		t.Errorf("version = %v, want TLSv1.3", obs["version"])
+	}
+
+	// New v0.2 fields
+	if obs["cert_verified"] != true {
+		t.Errorf("cert_verified = %v, want true", obs["cert_verified"])
+	}
+	if obs["cert_subject"] != "example.com" {
+		t.Errorf("cert_subject = %v, want example.com", obs["cert_subject"])
+	}
+	san, ok := obs["cert_san"].([]string)
+	if !ok {
+		t.Fatalf("cert_san is not []string: %T", obs["cert_san"])
+	}
+	if len(san) != 2 || san[0] != "example.com" || san[1] != "www.example.com" {
+		t.Errorf("cert_san = %v, want [example.com www.example.com]", san)
+	}
+	if obs["cert_issuer"] != "Test CA" {
+		t.Errorf("cert_issuer = %v, want Test CA", obs["cert_issuer"])
+	}
+	if obs["cert_not_after"] != leaf.NotAfter.UTC().Format(time.RFC3339) {
+		t.Errorf("cert_not_after = %v, want %v", obs["cert_not_after"], leaf.NotAfter.UTC().Format(time.RFC3339))
+	}
+	if obs["cert_not_before"] != leaf.NotBefore.UTC().Format(time.RFC3339) {
+		t.Errorf("cert_not_before = %v, want %v", obs["cert_not_before"], leaf.NotBefore.UTC().Format(time.RFC3339))
+	}
+
+	// cert_chain
+	chain, ok := obs["cert_chain"].([]map[string]string)
+	if !ok {
+		t.Fatalf("cert_chain is not []map[string]string: %T", obs["cert_chain"])
+	}
+	if len(chain) != 2 {
+		t.Fatalf("cert_chain length = %d, want 2", len(chain))
+	}
+	if chain[0]["subject"] != "example.com" || chain[0]["issuer"] != "Test CA" {
+		t.Errorf("cert_chain[0] = %v", chain[0])
+	}
+	if chain[1]["subject"] != "Intermediate CA" || chain[1]["issuer"] != "Root CA" {
+		t.Errorf("cert_chain[1] = %v", chain[1])
+	}
+}
+
+func TestTLSCertSanEmpty(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		Subject:   pkix.Name{CommonName: "example.com"},
+		Issuer:    pkix.Name{CommonName: "Test CA"},
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  nil, // no SANs
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	obs := buildObservations(state, "example.com", true)
+
+	san, ok := obs["cert_san"].([]string)
+	if !ok {
+		t.Fatalf("cert_san is not []string: %T", obs["cert_san"])
+	}
+	if len(san) != 0 {
+		t.Errorf("cert_san = %v, want empty slice", san)
+	}
+	// Ensure it's not nil (must be [] in JSON, not null)
+	if san == nil {
+		t.Error("cert_san is nil, want empty slice []string{}")
+	}
+}
+
+func TestTLSCertVerifiedTrue(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		Subject:   pkix.Name{CommonName: "example.com"},
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  []string{"example.com"},
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	obs := buildObservations(state, "example.com", true) // verified=true
+	if obs["cert_verified"] != true {
+		t.Errorf("cert_verified = %v, want true", obs["cert_verified"])
+	}
+}
+
+func TestTLSCertVerifiedFalse(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		Subject:   pkix.Name{CommonName: "example.com"},
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  []string{"example.com"},
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	obs := buildObservations(state, "example.com", false) // verified=false (InsecureSkipVerify path)
+	if obs["cert_verified"] != false {
+		t.Errorf("cert_verified = %v, want false", obs["cert_verified"])
+	}
+}
+
+func TestTLSCertChainSummary(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		Subject:  pkix.Name{CommonName: "leaf.example.com"},
+		Issuer:   pkix.Name{CommonName: "Intermediate CA"},
+		NotAfter: now.Add(365 * 24 * time.Hour),
+	}
+	inter := &x509.Certificate{
+		Subject:  pkix.Name{CommonName: "Intermediate CA"},
+		Issuer:   pkix.Name{CommonName: "Root CA"},
+		NotAfter: now.Add(5 * 365 * 24 * time.Hour),
+	}
+	root := &x509.Certificate{
+		Subject:  pkix.Name{CommonName: "Root CA"},
+		Issuer:   pkix.Name{CommonName: "Root CA"},
+		NotAfter: now.Add(10 * 365 * 24 * time.Hour),
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf, inter, root},
+	}
+
+	obs := buildObservations(state, "leaf.example.com", true)
+	chain, ok := obs["cert_chain"].([]map[string]string)
+	if !ok {
+		t.Fatalf("cert_chain is not []map[string]string: %T", obs["cert_chain"])
+	}
+	if len(chain) != 3 {
+		t.Fatalf("cert_chain length = %d, want 3", len(chain))
+	}
+
+	// Verify each entry has subject, issuer, not_after
+	for i, entry := range chain {
+		if _, ok := entry["subject"]; !ok {
+			t.Errorf("cert_chain[%d] missing subject", i)
+		}
+		if _, ok := entry["issuer"]; !ok {
+			t.Errorf("cert_chain[%d] missing issuer", i)
+		}
+		if _, ok := entry["not_after"]; !ok {
+			t.Errorf("cert_chain[%d] missing not_after", i)
+		}
+	}
+
+	if chain[0]["subject"] != "leaf.example.com" {
+		t.Errorf("chain[0].subject = %q, want leaf.example.com", chain[0]["subject"])
+	}
+	if chain[2]["subject"] != "Root CA" {
+		t.Errorf("chain[2].subject = %q, want Root CA", chain[2]["subject"])
+	}
+}
+
+func TestTLSHostnameMismatchTypeAssertion(t *testing.T) {
+	hostErr := x509.HostnameError{
+		Host: "wrong.example.com",
+		Certificate: &x509.Certificate{
+			DNSNames: []string{"example.com"},
+		},
+	}
+	result := classifyTLSError(hostErr)
+	if result.Code != "TLS_HOSTNAME_MISMATCH" {
+		t.Errorf("code = %q, want TLS_HOSTNAME_MISMATCH", result.Code)
+	}
+}
+
+func TestTLSUntrustedChainTypeAssertion(t *testing.T) {
+	unknownAuth := x509.UnknownAuthorityError{
+		Cert: &x509.Certificate{},
+	}
+	result := classifyTLSError(unknownAuth)
+	if result.Code != "TLS_UNTRUSTED_CHAIN" {
+		t.Errorf("code = %q, want TLS_UNTRUSTED_CHAIN", result.Code)
+	}
+}
+
+func TestTLSNoCertificates(t *testing.T) {
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: nil, // empty
+	}
+
+	layer := New(&fakeHandshaker{
+		state:      state,
+		durationMS: 2.0,
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_NO_CERTIFICATES" {
+		t.Fatalf("error = %v, want TLS_NO_CERTIFICATES", result.Error)
+	}
 }
 
 func TestTLSUntrustedChainHasObservations(t *testing.T) {
