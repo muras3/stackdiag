@@ -97,7 +97,8 @@ The `code` field is the primary interface for programmatic consumers. The `messa
 Design notes:
 - ICMP only. No TCP fallback (avoids responsibility overlap with the TCP layer).
 - When ICMP is not permitted: `probe_method: "none"`, `reachable: null`, `skip_reason: "permission_denied"`, `status: "skip"`.
-- When the target address is not supported (e.g., IPv6 with IPv4-only ICMP): `probe_method: "none"`, `reachable: null`, `skip_reason: "unsupported_address"`, `status: "skip"`.
+- IPv4 and IPv6 addresses are both supported via ICMP/ICMPv6.
+- `skip_reason: "unsupported_address"` is reserved for future address types that cannot be probed.
 - Permission denied results in `skip`, not `fail`, to preserve diagnostic reliability.
 
 ### TCP

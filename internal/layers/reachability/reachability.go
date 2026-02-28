@@ -6,7 +6,6 @@ import (
 	"errors"
 	"net"
 	"os"
-	"strings"
 	"syscall"
 	"time"
 
@@ -103,14 +102,6 @@ func skipReason(err error) string {
 			return "permission_denied"
 		}
 	}
-	// IPv6 addresses with ip4:icmp dial produce "no suitable address found".
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
-		return "unsupported_address"
-	}
-	if strings.Contains(err.Error(), "no suitable address found") {
-		return "unsupported_address"
-	}
 	return ""
 }
 
@@ -137,7 +128,14 @@ func isIPv6(addr string) bool {
 type icmpPinger struct{}
 
 func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, error) {
-	conn, err := net.Dial("ip4:icmp", addr)
+	// Select protocol based on address type.
+	network := "ip4:icmp"
+	v6 := isIPv6(addr)
+	if v6 {
+		network = "ip6:ipv6-icmp"
+	}
+
+	conn, err := net.Dial(network, addr)
 	if err != nil {
 		return 0, err
 	}
@@ -159,9 +157,13 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 		}
 	}()
 
-	// Build ICMP Echo Request (type=8, code=0)
 	id := uint16(os.Getpid() & 0xffff)
-	msg := buildICMPEchoRequest(id, 1)
+	var msg []byte
+	if v6 {
+		msg = buildICMPv6EchoRequest(id, 1)
+	} else {
+		msg = buildICMPEchoRequest(id, 1)
+	}
 
 	start := time.Now()
 	if _, err := conn.Write(msg); err != nil {
@@ -179,21 +181,34 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 			return 0, err
 		}
 
-		// Skip IP header (usually 20 bytes) to get ICMP payload
-		if n < 20 {
-			continue
-		}
-		ipHeaderLen := int(buf[0]&0x0f) << 2
-		if n < ipHeaderLen+8 {
-			continue
-		}
-		icmpData := buf[ipHeaderLen:n]
-
-		// Check for Echo Reply (type=0, code=0) with matching ID
-		if icmpData[0] == 0 && icmpData[1] == 0 && len(icmpData) >= 6 {
-			replyID := binary.BigEndian.Uint16(icmpData[4:6])
-			if replyID == id {
-				return time.Since(start), nil
+		if v6 {
+			// IPv6 raw sockets do NOT include the IP header.
+			if n < 8 {
+				continue
+			}
+			// ICMPv6 Echo Reply: type=129, code=0
+			if buf[0] == 129 && buf[1] == 0 && n >= 6 {
+				replyID := binary.BigEndian.Uint16(buf[4:6])
+				if replyID == id {
+					return time.Since(start), nil
+				}
+			}
+		} else {
+			// IPv4: skip IP header (usually 20 bytes) to get ICMP payload
+			if n < 20 {
+				continue
+			}
+			ipHeaderLen := int(buf[0]&0x0f) << 2
+			if n < ipHeaderLen+8 {
+				continue
+			}
+			icmpData := buf[ipHeaderLen:n]
+			// Check for Echo Reply (type=0, code=0) with matching ID
+			if icmpData[0] == 0 && icmpData[1] == 0 && len(icmpData) >= 6 {
+				replyID := binary.BigEndian.Uint16(icmpData[4:6])
+				if replyID == id {
+					return time.Since(start), nil
+				}
 			}
 		}
 	}

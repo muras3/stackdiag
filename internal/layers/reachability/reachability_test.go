@@ -196,6 +196,16 @@ func (r *recordingPinger) Ping(ctx context.Context, addr string) (time.Duration,
 	return r.FakePinger.Ping(ctx, addr)
 }
 
+func TestSkipReasonNoLongerSkipsIPv6(t *testing.T) {
+	// After IPv6 support, "no suitable address found" should no longer
+	// produce unsupported_address skip. Permission errors should still skip.
+	layer := New(&testkit.FakePinger{Err: syscall.EPERM})
+	result := layer.Probe(makeCtx(t, 5*time.Second))
+	if result.Observations["skip_reason"] != "permission_denied" {
+		t.Errorf("skip_reason = %v, want permission_denied", result.Observations["skip_reason"])
+	}
+}
+
 func TestBuildICMPv6EchoRequest(t *testing.T) {
 	msg := buildICMPv6EchoRequest(0x1234, 1)
 	if len(msg) != 8 {
