@@ -43,8 +43,14 @@ def evaluate_stdiag_diagnosis(stdiag: dict, scenario: dict) -> bool:
             for layer in layers.values()
         )
 
-    # Warning scenario (e.g. TLS_CERT_EXPIRING_SOON): check warn status + code
+    # Warning scenario (e.g. TLS_CERT_EXPIRING_SOON): check warn status + code,
+    # and ensure no layer has status == "fail" (which would indicate a broken run).
     if ground_truth in ("TLS_CERT_EXPIRING_SOON",):
+        has_fail = any(
+            layer.get("status") == "fail" for layer in layers.values()
+        )
+        if has_fail:
+            return False
         for layer in layers.values():
             if layer.get("status") == "warn":
                 error = layer.get("error")

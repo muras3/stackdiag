@@ -397,15 +397,15 @@ This ensures programmatic consumers always receive parseable JSON, even for tool
 
 ## Schema Contract
 
-These guarantees hold across all versions:
+These guarantees hold **within a given schema version** after publication:
 
-1. **No field removals** — fields are never removed from the schema
-2. **No type changes** — a field's type never changes
+1. **No field removals** — fields are never removed within a schema version
+2. **No type changes** — a field's type never changes within a schema version
 3. **Additions only** — new fields may be added (backward-compatible)
 4. **Consistent structure on error** — the JSON shape is identical for success, warning, failure, and skip
 5. **Skip, not null** — unused layers have `status: "skip"`, not `null`
 
-Note: Field removals between schema versions (e.g., v0.1 to v0.2) are permitted since the schema version acts as the compatibility boundary. The contract applies within a given schema version after publication.
+Breaking changes (field removals, type changes) are permitted only across major schema version boundaries (e.g., v0.1 to v0.2). Consumers should check `schema_version` to select the appropriate parser.
 
 ## Full Example
 
