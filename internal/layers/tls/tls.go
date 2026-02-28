@@ -94,7 +94,16 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	obs := buildObservations(state, pctx.Target.Host)
 
 	// Phase 2: Manual cert validation (unless insecure mode)
-	if !pctx.Insecure && len(state.PeerCertificates) > 0 {
+	if !pctx.Insecure {
+		if len(state.PeerCertificates) == 0 {
+			return &core.LayerResult{
+				Status:       core.StatusFail,
+				DurationMS:   durationMS,
+				Observations: obs,
+				Error:        &core.ProbeError{Code: "TLS_NO_CERTIFICATES", Message: "server presented no certificates"},
+			}
+		}
+
 		leaf := state.PeerCertificates[0]
 
 		verifyOpts := x509.VerifyOptions{

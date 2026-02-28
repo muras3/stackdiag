@@ -1039,6 +1039,34 @@ func TestTLSInsecureNotYetValidCert(t *testing.T) {
 }
 
 // =============================================================================
+// Test: No certificates presented — status=fail, code=TLS_NO_CERTIFICATES
+// =============================================================================
+
+func TestTLSNoCertificatesViaFakeHandshaker(t *testing.T) {
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: nil, // no certs
+	}
+
+	layer := New(&fakeHandshaker{
+		state:      state,
+		durationMS: 2.5,
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_NO_CERTIFICATES" {
+		t.Fatalf("error = %v, want TLS_NO_CERTIFICATES", result.Error)
+	}
+	if result.DurationMS != 2.5 {
+		t.Fatalf("duration_ms = %v, want 2.5", result.DurationMS)
+	}
+}
+
+// =============================================================================
 // Tests: Cert error scenarios should still return observations (2-phase handshake)
 // =============================================================================
 
