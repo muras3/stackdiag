@@ -206,7 +206,7 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 			}
 			icmpData := buf[ipHeaderLen:n]
 			// Check for Echo Reply (type=0, code=0) with matching ID
-			if icmpData[0] == 0 && icmpData[1] == 0 && len(icmpData) >= 6 {
+			if icmpData[0] == 0 && icmpData[1] == 0 {
 				replyID := binary.BigEndian.Uint16(icmpData[4:6])
 				if replyID == id {
 					return time.Since(start), nil

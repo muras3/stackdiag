@@ -92,7 +92,7 @@ The `code` field is the primary interface for programmatic consumers. The `messa
 | `probe_method` | string | `"icmp"` or `"none"` |
 | `reachable` | bool\|null | Whether the host is reachable. `null` if determination was not possible (e.g., permission denied) |
 | `rtt_ms` | float64\|null | Round-trip time in milliseconds. `null` if unreachable or undetermined |
-| `skip_reason` | string\|null | Reason the layer was skipped: `"permission_denied"`, `"unsupported_address"`, or `null` |
+| `skip_reason` | string\|null | Reason the layer was skipped: `"permission_denied"`, `"unsupported_address"` (reserved for future use), or `null` |
 
 Design notes:
 - ICMP only. No TCP fallback (avoids responsibility overlap with the TCP layer).
