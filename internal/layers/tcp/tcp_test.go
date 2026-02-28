@@ -201,7 +201,7 @@ func TestTCPConnectionRefusedFake(t *testing.T) {
 	}
 }
 
-func TestTCPConnectionReset(t *testing.T) {
+func TestTCPResetBecomesError(t *testing.T) {
 	resetErr := &net.OpError{
 		Op:  "dial",
 		Net: "tcp",
@@ -218,8 +218,8 @@ func TestTCPConnectionReset(t *testing.T) {
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	if result.Error == nil || result.Error.Code != "TCP_RESET" {
-		t.Errorf("error code = %v, want TCP_RESET", result.Error)
+	if result.Error == nil || result.Error.Code != "TCP_ERROR" {
+		t.Errorf("error code = %v, want TCP_ERROR", result.Error)
 	}
 }
 

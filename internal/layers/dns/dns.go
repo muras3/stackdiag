@@ -37,11 +37,18 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	durationMS := float64(time.Since(start).Microseconds()) / 1000.0
 
 	if err != nil {
+		probeErr, hint := classifyDNSError(err)
+		obs := map[string]any{
+			"query_name":       pctx.Target.Host,
+			"dns_error_hint":   hint,
+			"ttl":              nil,
+			"resolver_address": nil,
+		}
 		return &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   durationMS,
-			Observations: map[string]any{"query_name": pctx.Target.Host},
-			Error:        classifyDNSError(err),
+			Observations: obs,
+			Error:        probeErr,
 		}
 	}
 
@@ -52,35 +59,46 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		Status:     core.StatusOK,
 		DurationMS: durationMS,
 		Observations: map[string]any{
-			"query_name": pctx.Target.Host,
-			"answers":    ips,
+			"query_name":       pctx.Target.Host,
+			"answers":          ips,
+			"dns_error_hint":   nil,
+			"ttl":              nil,
+			"resolver_address": nil,
 		},
 		Error: nil,
 	}
 }
 
-func classifyDNSError(err error) *core.ProbeError {
+func classifyDNSError(err error) (*core.ProbeError, any) {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
-		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: err.Error()}
+		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: err.Error()}, nil
 	}
 
 	var dnsErr *net.DNSError
 	if !errors.As(err, &dnsErr) {
-		return &core.ProbeError{Code: "DNS_ERROR", Message: err.Error()}
+		return &core.ProbeError{Code: "DNS_ERROR", Message: err.Error()}, nil
 	}
 
+	if dnsErr.IsNotFound {
+		return &core.ProbeError{Code: "DNS_NXDOMAIN", Message: err.Error()}, nil
+	}
+	if dnsErr.IsTimeout {
+		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: err.Error()}, nil
+	}
+
+	// Best-effort hint (not contract code)
+	hint := inferDNSHint(dnsErr)
+	return &core.ProbeError{Code: "DNS_ERROR", Message: err.Error()}, hint
+}
+
+func inferDNSHint(dnsErr *net.DNSError) any {
+	msg := dnsErr.Err
 	switch {
-	case dnsErr.IsNotFound:
-		return &core.ProbeError{Code: "DNS_NXDOMAIN", Message: dnsErr.Error()}
-	case dnsErr.IsTimeout:
-		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: dnsErr.Error()}
-	case strings.Contains(dnsErr.Err, "server misbehaving"):
-		return &core.ProbeError{Code: "DNS_SERVFAIL", Message: dnsErr.Error()}
-	case strings.Contains(dnsErr.Err, "refused"):
-		return &core.ProbeError{Code: "DNS_REFUSED", Message: dnsErr.Error()}
-	case strings.Contains(dnsErr.Err, "no answer"):
-		return &core.ProbeError{Code: "DNS_NO_ANSWER", Message: dnsErr.Error()}
+	case strings.Contains(msg, "server misbehaving"):
+		return "servfail"
+	case strings.Contains(msg, "refused"):
+		return "refused"
 	default:
-		return &core.ProbeError{Code: "DNS_ERROR", Message: dnsErr.Error()}
+		return nil
 	}
 }

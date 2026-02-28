@@ -140,7 +140,7 @@ func TestDNSMultipleIPs(t *testing.T) {
 	}
 }
 
-func TestDNSSERVFAIL(t *testing.T) {
+func TestDNSServfailBecomesErrorWithHint(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "server misbehaving", Name: "fail.example.com"}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
 	result := layer.Probe(makeCtx(5 * time.Second))
@@ -148,12 +148,19 @@ func TestDNSSERVFAIL(t *testing.T) {
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	if result.Error == nil || result.Error.Code != "DNS_SERVFAIL" {
-		t.Errorf("error code = %v, want DNS_SERVFAIL", result.Error)
+	if result.Error == nil || result.Error.Code != "DNS_ERROR" {
+		t.Errorf("error code = %v, want DNS_ERROR", result.Error)
+	}
+	hint, ok := result.Observations["dns_error_hint"]
+	if !ok {
+		t.Fatal("missing dns_error_hint observation")
+	}
+	if hint != "servfail" {
+		t.Errorf("dns_error_hint = %v, want servfail", hint)
 	}
 }
 
-func TestDNSRefused(t *testing.T) {
+func TestDNSRefusedBecomesErrorWithHint(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "connection refused", Name: "refused.example.com"}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
 	result := layer.Probe(makeCtx(5 * time.Second))
@@ -161,21 +168,96 @@ func TestDNSRefused(t *testing.T) {
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	if result.Error == nil || result.Error.Code != "DNS_REFUSED" {
-		t.Errorf("error code = %v, want DNS_REFUSED", result.Error)
+	if result.Error == nil || result.Error.Code != "DNS_ERROR" {
+		t.Errorf("error code = %v, want DNS_ERROR", result.Error)
+	}
+	hint, ok := result.Observations["dns_error_hint"]
+	if !ok {
+		t.Fatal("missing dns_error_hint observation")
+	}
+	if hint != "refused" {
+		t.Errorf("dns_error_hint = %v, want refused", hint)
 	}
 }
 
-func TestDNSNoAnswer(t *testing.T) {
-	dnsErr := &net.DNSError{Err: "no answer from DNS server", Name: "empty.example.com"}
+func TestDNSNxdomainUnchanged(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "no such host", Name: "nx.example.com", IsNotFound: true}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
 	result := layer.Probe(makeCtx(5 * time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	if result.Error == nil || result.Error.Code != "DNS_NO_ANSWER" {
-		t.Errorf("error code = %v, want DNS_NO_ANSWER", result.Error)
+	if result.Error == nil || result.Error.Code != "DNS_NXDOMAIN" {
+		t.Errorf("error code = %v, want DNS_NXDOMAIN", result.Error)
+	}
+	hint, ok := result.Observations["dns_error_hint"]
+	if !ok {
+		t.Fatal("missing dns_error_hint observation")
+	}
+	if hint != nil {
+		t.Errorf("dns_error_hint = %v, want nil", hint)
+	}
+}
+
+func TestDNSTimeoutUnchanged(t *testing.T) {
+	dnsErr := &net.DNSError{Err: "timeout", Name: "slow.example.com", IsTimeout: true}
+	layer := New(&testkit.FakeResolver{Err: dnsErr})
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "DNS_TIMEOUT" {
+		t.Errorf("error code = %v, want DNS_TIMEOUT", result.Error)
+	}
+	hint, ok := result.Observations["dns_error_hint"]
+	if !ok {
+		t.Fatal("missing dns_error_hint observation")
+	}
+	if hint != nil {
+		t.Errorf("dns_error_hint = %v, want nil", hint)
+	}
+}
+
+func TestDNSObservationsHaveHintField(t *testing.T) {
+	// On success, dns_error_hint should still be present as nil.
+	layer := New(&testkit.FakeResolver{IPs: []string{"203.0.113.10"}})
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusOK {
+		t.Errorf("status = %q, want ok", result.Status)
+	}
+	hint, ok := result.Observations["dns_error_hint"]
+	if !ok {
+		t.Fatal("missing dns_error_hint observation on success")
+	}
+	if hint != nil {
+		t.Errorf("dns_error_hint = %v, want nil on success", hint)
+	}
+}
+
+func TestDNSObservationsHaveTTLAndResolver(t *testing.T) {
+	// On success, ttl and resolver_address should be present as nil placeholders.
+	layer := New(&testkit.FakeResolver{IPs: []string{"203.0.113.10"}})
+	result := layer.Probe(makeCtx(5 * time.Second))
+
+	if result.Status != core.StatusOK {
+		t.Errorf("status = %q, want ok", result.Status)
+	}
+	ttl, ok := result.Observations["ttl"]
+	if !ok {
+		t.Fatal("missing ttl observation")
+	}
+	if ttl != nil {
+		t.Errorf("ttl = %v, want nil", ttl)
+	}
+	resolver, ok := result.Observations["resolver_address"]
+	if !ok {
+		t.Fatal("missing resolver_address observation")
+	}
+	if resolver != nil {
+		t.Errorf("resolver_address = %v, want nil", resolver)
 	}
 }
 

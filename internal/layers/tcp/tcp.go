@@ -93,9 +93,6 @@ func classifyTCPError(err error) *core.ProbeError {
 	if errors.As(err, &opErr) {
 		var sysErr *os.SyscallError
 		if errors.As(opErr.Err, &sysErr) {
-			if errors.Is(sysErr.Err, syscall.ECONNRESET) {
-				return &core.ProbeError{Code: "TCP_RESET", Message: err.Error()}
-			}
 			if errors.Is(sysErr.Err, syscall.ECONNREFUSED) {
 				return &core.ProbeError{Code: "TCP_REFUSED", Message: err.Error()}
 			}
