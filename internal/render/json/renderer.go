@@ -35,7 +35,7 @@ type toolError struct {
 // RenderToolError writes a structured JSON error for argument/target parse failures.
 func RenderToolError(w io.Writer, code, message string, exitCode int) error {
 	e := toolError{
-		SchemaVersion: "v0.1",
+		SchemaVersion: core.SchemaVersion,
 		Error:         &core.ProbeError{Code: code, Message: message},
 		ExitCode:      exitCode,
 	}

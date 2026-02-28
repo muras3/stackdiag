@@ -722,6 +722,184 @@ func TestRenderCountAllFail(t *testing.T) {
 	assertContains(t, out, "exit 1")
 }
 
+// reachabilityOKResult returns a Result where reachability succeeds with full observations.
+func reachabilityOKResult() *core.Result {
+	r := allOKResult()
+	r.Layers["reachability"] = &core.LayerResult{
+		Status:     core.StatusOK,
+		DurationMS: 3,
+		Observations: map[string]any{
+			"probe_method": "icmp",
+			"reachable":    true,
+			"rtt_ms":       2.5,
+		},
+	}
+	return r
+}
+
+func TestRenderReachabilityOK(t *testing.T) {
+	var buf bytes.Buffer
+	err := Render(&buf, reachabilityOKResult(), false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+
+	// Reachability is line index 1 (after dns).
+	assertContains(t, lines[1], "reachability")
+	assertContains(t, lines[1], "[ok]")
+	assertContains(t, lines[1], "3ms")
+	assertContains(t, lines[1], "icmp")
+}
+
+func TestRenderReachabilitySkip(t *testing.T) {
+	r := allOKResult()
+	r.Layers["reachability"] = &core.LayerResult{
+		Status:       core.StatusSkip,
+		DurationMS:   0,
+		Observations: map[string]any{"skip_reason": "permission_denied"},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+
+	assertContains(t, lines[1], "reachability")
+	assertContains(t, lines[1], "[skip]")
+	assertContains(t, lines[1], "permission denied")
+}
+
+func TestRenderReachabilityFail(t *testing.T) {
+	r := allOKResult()
+	r.Layers["reachability"] = &core.LayerResult{
+		Status:       core.StatusFail,
+		DurationMS:   5,
+		Observations: map[string]any{},
+		Error:        &core.ProbeError{Code: "REACHABILITY_TIMEOUT", Message: "host unreachable (timeout)"},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+
+	assertContains(t, lines[1], "reachability")
+	assertContains(t, lines[1], "[FAIL]")
+	assertContains(t, lines[1], "host unreachable")
+}
+
+func TestRenderTLSExpandedObservations(t *testing.T) {
+	r := allOKResult()
+	r.Layers["tls"] = &core.LayerResult{
+		Status:     core.StatusOK,
+		DurationMS: 31,
+		Observations: map[string]any{
+			"version":                "TLSv1.3",
+			"cipher_suite":           "TLS_AES_256_GCM_SHA384",
+			"cert_days_until_expiry": 90,
+			"cert_verified":          true,
+			"cert_subject":           "CN=api.example.com",
+			"cert_issuer":            "CN=Let's Encrypt Authority X3",
+		},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	assertContains(t, out, "TLSv1.3")
+	assertContains(t, out, "CN=api.example.com")
+	assertContains(t, out, "CN=Let's Encrypt Authority X3")
+}
+
+func TestRenderTLSUnverifiedCert(t *testing.T) {
+	r := allOKResult()
+	r.Layers["tls"] = &core.LayerResult{
+		Status:     core.StatusWarn,
+		DurationMS: 31,
+		Observations: map[string]any{
+			"version":                "TLSv1.3",
+			"cert_days_until_expiry": 90,
+			"cert_verified":          false,
+			"cert_subject":           "CN=api.example.com",
+		},
+		Error: &core.ProbeError{Code: "TLS_CERT_UNVERIFIED", Message: "certificate not verified"},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	assertContains(t, out, "unverified")
+}
+
+func TestRenderHTTPResponseHeaders(t *testing.T) {
+	r := allOKResult()
+	r.Layers["http"] = &core.LayerResult{
+		Status:     core.StatusOK,
+		DurationMS: 57,
+		Observations: map[string]any{
+			"method":      "GET",
+			"status_code": 200,
+			"status_text": "OK",
+			"response_headers": map[string]any{
+				"Content-Type": "application/json",
+				"Server":       "nginx",
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	assertContains(t, out, "Content-Type: application/json")
+	assertContains(t, out, "Server: nginx")
+}
+
+func TestRenderDNSErrorHint(t *testing.T) {
+	r := allOKResult()
+	r.Layers["dns"] = &core.LayerResult{
+		Status:     core.StatusWarn,
+		DurationMS: 12,
+		Observations: map[string]any{
+			"query_name":     "api.example.com",
+			"answers":        []any{"203.0.113.10"},
+			"dns_error_hint": "servfail",
+		},
+		Error: &core.ProbeError{Code: "DNS_WARN", Message: "partial failure"},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	assertContains(t, out, "hint: servfail")
+}
+
 // assertContains is a test helper that checks if s contains substr.
 func assertContains(t *testing.T, s, substr string) {
 	t.Helper()

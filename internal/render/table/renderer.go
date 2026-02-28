@@ -56,6 +56,13 @@ func Render(w io.Writer, r *core.Result, useColor bool) error {
 				return err
 			}
 		}
+
+		// Render HTTP response_headers sub-lines if present.
+		if name == "http" {
+			if err := renderResponseHeadersLines(w, lr); err != nil {
+				return err
+			}
+		}
 	}
 
 	// Blank line before summary.
@@ -118,6 +125,12 @@ func layerDescription(name string, lr *core.LayerResult, useColor bool) string {
 	}
 
 	if lr.Status == core.StatusSkip {
+		// Reachability skip shows skip_reason.
+		if name == "reachability" {
+			if reason, ok := lr.Observations["skip_reason"].(string); ok {
+				return strings.ReplaceAll(reason, "_", " ")
+			}
+		}
 		return ""
 	}
 
@@ -126,6 +139,8 @@ func layerDescription(name string, lr *core.LayerResult, useColor bool) string {
 	switch name {
 	case "dns":
 		return dnsDescription(obs, lr, useColor)
+	case "reachability":
+		return reachabilityDescription(obs, lr)
 	case "tcp":
 		return tcpDescription(obs, lr)
 	case "tls":
@@ -135,6 +150,21 @@ func layerDescription(name string, lr *core.LayerResult, useColor bool) string {
 	default:
 		return ""
 	}
+}
+
+// reachabilityDescription builds the description for the reachability layer.
+func reachabilityDescription(obs map[string]any, lr *core.LayerResult) string {
+	method, _ := obs["probe_method"].(string)
+	if method == "" {
+		method, _ = obs["method"].(string)
+	}
+	if method != "" {
+		return method
+	}
+	if lr.Error != nil {
+		return lr.Error.Message
+	}
+	return ""
 }
 
 // dnsDescription builds: "{query_name} → {first_answer}" or error message.
@@ -160,16 +190,24 @@ func dnsDescription(obs map[string]any, lr *core.LayerResult, useColor bool) str
 		arrow = " -> "
 	}
 
+	var desc string
 	if queryName != "" && firstAnswer != "" {
-		return queryName + arrow + firstAnswer
+		desc = queryName + arrow + firstAnswer
+	} else if queryName != "" {
+		desc = queryName
+	} else if lr.Error != nil {
+		desc = lr.Error.Message
 	}
-	if queryName != "" {
-		return queryName
+
+	if hint, ok := obs["dns_error_hint"].(string); ok && hint != "" {
+		if desc != "" {
+			desc += ", hint: " + hint
+		} else {
+			desc = "hint: " + hint
+		}
 	}
-	if lr.Error != nil {
-		return lr.Error.Message
-	}
-	return ""
+
+	return desc
 }
 
 // tcpDescription builds: ":{port}" or error message.
@@ -194,6 +232,15 @@ func tlsDescription(obs map[string]any, lr *core.LayerResult) string {
 	}
 	if days >= 0 {
 		parts = append(parts, fmt.Sprintf("cert expires in %dd", days))
+	}
+	if subject, ok := obs["cert_subject"].(string); ok && subject != "" {
+		parts = append(parts, subject)
+	}
+	if issuer, ok := obs["cert_issuer"].(string); ok && issuer != "" {
+		parts = append(parts, "issuer: "+issuer)
+	}
+	if verified, ok := obs["cert_verified"].(bool); ok && !verified {
+		parts = append(parts, "(unverified)")
 	}
 
 	if len(parts) > 0 {
@@ -365,6 +412,54 @@ func scanStatusSymbol(s core.Status, useColor bool) string {
 		return "[FAIL]"
 	default:
 		return "[??]"
+	}
+}
+
+// renderResponseHeadersLines writes HTTP response_headers as sub-lines.
+func renderResponseHeadersLines(w io.Writer, lr *core.LayerResult) error {
+	headersRaw, ok := lr.Observations["response_headers"]
+	if !ok {
+		return nil
+	}
+
+	var headers map[string]string
+	switch h := headersRaw.(type) {
+	case map[string]any:
+		headers = make(map[string]string, len(h))
+		for k, v := range h {
+			headers[k] = fmt.Sprintf("%v", v)
+		}
+	case map[string]string:
+		headers = h
+	default:
+		return nil
+	}
+
+	if len(headers) == 0 {
+		return nil
+	}
+
+	// Sort keys for deterministic output.
+	keys := make([]string, 0, len(headers))
+	for k := range headers {
+		keys = append(keys, k)
+	}
+	sortStrings(keys)
+
+	for _, k := range keys {
+		if _, err := fmt.Fprintf(w, "    %s: %s\n", k, headers[k]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// sortStrings sorts a slice of strings in place (simple insertion sort to avoid importing sort).
+func sortStrings(s []string) {
+	for i := 1; i < len(s); i++ {
+		for j := i; j > 0 && s[j] < s[j-1]; j-- {
+			s[j], s[j-1] = s[j-1], s[j]
+		}
 	}
 }
 

@@ -564,6 +564,192 @@ func TestContractCountResultStatisticsOrder(t *testing.T) {
 	}
 }
 
+func TestContractSchemaVersion(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResult()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	if v, ok := m["schema_version"].(string); !ok || v != "v0.2" {
+		t.Errorf("schema_version = %v, want \"v0.2\"", m["schema_version"])
+	}
+}
+
+func TestContractFiveLayersPresent(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResult()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	layers := m["layers"].(map[string]any)
+	expected := []string{"dns", "reachability", "tcp", "tls", "http"}
+	for _, name := range expected {
+		if _, ok := layers[name]; !ok {
+			t.Errorf("missing layer %q in output", name)
+		}
+	}
+	if len(layers) != 5 {
+		t.Errorf("expected 5 layers, got %d", len(layers))
+	}
+}
+
+// contractResultReachabilitySkip returns a Result where reachability is skipped with permission_denied.
+func contractResultReachabilitySkip() *core.Result {
+	return &core.Result{
+		SchemaVersion: "v0.2",
+		StartedAt:     time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
+		Target:        "https://api.example.com/health",
+		Layers: map[string]*core.LayerResult{
+			"dns": {
+				Status:       core.StatusOK,
+				DurationMS:   9,
+				Observations: map[string]any{"query_name": "api.example.com", "answers": []string{"203.0.113.10"}},
+			},
+			"reachability": {
+				Status:       core.StatusSkip,
+				DurationMS:   0,
+				Observations: map[string]any{"skip_reason": "permission_denied"},
+			},
+			"tcp": {
+				Status:       core.StatusOK,
+				DurationMS:   16,
+				Observations: map[string]any{"remote_ip": "203.0.113.10", "remote_port": 443},
+			},
+			"tls": {
+				Status:     core.StatusOK,
+				DurationMS: 31,
+				Observations: map[string]any{
+					"version":      "TLSv1.3",
+					"cipher_suite": "TLS_AES_256_GCM_SHA384",
+				},
+			},
+			"http": {
+				Status:     core.StatusOK,
+				DurationMS: 57,
+				Observations: map[string]any{
+					"method":      "GET",
+					"status_code": 200,
+				},
+			},
+		},
+		Summary: &core.Summary{
+			WallClockMS:     122,
+			FirstNonOKLayer: "",
+			ExitCode:        0,
+		},
+	}
+}
+
+func TestContractReachabilitySkipRender(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResultReachabilitySkip()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	layers := m["layers"].(map[string]any)
+	reach := layers["reachability"].(map[string]any)
+	if reach["status"] != "skip" {
+		t.Errorf("reachability status = %v, want \"skip\"", reach["status"])
+	}
+	obs := reach["observations"].(map[string]any)
+	if obs["skip_reason"] != "permission_denied" {
+		t.Errorf("reachability skip_reason = %v, want \"permission_denied\"", obs["skip_reason"])
+	}
+}
+
+func TestContractNewTLSObservations(t *testing.T) {
+	r := contractResult()
+	r.Layers["tls"].Observations["cert_verified"] = true
+	r.Layers["tls"].Observations["cert_subject"] = "CN=api.example.com"
+	r.Layers["tls"].Observations["cert_san"] = []string{"api.example.com", "*.example.com"}
+	r.Layers["tls"].Observations["cert_issuer"] = "CN=Let's Encrypt Authority X3"
+	r.Layers["tls"].Observations["cert_not_after"] = "2026-03-05T00:00:00Z"
+	r.Layers["tls"].Observations["cert_not_before"] = "2025-12-05T00:00:00Z"
+	r.Layers["tls"].Observations["cert_chain"] = []string{"CN=api.example.com", "CN=Let's Encrypt Authority X3", "CN=DST Root CA X3"}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, r); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	tlsObs := m["layers"].(map[string]any)["tls"].(map[string]any)["observations"].(map[string]any)
+	for _, field := range []string{"cert_verified", "cert_subject", "cert_san", "cert_issuer", "cert_not_after", "cert_not_before", "cert_chain"} {
+		if _, ok := tlsObs[field]; !ok {
+			t.Errorf("tls observations missing %q", field)
+		}
+	}
+}
+
+func TestContractDNSErrorHint(t *testing.T) {
+	r := contractResult()
+	r.Layers["dns"].Observations["dns_error_hint"] = "servfail"
+
+	var buf bytes.Buffer
+	if err := Render(&buf, r); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	dnsObs := m["layers"].(map[string]any)["dns"].(map[string]any)["observations"].(map[string]any)
+	if v, ok := dnsObs["dns_error_hint"]; !ok || v != "servfail" {
+		t.Errorf("dns_error_hint = %v, want \"servfail\"", v)
+	}
+}
+
+func TestContractHTTPResponseHeaders(t *testing.T) {
+	r := contractResult()
+	r.Layers["http"].Observations["response_headers"] = map[string]string{
+		"Content-Type": "application/json",
+		"Server":       "nginx",
+	}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, r); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	httpObs := m["layers"].(map[string]any)["http"].(map[string]any)["observations"].(map[string]any)
+	headers, ok := httpObs["response_headers"].(map[string]any)
+	if !ok {
+		t.Fatal("http observations missing response_headers or not an object")
+	}
+	if headers["Content-Type"] != "application/json" {
+		t.Errorf("response_headers Content-Type = %v", headers["Content-Type"])
+	}
+	if headers["Server"] != "nginx" {
+		t.Errorf("response_headers Server = %v", headers["Server"])
+	}
+}
+
 func TestContractObservations(t *testing.T) {
 	var buf bytes.Buffer
 	if err := Render(&buf, contractResult()); err != nil {
