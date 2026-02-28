@@ -2,6 +2,7 @@ package reachability
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"syscall"
 	"testing"
@@ -193,6 +194,31 @@ type recordingPinger struct {
 func (r *recordingPinger) Ping(ctx context.Context, addr string) (time.Duration, error) {
 	*r.addrRef = addr
 	return r.FakePinger.Ping(ctx, addr)
+}
+
+func TestBuildICMPv6EchoRequest(t *testing.T) {
+	msg := buildICMPv6EchoRequest(0x1234, 1)
+	if len(msg) != 8 {
+		t.Fatalf("len = %d, want 8", len(msg))
+	}
+	if msg[0] != 128 {
+		t.Errorf("type = %d, want 128", msg[0])
+	}
+	if msg[1] != 0 {
+		t.Errorf("code = %d, want 0", msg[1])
+	}
+	csum := binary.BigEndian.Uint16(msg[2:4])
+	if csum != 0 {
+		t.Errorf("checksum = %d, want 0 (kernel-computed)", csum)
+	}
+	id := binary.BigEndian.Uint16(msg[4:6])
+	if id != 0x1234 {
+		t.Errorf("id = 0x%04x, want 0x1234", id)
+	}
+	seq := binary.BigEndian.Uint16(msg[6:8])
+	if seq != 1 {
+		t.Errorf("seq = %d, want 1", seq)
+	}
 }
 
 func TestIsIPv6(t *testing.T) {

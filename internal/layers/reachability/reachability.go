@@ -114,6 +114,16 @@ func skipReason(err error) string {
 	return ""
 }
 
+func buildICMPv6EchoRequest(id, seq uint16) []byte {
+	msg := make([]byte, 8)
+	msg[0] = 128 // Type: ICMPv6 Echo Request
+	msg[1] = 0   // Code
+	// Checksum at [2:4] = 0 (kernel-computed for ICMPv6)
+	binary.BigEndian.PutUint16(msg[4:6], id)
+	binary.BigEndian.PutUint16(msg[6:8], seq)
+	return msg
+}
+
 // isIPv6 returns true if addr is an IPv6 address.
 func isIPv6(addr string) bool {
 	ip := net.ParseIP(addr)
