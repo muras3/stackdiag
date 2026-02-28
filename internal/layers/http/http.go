@@ -96,11 +96,12 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	defer resp.Body.Close()
 
 	obs := map[string]any{
-		"method":          method,
-		"protocol":        resp.Proto,
-		"status_code":     resp.StatusCode,
-		"status_text":     http.StatusText(resp.StatusCode),
-		"request_headers": buildRequestHeaders(pctx.Headers, pctx.Redact),
+		"method":           method,
+		"protocol":         resp.Proto,
+		"status_code":      resp.StatusCode,
+		"status_text":      http.StatusText(resp.StatusCode),
+		"request_headers":  buildRequestHeaders(pctx.Headers, pctx.Redact),
+		"response_headers": buildResponseHeaders(resp.Header, pctx.Redact),
 	}
 
 	if resp.StatusCode >= 400 {
@@ -141,6 +142,45 @@ func buildURL(pctx *core.ProbeContext) string {
 	}
 
 	return fmt.Sprintf("%s://%s%s", scheme, hostPort, path)
+}
+
+// importantResponseHeaders is the allowlist of response headers to capture.
+var importantResponseHeaders = map[string]bool{
+	"content-type":             true,
+	"server":                   true,
+	"x-request-id":             true,
+	"x-correlation-id":         true,
+	"retry-after":              true,
+	"www-authenticate":         true,
+	"location":                 true,
+	"x-ratelimit-limit":        true,
+	"x-ratelimit-remaining":    true,
+	"x-ratelimit-reset":        true,
+	"strict-transport-security": true,
+	"x-content-type-options":   true,
+	"x-frame-options":          true,
+	"cache-control":            true,
+	"age":                      true,
+	"cf-ray":                   true,
+	"x-served-by":              true,
+}
+
+// buildResponseHeaders returns allowlisted response headers, with sensitive
+// values masked when redact is true.
+func buildResponseHeaders(header http.Header, redact bool) map[string]string {
+	result := make(map[string]string)
+	for name, values := range header {
+		lower := strings.ToLower(name)
+		if !importantResponseHeaders[lower] {
+			continue
+		}
+		val := strings.Join(values, ", ")
+		if redact && isSensitiveHeader(name) {
+			val = "[REDACTED]"
+		}
+		result[name] = val
+	}
+	return result
 }
 
 func classifyHTTPError(err error) *core.ProbeError {

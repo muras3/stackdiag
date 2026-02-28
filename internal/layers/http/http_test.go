@@ -667,6 +667,169 @@ func TestHTTPRequestHeadersEmptyMap(t *testing.T) {
 	}
 }
 
+// responseHeadersObs extracts response_headers from observations as map[string]string.
+func responseHeadersObs(t *testing.T, result *core.LayerResult) map[string]string {
+	t.Helper()
+	raw, ok := result.Observations["response_headers"]
+	if !ok {
+		t.Fatal("missing response_headers observation")
+	}
+	switch h := raw.(type) {
+	case map[string]string:
+		return h
+	case map[string]any:
+		out := make(map[string]string, len(h))
+		for k, v := range h {
+			s, ok := v.(string)
+			if !ok {
+				t.Fatalf("response_headers[%q] has non-string type %T", k, v)
+			}
+			out[k] = s
+		}
+		return out
+	default:
+		t.Fatalf("response_headers has unexpected type %T", raw)
+		return nil
+	}
+}
+
+func TestHTTPResponseHeaders(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Server", "test-server")
+		w.Header().Set("X-Request-Id", "req-123")
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusOK {
+		t.Fatalf("status = %q, want ok; error = %v", result.Status, result.Error)
+	}
+
+	got := responseHeadersObs(t, result)
+	if got["Content-Type"] != "application/json" {
+		t.Errorf("Content-Type = %q, want %q", got["Content-Type"], "application/json")
+	}
+	if got["Server"] != "test-server" {
+		t.Errorf("Server = %q, want %q", got["Server"], "test-server")
+	}
+	if got["X-Request-Id"] != "req-123" {
+		t.Errorf("X-Request-Id = %q, want %q", got["X-Request-Id"], "req-123")
+	}
+}
+
+func TestHTTPResponseHeadersRedacted(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Set-Cookie", "session=secret123")
+		w.Header().Set("Content-Type", "text/html")
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	pctx.Redact = true
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusOK {
+		t.Fatalf("status = %q, want ok; error = %v", result.Status, result.Error)
+	}
+
+	got := responseHeadersObs(t, result)
+	// Set-Cookie is sensitive but not in the allowlist, so it should be absent.
+	// Content-Type is in the allowlist and not sensitive, so it should be present.
+	if got["Content-Type"] != "text/html" {
+		t.Errorf("Content-Type = %q, want %q", got["Content-Type"], "text/html")
+	}
+	if _, ok := got["Set-Cookie"]; ok {
+		t.Errorf("Set-Cookie should not be in response_headers (not in allowlist)")
+	}
+}
+
+func TestHTTPResponseHeadersEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Only set headers that are NOT in the allowlist.
+		w.Header().Set("X-Custom-Only", "value")
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusOK {
+		t.Fatalf("status = %q, want ok; error = %v", result.Status, result.Error)
+	}
+
+	got := responseHeadersObs(t, result)
+	// httptest may set Content-Type automatically, so we check the map exists
+	// and does not contain our custom header.
+	if _, ok := got["X-Custom-Only"]; ok {
+		t.Errorf("X-Custom-Only should not be in response_headers")
+	}
+}
+
+func TestHTTPResponseHeadersNotInAllowlist(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("X-Custom-Header", "should-be-excluded")
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusOK {
+		t.Fatalf("status = %q, want ok; error = %v", result.Status, result.Error)
+	}
+
+	got := responseHeadersObs(t, result)
+	if _, ok := got["X-Custom-Header"]; ok {
+		t.Errorf("X-Custom-Header should not be in response_headers (not in allowlist)")
+	}
+	if got["Content-Type"] != "text/plain" {
+		t.Errorf("Content-Type = %q, want %q", got["Content-Type"], "text/plain")
+	}
+}
+
+func TestHTTPResponseHeadersMultiValue(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Add("Cache-Control", "no-cache")
+		w.Header().Add("Cache-Control", "no-store")
+		w.WriteHeader(200)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusOK {
+		t.Fatalf("status = %q, want ok; error = %v", result.Status, result.Error)
+	}
+
+	got := responseHeadersObs(t, result)
+	val, ok := got["Cache-Control"]
+	if !ok {
+		t.Fatal("missing Cache-Control in response_headers")
+	}
+	if val != "no-cache, no-store" {
+		t.Errorf("Cache-Control = %q, want %q", val, "no-cache, no-store")
+	}
+}
+
 // targetFromURL parses an httptest server URL into a Target.
 func targetFromURL(t *testing.T, rawURL string) core.Target {
 	t.Helper()
