@@ -22,10 +22,22 @@
 
 ### Development
 - TDD必須。テストを先に書く。例外なし。
-- Agent Teams使用（TeamCreate → TaskCreate → Task with team_name）
-- subagent並列は最大2
 - コミットは小刻みに
 - Makefileでローカル/CI同一性を保証
+
+### Agent Teams
+- Agent Teamsを最大限活用する（TeamCreate → TaskCreate → Task with team_name）
+- 並列数に上限なし。独立性の高いタスクは可能な限り同時起動
+- 各エージェントは `isolation: worktree` で隔離し、マージ競合を排除
+- 各エージェントは自己検証してから完了報告すること
+- 実装エージェントはレビューを待たずに次の作業に進む（待ち時間ゼロ設計）
+- インターフェースを事前合意し、エージェント間の依存をデータ形式に限定
+
+### Code Review
+- 全コードをCodexにレビュー依頼する。例外なし
+- コミットごとにCodexレビューを実行（`codex exec`）
+- コードレビューとセキュリティレビューは別エージェントで並列実行
+- レビュー担当エージェントはバックグラウンドで常駐し、コミット通知を受け次第レビュー開始
 
 ### Team Roles
 - Architect: Claude（Codexと合議）
