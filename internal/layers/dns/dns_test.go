@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -335,6 +336,36 @@ func TestDNSResolverAddressNilWhenInterfaceNotImplemented(t *testing.T) {
 	addr := result.Observations["resolver_address"]
 	if addr != nil {
 		t.Errorf("resolver_address = %v, want nil (interface not implemented)", addr)
+	}
+}
+
+func TestTrackingResolverSkipsLinkLocal(t *testing.T) {
+	// Verify that the Dial hook in trackingResolver rejects link-local nameservers.
+	// This exercises the workaround for Go issue #52839.
+	tr := newTrackingResolver()
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	// Link-local IPv6 address should be rejected immediately.
+	_, err := tr.inner.Dial(ctx, "udp", "[fe80::1%25en0]:53")
+	if err == nil {
+		t.Fatal("expected error for link-local nameserver, got nil")
+	}
+	if !strings.Contains(err.Error(), "link-local") {
+		t.Errorf("error = %q, want substring 'link-local'", err.Error())
+	}
+
+	// Non-link-local should not be rejected by the hook (may fail to connect, that's fine).
+	// We just verify it doesn't return our specific link-local error.
+	_, err = tr.inner.Dial(ctx, "udp", "192.168.1.1:53")
+	if err != nil && strings.Contains(err.Error(), "link-local") {
+		t.Errorf("non-link-local address wrongly rejected: %v", err)
+	}
+
+	// Verify resolver_address is NOT set for the skipped link-local.
+	addr := tr.ResolverAddress()
+	if addr == "[fe80::1%25en0]:53" {
+		t.Error("resolver_address should not be set for skipped link-local nameserver")
 	}
 }
 

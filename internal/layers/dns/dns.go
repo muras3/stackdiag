@@ -3,6 +3,7 @@ package dns
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"sync"
@@ -49,11 +50,26 @@ type trackingResolver struct {
 // - May bypass platform-specific resolution (e.g., macOS mDNSResponder)
 // This trade-off is acceptable: resolver_address capture requires the hook,
 // and the pure Go resolver handles /etc/resolv.conf correctly on all targets.
+//
+// The Dial hook skips IPv6 link-local nameservers (fe80::/10) to work around
+// Go issue #52839: the pure Go resolver hangs on macOS when /etc/resolv.conf
+// contains a link-local nameserver with a zone ID (e.g. fe80::1%en0).
+// Returning an error causes Go's resolver to immediately try the next nameserver.
 func newTrackingResolver() *trackingResolver {
 	tr := &trackingResolver{}
 	tr.inner = &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			if host, _, err := net.SplitHostPort(address); err == nil {
+				// Strip zone ID (e.g. "%en0") before ParseIP; ParseIP rejects zones.
+				ipStr := host
+				if i := strings.IndexByte(host, '%'); i >= 0 {
+					ipStr = host[:i]
+				}
+				if ip := net.ParseIP(ipStr); ip != nil && ip.IsLinkLocalUnicast() {
+					return nil, fmt.Errorf("skipping link-local nameserver %s", address)
+				}
+			}
 			tr.mu.Lock()
 			tr.address = address
 			tr.mu.Unlock()
