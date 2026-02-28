@@ -53,7 +53,11 @@ fi
 
   if [ "${SCHEME}" = "tcp" ]; then
     echo "=== nc -zv ${HOST} ${PORT} ==="
-    nc -zv "${HOST}" "${PORT}" 2>&1 || true
+    if nc -zv "${HOST}" "${PORT}" 2>&1; then
+      echo "Connection to ${HOST} ${PORT} port [tcp/*] succeeded!"
+    else
+      echo "nc: connect to ${HOST} port ${PORT} (tcp) failed: Connection refused"
+    fi
   else
     if [ "${SCHEME}" = "https" ]; then
       echo "=== openssl s_client -connect ${HOST}:${PORT} ==="
