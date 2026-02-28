@@ -8,7 +8,7 @@ Structured network diagnostics for AI agents and humans.
 
 ![demo](demo.gif)
 
-One command to diagnose DNS → TCP → TLS → HTTP — layer by layer. Stops at the first failure. Tells you which layer broke.
+One command to diagnose DNS → Reachability → TCP → TLS → HTTP — layer by layer. Stops at the first failure. Tells you which layer broke.
 
 ## Install
 
@@ -41,7 +41,7 @@ stdiag --count 5 https://example.com        # Repeated measurement
 |------|---------|
 | 0 | All layers passed |
 | 1 | Tool error |
-| 10 / 20 / 30 / 40 | DNS / TCP / TLS / HTTP failure |
+| 10 / 15 / 20 / 30 / 40 | DNS / Reachability / TCP / TLS / HTTP failure |
 
 ```bash
 stdiag https://api.example.com || echo "exit: $?"

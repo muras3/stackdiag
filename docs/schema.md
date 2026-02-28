@@ -1,6 +1,6 @@
 # stackdiag JSON Schema Reference
 
-> Schema version: **v0.1**
+> Schema version: **v0.2**
 
 This document is the complete specification for stackdiag's `--json` output.
 
@@ -8,7 +8,7 @@ This document is the complete specification for stackdiag's `--json` output.
 
 ```json
 {
-  "schema_version": "v0.1",
+  "schema_version": "v0.2",
   "started_at": "2026-02-26T18:42:03Z",
   "target": "https://api.example.com/health",
   "layers": { ... },
@@ -18,7 +18,7 @@ This document is the complete specification for stackdiag's `--json` output.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schema_version` | string | Schema version identifier (currently `"v0.1"`) |
+| `schema_version` | string | Schema version identifier (currently `"v0.2"`) |
 | `started_at` | string | ISO 8601 UTC timestamp of stackdiag start |
 | `target` | string | Original target as provided by the user |
 | `layers` | object | Per-layer results (see below) |
@@ -26,7 +26,7 @@ This document is the complete specification for stackdiag's `--json` output.
 
 ## Layers
 
-The `layers` object always contains exactly four keys: `dns`, `tcp`, `tls`, `http`. Layers that were not executed have `status: "skip"`.
+The `layers` object always contains exactly five keys: `dns`, `reachability`, `tcp`, `tls`, `http`. Layers that were not executed have `status: "skip"`.
 
 ### Layer Result Structure
 
@@ -81,6 +81,23 @@ The `code` field is the primary interface for programmatic consumers. The `messa
 |-------|------|-------------|
 | `query_name` | string | Queried hostname |
 | `answers` | []string | Resolved IP addresses |
+| `dns_error_hint` | string\|null | Best-effort hint: `"servfail"`, `"refused"`, `"no_answer"`, or `null`. Depends on Go internal strings; not a contract value — use for diagnostics only |
+| `ttl` | int\|null | Remaining TTL in seconds (not the authoritative TTL). `null` if unavailable |
+| `resolver_address` | string\|null | Resolver address used for the query. `null` if system default |
+
+### Reachability
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `probe_method` | string | `"icmp"` or `"none"` |
+| `reachable` | bool\|null | Whether the host is reachable. `null` if determination was not possible (e.g., permission denied) |
+| `rtt_ms` | float64\|null | Round-trip time in milliseconds. `null` if unreachable or undetermined |
+| `skip_reason` | string\|null | Reason the layer was skipped: `"permission_denied"`, or `null` |
+
+Design notes:
+- ICMP only. No TCP fallback (avoids responsibility overlap with the TCP layer).
+- When ICMP is not permitted: `probe_method: "none"`, `reachable: null`, `skip_reason: "permission_denied"`, `status: "skip"`.
+- Permission denied results in `skip`, not `fail`, to preserve diagnostic reliability.
 
 ### TCP
 
@@ -97,6 +114,13 @@ The `code` field is the primary interface for programmatic consumers. The `messa
 | `cipher_suite` | string | Negotiated cipher suite |
 | `cert_days_until_expiry` | int | Days until certificate expiration |
 | `cert_hostname_match` | bool | Whether the certificate matches the hostname |
+| `cert_verified` | bool | `true` if the certificate was fully verified by the system trust store; `false` if it was retrieved via `InsecureSkipVerify` reconnection. Distinguishes "retrieved" from "validated" |
+| `cert_subject` | string | Certificate subject Common Name |
+| `cert_san` | []string | Subject Alternative Names. Can be an empty array `[]` (for certificates without SANs) |
+| `cert_issuer` | string | Certificate issuer Common Name |
+| `cert_not_after` | string | Certificate expiration date in ISO 8601 UTC |
+| `cert_not_before` | string\|null | Certificate validity start date in ISO 8601 UTC. `null` if unavailable |
+| `cert_chain` | []object\|null | Certificate chain in summary format: `[{"subject":"...","issuer":"...","not_after":"..."}]`. Full PEM is never included (token cost and leak risk). `null` if unavailable |
 
 ### HTTP
 
@@ -107,6 +131,7 @@ The `code` field is the primary interface for programmatic consumers. The `messa
 | `status_code` | int | HTTP response status code |
 | `status_text` | string | HTTP status text (e.g., `"OK"`, `"Service Unavailable"`) |
 | `request_headers` | object | Request headers sent (sensitive values redacted by default) |
+| `response_headers` | object | Selected response headers. Can be an empty object `{}` (not all headers are returned) |
 
 ## Summary
 
@@ -128,16 +153,24 @@ The `code` field is the primary interface for programmatic consumers. The `messa
 
 All error codes follow the pattern `{LAYER}_{CONDITION}`. The `code` field is the stable interface for programmatic branching.
 
+**Error code principle:** Only conditions that can be reliably distinguished via Go types or errno values are contract codes. Conditions that depend on string matching are best-effort hints in `observations`, not contract codes.
+
 ### DNS Errors
 
 | Code | Description |
 |------|-------------|
 | `DNS_NXDOMAIN` | Domain does not exist |
 | `DNS_TIMEOUT` | DNS resolution timed out |
-| `DNS_SERVFAIL` | DNS server returned SERVFAIL |
-| `DNS_REFUSED` | DNS server refused the query |
-| `DNS_NO_ANSWER` | DNS server returned no answer records |
 | `DNS_ERROR` | Other DNS error (fallback) |
+
+Note: `DNS_SERVFAIL`, `DNS_REFUSED`, and `DNS_NO_ANSWER` are not contract error codes because they depend on Go internal string matching. These conditions are reported as best-effort hints in the `dns_error_hint` observation field.
+
+### Reachability Errors
+
+| Code | Description |
+|------|-------------|
+| `REACHABILITY_TIMEOUT` | ICMP probe timed out (no response) |
+| `REACHABILITY_ERROR` | Other ICMP error (fallback) |
 
 ### TCP Errors
 
@@ -145,7 +178,6 @@ All error codes follow the pattern `{LAYER}_{CONDITION}`. The `code` field is th
 |------|-------------|
 | `TCP_TIMEOUT` | TCP connection timed out |
 | `TCP_REFUSED` | Connection refused (port closed) |
-| `TCP_RESET` | Connection reset by peer |
 | `TCP_HOST_UNREACHABLE` | Host is unreachable |
 | `TCP_NETWORK_UNREACHABLE` | Network is unreachable |
 | `TCP_ERROR` | Other TCP error (fallback) |
@@ -159,8 +191,9 @@ All error codes follow the pattern `{LAYER}_{CONDITION}`. The `code` field is th
 | `TLS_CERT_EXPIRING_SOON` | Certificate expires within 30 days (warning) |
 | `TLS_HOSTNAME_MISMATCH` | Certificate does not match the hostname |
 | `TLS_UNTRUSTED_CHAIN` | Certificate chain is not trusted |
+| `TLS_NO_CERTIFICATES` | Server returned no certificates |
 | `TLS_HANDSHAKE_TIMEOUT` | TLS handshake timed out |
-| `TLS_PROTOCOL_ERROR` | TLS protocol error |
+| `TLS_PROTOCOL_ERROR` | TLS protocol error (best-effort classification) |
 | `TLS_DEPRECATED_VERSION_ENABLED` | Server supports deprecated TLS versions (warning, via `--tls-scan`) |
 | `TLS_ERROR` | Other TLS error (fallback) |
 
@@ -203,19 +236,20 @@ All error codes follow the pattern `{LAYER}_{CONDITION}`. The `code` field is th
 | 1 | Tool error | `INVALID_TARGET`, `INVALID_ARGS` |
 | 2 | Warning | Any layer `warn`, none `fail` |
 | 10 | DNS failure | First failing layer is DNS |
+| 15 | Reachability failure | First failing layer is Reachability |
 | 20 | TCP failure | First failing layer is TCP |
 | 30 | TLS failure | First failing layer is TLS |
 | 40 | HTTP failure | First failing layer is HTTP |
 
-Exit codes reflect the **first failing layer** in execution order (DNS → TCP → TLS → HTTP).
+Exit codes reflect the **first failing layer** in execution order (DNS → Reachability → TCP → TLS → HTTP).
 
 ## Target Schemes and Layer Execution
 
 | Target | Layers executed |
 |--------|----------------|
-| `https://host/path` | DNS → TCP → TLS → HTTP |
-| `http://host/path` | DNS → TCP → HTTP |
-| `tcp://host:port` | DNS → TCP |
+| `https://host/path` | DNS → Reachability → TCP → TLS → HTTP |
+| `http://host/path` | DNS → Reachability → TCP → HTTP |
+| `tcp://host:port` | DNS → Reachability → TCP |
 | `host` (bare) | Treated as `https://host` |
 
 Layers not executed for a given scheme have `status: "skip"`.
@@ -224,8 +258,9 @@ Layers not executed for a given scheme have `status: "skip"`.
 
 ### Status Classification
 
-- **DNS**: `ok` if at least one IP resolved; `fail` on NXDOMAIN, timeout, SERVFAIL, etc.
-- **TCP**: `ok` if connection established; `fail` on timeout, refused, reset, etc.
+- **DNS**: `ok` if at least one IP resolved; `fail` on NXDOMAIN, timeout, etc.
+- **Reachability**: `ok` if ICMP probe received a response; `fail` on timeout or error; `skip` if ICMP is not permitted (permission denied).
+- **TCP**: `ok` if connection established; `fail` on timeout, refused, etc.
 - **TLS**: `ok` if handshake succeeded and cert is valid; `warn` if cert expires within 30 days; `fail` on expired cert, hostname mismatch, untrusted chain, etc.
 - **HTTP**: `ok` if status code < 400; `fail` if status code >= 400. 3xx responses are treated as `ok` (redirects are **not** followed).
 
@@ -235,6 +270,8 @@ When a layer has `status: "skip"`:
 - `duration_ms` is `0`
 - `observations` is `{}` (empty object)
 - `error` is `null`
+
+When ICMP permission is denied, the Reachability layer uses `status: "skip"` (not `"fail"`), preserving the skip invariants above. This ensures that lack of ICMP privileges does not block downstream layers.
 
 ### Timeout Behavior
 
@@ -246,7 +283,7 @@ HTTP redirects are **not** followed. The response from the first request is repo
 
 ### DNS Resolution
 
-Uses the system resolver via Go's `net.LookupHost`. No custom DNS server configuration in v0.1.
+Uses the system resolver via Go's `net.LookupHost`. No custom DNS server configuration in v0.2.
 
 ### TLS / `--insecure`
 
@@ -295,7 +332,7 @@ When `--count N` is used, the output structure changes to a `CountResult`:
 
 ```json
 {
-  "schema_version": "v0.1",
+  "schema_version": "v0.2",
   "target": "https://example.com",
   "count": 5,
   "exit_code": 0,
@@ -303,12 +340,13 @@ When `--count N` is used, the output structure changes to a `CountResult`:
     {
       "attempt": 1,
       "started_at": "2026-02-26T18:42:03Z",
-      "layers": { "dns": {...}, "tcp": {...}, "tls": {...}, "http": {...} },
+      "layers": { "dns": {...}, "reachability": {...}, "tcp": {...}, "tls": {...}, "http": {...} },
       "summary": { "wall_clock_ms": 120, "first_non_ok_layer": "", "exit_code": 0 }
     }
   ],
   "statistics": {
     "dns": { "p50_ms": 8.5, "p95_ms": 12.1, "success_count": 5, "fail_count": 0, "skip_count": 0, "sample_count": 5, "loss_ratio": 0 },
+    "reachability": { "..." : "..." },
     "tcp": { "..." : "..." },
     "tls": { "..." : "..." },
     "http": { "..." : "..." }
@@ -345,7 +383,7 @@ When `--json` is used and an argument or target parsing error occurs, stackdiag 
 
 ```json
 {
-  "schema_version": "v0.1",
+  "schema_version": "v0.2",
   "error": {
     "code": "INVALID_TARGET",
     "message": "unsupported scheme: \"ftp\""
@@ -366,11 +404,13 @@ These guarantees hold across all versions:
 4. **Consistent structure on error** — the JSON shape is identical for success, warning, failure, and skip
 5. **Skip, not null** — unused layers have `status: "skip"`, not `null`
 
+Note: Field removals between schema versions (e.g., v0.1 to v0.2) are permitted since the schema version acts as the compatibility boundary. The contract applies within a given schema version after publication.
+
 ## Full Example
 
 ```json
 {
-  "schema_version": "v0.1",
+  "schema_version": "v0.2",
   "started_at": "2026-02-26T18:42:03Z",
   "target": "https://api.example.com/health",
   "layers": {
@@ -379,7 +419,21 @@ These guarantees hold across all versions:
       "duration_ms": 9,
       "observations": {
         "query_name": "api.example.com",
-        "answers": ["203.0.113.10"]
+        "answers": ["203.0.113.10"],
+        "dns_error_hint": null,
+        "ttl": 300,
+        "resolver_address": null
+      },
+      "error": null
+    },
+    "reachability": {
+      "status": "ok",
+      "duration_ms": 12,
+      "observations": {
+        "probe_method": "icmp",
+        "reachable": true,
+        "rtt_ms": 11.5,
+        "skip_reason": null
       },
       "error": null
     },
@@ -399,7 +453,17 @@ These guarantees hold across all versions:
         "version": "TLSv1.3",
         "cipher_suite": "TLS_AES_256_GCM_SHA384",
         "cert_days_until_expiry": 5,
-        "cert_hostname_match": true
+        "cert_hostname_match": true,
+        "cert_verified": true,
+        "cert_subject": "api.example.com",
+        "cert_san": ["api.example.com", "*.example.com"],
+        "cert_issuer": "R3",
+        "cert_not_after": "2026-03-05T12:00:00Z",
+        "cert_not_before": "2025-12-05T12:00:00Z",
+        "cert_chain": [
+          {"subject": "api.example.com", "issuer": "R3", "not_after": "2026-03-05T12:00:00Z"},
+          {"subject": "R3", "issuer": "ISRG Root X1", "not_after": "2035-09-15T16:00:00Z"}
+        ]
       },
       "error": {
         "code": "TLS_CERT_EXPIRING_SOON",
@@ -413,7 +477,11 @@ These guarantees hold across all versions:
         "method": "GET",
         "protocol": "HTTP/2",
         "status_code": 503,
-        "status_text": "Service Unavailable"
+        "status_text": "Service Unavailable",
+        "response_headers": {
+          "content-type": "application/json",
+          "retry-after": "30"
+        }
       },
       "error": {
         "code": "HTTP_503",
@@ -422,7 +490,7 @@ These guarantees hold across all versions:
     }
   },
   "summary": {
-    "wall_clock_ms": 122,
+    "wall_clock_ms": 134,
     "first_non_ok_layer": "tls",
     "exit_code": 40
   }
@@ -436,6 +504,9 @@ These guarantees hold across all versions:
 ```bash
 # Get the status of a specific layer
 stackdiag --json https://example.com 2>/dev/null | jq -r '.layers.tls.status'
+
+# Check reachability
+stackdiag --json https://example.com 2>/dev/null | jq -r '.layers.reachability.observations.reachable'
 
 # Extract the first failing layer
 stackdiag --json https://example.com 2>/dev/null | jq -r '.summary.first_non_ok_layer'
@@ -458,6 +529,7 @@ case $EXIT in
   0)  echo "All layers healthy" ;;
   2)  echo "Warning: $(echo "$RESULT" | jq -r '.layers[] | select(.status=="warn") | .error.code')" ;;
   10) echo "DNS failure" ;;
+  15) echo "Reachability failure" ;;
   20) echo "TCP failure" ;;
   30) echo "TLS failure" ;;
   40) echo "HTTP failure" ;;
