@@ -11,9 +11,10 @@ import (
 	"github.com/muras3/stackdiag/internal/testkit"
 )
 
-func makeCtx(timeout time.Duration) *core.ProbeContext {
+func makeCtx(t *testing.T, timeout time.Duration) *core.ProbeContext {
+	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	_ = cancel // caller should defer cancel in real code
+	t.Cleanup(cancel)
 	return &core.ProbeContext{
 		Context: ctx,
 		Target:  core.Target{Host: "example.com", Port: 443, Scheme: "https"},
@@ -22,7 +23,7 @@ func makeCtx(timeout time.Duration) *core.ProbeContext {
 
 func TestDNSSuccess(t *testing.T) {
 	layer := New(&testkit.FakeResolver{IPs: []string{"203.0.113.10"}})
-	pctx := makeCtx(5 * time.Second)
+	pctx := makeCtx(t, 5*time.Second)
 	result := layer.Probe(pctx)
 
 	if result.Status != core.StatusOK {
@@ -51,7 +52,7 @@ func TestDNSSuccess(t *testing.T) {
 func TestDNSNXDOMAIN(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "no such host", Name: "nx.example.com", IsNotFound: true}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -64,7 +65,7 @@ func TestDNSNXDOMAIN(t *testing.T) {
 func TestDNSTimeout(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "timeout", Name: "slow.example.com", IsTimeout: true}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -77,7 +78,7 @@ func TestDNSTimeout(t *testing.T) {
 func TestDNSErrorDefault(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "server failure", Name: "fail.example.com"}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -89,7 +90,7 @@ func TestDNSErrorDefault(t *testing.T) {
 
 func TestDNSGenericError(t *testing.T) {
 	layer := New(&testkit.FakeResolver{Err: errors.New("something went wrong")})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -102,7 +103,7 @@ func TestDNSGenericError(t *testing.T) {
 func TestDNSContextCanceled(t *testing.T) {
 	// Verify that context.DeadlineExceeded is classified as DNS_TIMEOUT.
 	layer := New(&testkit.FakeResolver{Err: context.DeadlineExceeded})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -121,7 +122,7 @@ func TestDNSName(t *testing.T) {
 
 func TestDNSMultipleIPs(t *testing.T) {
 	layer := New(&testkit.FakeResolver{IPs: []string{"203.0.113.10", "203.0.113.11", "203.0.113.12"}})
-	pctx := makeCtx(5 * time.Second)
+	pctx := makeCtx(t, 5*time.Second)
 	result := layer.Probe(pctx)
 
 	if result.Status != core.StatusOK {
@@ -143,7 +144,7 @@ func TestDNSMultipleIPs(t *testing.T) {
 func TestDNSServfailBecomesErrorWithHint(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "server misbehaving", Name: "fail.example.com"}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -163,7 +164,7 @@ func TestDNSServfailBecomesErrorWithHint(t *testing.T) {
 func TestDNSRefusedBecomesErrorWithHint(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "connection refused", Name: "refused.example.com"}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -183,7 +184,7 @@ func TestDNSRefusedBecomesErrorWithHint(t *testing.T) {
 func TestDNSNoAnswerBecomesErrorWithHint(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "no answer from DNS server", Name: "empty.example.com"}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -203,7 +204,7 @@ func TestDNSNoAnswerBecomesErrorWithHint(t *testing.T) {
 func TestDNSNxdomainUnchanged(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "no such host", Name: "nx.example.com", IsNotFound: true}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -223,7 +224,7 @@ func TestDNSNxdomainUnchanged(t *testing.T) {
 func TestDNSTimeoutUnchanged(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "timeout", Name: "slow.example.com", IsTimeout: true}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
@@ -243,7 +244,7 @@ func TestDNSTimeoutUnchanged(t *testing.T) {
 func TestDNSObservationsHaveHintField(t *testing.T) {
 	// On success, dns_error_hint should still be present as nil.
 	layer := New(&testkit.FakeResolver{IPs: []string{"203.0.113.10"}})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusOK {
 		t.Errorf("status = %q, want ok", result.Status)
@@ -260,7 +261,7 @@ func TestDNSObservationsHaveHintField(t *testing.T) {
 func TestDNSObservationsHaveTTLAndResolver(t *testing.T) {
 	// On success, ttl and resolver_address should be present as nil placeholders.
 	layer := New(&testkit.FakeResolver{IPs: []string{"203.0.113.10"}})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusOK {
 		t.Errorf("status = %q, want ok", result.Status)
@@ -287,7 +288,7 @@ func TestDNSResolverAddressReturned(t *testing.T) {
 		ResolverAddr: "192.168.1.1:53",
 	}
 	layer := New(resolver)
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusOK {
 		t.Fatalf("status = %q, want ok", result.Status)
@@ -303,7 +304,7 @@ func TestDNSResolverAddressNilWhenEmpty(t *testing.T) {
 		IPs: []string{"203.0.113.10"},
 	}
 	layer := New(resolver)
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusOK {
 		t.Fatalf("status = %q, want ok", result.Status)
@@ -314,10 +315,33 @@ func TestDNSResolverAddressNilWhenEmpty(t *testing.T) {
 	}
 }
 
+// simpleResolver implements Resolver but NOT ResolverWithAddress.
+type simpleResolver struct {
+	ips []string
+	err error
+}
+
+func (r *simpleResolver) LookupHost(_ context.Context, _ string) ([]string, error) {
+	return r.ips, r.err
+}
+
+func TestDNSResolverAddressNilWhenInterfaceNotImplemented(t *testing.T) {
+	layer := New(&simpleResolver{ips: []string{"203.0.113.10"}})
+	result := layer.Probe(makeCtx(t, 5*time.Second))
+
+	if result.Status != core.StatusOK {
+		t.Fatalf("status = %q, want ok", result.Status)
+	}
+	addr := result.Observations["resolver_address"]
+	if addr != nil {
+		t.Errorf("resolver_address = %v, want nil (interface not implemented)", addr)
+	}
+}
+
 func TestDNSQueryNameOnFailure(t *testing.T) {
 	dnsErr := &net.DNSError{Err: "no such host", Name: "bad.example.com", IsNotFound: true}
 	layer := New(&testkit.FakeResolver{Err: dnsErr})
-	result := layer.Probe(makeCtx(5 * time.Second))
+	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
