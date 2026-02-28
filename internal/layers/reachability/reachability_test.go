@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"net"
 	"syscall"
 	"testing"
 	"time"
@@ -197,12 +198,23 @@ func (r *recordingPinger) Ping(ctx context.Context, addr string) (time.Duration,
 }
 
 func TestSkipReasonNoLongerSkipsIPv6(t *testing.T) {
-	// After IPv6 support, "no suitable address found" should no longer
-	// produce unsupported_address skip. Permission errors should still skip.
-	layer := New(&testkit.FakePinger{Err: syscall.EPERM})
-	result := layer.Probe(makeCtx(t, 5*time.Second))
-	if result.Observations["skip_reason"] != "permission_denied" {
-		t.Errorf("skip_reason = %v, want permission_denied", result.Observations["skip_reason"])
+	// Verify that errors which previously triggered "unsupported_address" skip
+	// (net.DNSError and "no suitable address found") now return "" (no skip),
+	// meaning they are treated as genuine REACHABILITY_ERROR.
+	tests := []struct {
+		name string
+		err  error
+	}{
+		{"dns_error", &net.DNSError{Err: "no suitable address found", Name: "test"}},
+		{"string_match", errors.New("no suitable address found")},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reason := skipReason(tt.err)
+			if reason != "" {
+				t.Errorf("skipReason(%v) = %q, want empty (no skip)", tt.err, reason)
+			}
+		})
 	}
 }
 

@@ -158,6 +158,8 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 	}()
 
 	id := uint16(os.Getpid() & 0xffff)
+	// seq is always 1: each --count attempt creates a fresh net.Dial connection,
+	// so stale replies from prior attempts cannot arrive on a new raw socket.
 	var msg []byte
 	if v6 {
 		msg = buildICMPv6EchoRequest(id, 1)
@@ -187,7 +189,7 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 				continue
 			}
 			// ICMPv6 Echo Reply: type=129, code=0
-			if buf[0] == 129 && buf[1] == 0 && n >= 6 {
+			if buf[0] == 129 && buf[1] == 0 {
 				replyID := binary.BigEndian.Uint16(buf[4:6])
 				if replyID == id {
 					return time.Since(start), nil
