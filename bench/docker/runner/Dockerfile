@@ -16,7 +16,8 @@ RUN apk add --no-cache \
     openssl \
     curl \
     bash \
-    ca-certificates
+    ca-certificates \
+    iputils
 
 COPY --from=builder /usr/local/bin/stdiag /usr/local/bin/stdiag
 

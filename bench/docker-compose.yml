@@ -119,6 +119,35 @@ services:
       bench:
         ipv4_address: 172.28.0.20
 
+  nginx-chainbroken:
+    <<: *nginx-build
+    hostname: nginx-chainbroken
+    volumes:
+      - ./docker/nginx/chainbroken.conf:/etc/nginx/conf.d/chainbroken.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.21
+
+  nginx-nocert:
+    <<: *nginx-build
+    hostname: nginx-nocert
+    volumes:
+      - ./docker/nginx/nocert.conf:/etc/nginx/conf.d/nocert.conf:ro
+    networks:
+      bench:
+        ipv4_address: 172.28.0.22
+
+  blackhole:
+    build:
+      context: docker/blackhole
+    hostname: blackhole
+    cap_add:
+      - NET_ADMIN
+    networks:
+      bench:
+        ipv4_address: 172.28.0.201
+
   coredns:
     image: coredns/coredns:latest
     hostname: coredns
@@ -147,6 +176,9 @@ services:
       - nginx-expiring
       - nginx-429
       - nginx-redirect
+      - nginx-chainbroken
+      - nginx-nocert
+      - blackhole
       - coredns
     volumes:
       - ./capture.sh:/bench/capture.sh:ro

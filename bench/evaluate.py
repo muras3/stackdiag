@@ -9,11 +9,15 @@ from pathlib import Path
 # Manual diagnosis keywords per error code
 MANUAL_KEYWORDS = {
     "DNS_NXDOMAIN": ["NXDOMAIN", "name not found"],
+    "DNS_TIMEOUT": ["timed out", "no servers could be reached", "connection timed out"],
+    "REACHABILITY_TIMEOUT": ["100% packet loss", "unreachable", "timed out"],
     "TLS_CERT_EXPIRED": ["certificate has expired", "expired"],
     "TLS_CERT_EXPIRING_SOON": ["certificate will expire", "expiring soon"],
     "TLS_HOSTNAME_MISMATCH": ["hostname mismatch", "does not match"],
-    "TLS_UNTRUSTED_CHAIN": ["self-signed", "unable to verify"],
+    "TLS_UNTRUSTED_CHAIN": ["self-signed", "unable to verify", "unable to get local issuer"],
+    "TLS_NO_CERTIFICATES": ["wrong version number", "no peer certificate", "connection reset"],
     "TCP_REFUSED": ["Connection refused"],
+    "TCP_TIMEOUT": ["timed out", "connection timed out"],
     "HTTP_503": ["503"],
     "HTTP_403": ["403"],
     "HTTP_500": ["500"],

@@ -49,6 +49,22 @@ sign_cert wronghost wrong.host.example.com "DNS:wrong.host.example.com"
 echo "==> Generating expiring-soon cert (nginx-expiring, expires in 7 days)..."
 sign_cert expiring nginx-expiring "DNS:nginx-expiring" 7
 
+echo "==> Generating chain-broken cert (leaf signed by intermediate, intermediate not served)..."
+# Create an intermediate CA signed by root
+openssl genrsa -out intermediate.key 2048 2>/dev/null
+openssl req -new -key intermediate.key -subj "/CN=Bench Intermediate CA" -out intermediate.csr
+openssl x509 -req -in intermediate.csr -CA ca.crt -CAkey ca.key -CAcreateserial \
+  -days 365 -sha256 \
+  -extfile <(printf "basicConstraints=CA:TRUE\nkeyUsage=keyCertSign,cRLSign") \
+  -out intermediate.crt 2>/dev/null
+# Create leaf cert signed by intermediate (NOT bundled with intermediate)
+openssl genrsa -out chainbroken.key 2048 2>/dev/null
+openssl req -new -key chainbroken.key -subj "/CN=nginx-chainbroken" -out chainbroken.csr
+openssl x509 -req -in chainbroken.csr -CA intermediate.crt -CAkey intermediate.key -CAcreateserial \
+  -days 365 -sha256 \
+  -extfile <(printf "subjectAltName=DNS:nginx-chainbroken") \
+  -out chainbroken.crt 2>/dev/null
+
 echo "==> Generating self-signed cert (nginx-selfsigned, not CA-signed)..."
 openssl genrsa -out selfsigned.key 2048 2>/dev/null
 openssl req -x509 -new -nodes -key selfsigned.key -sha256 -days 365 \

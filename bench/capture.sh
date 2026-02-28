@@ -51,9 +51,14 @@ fi
   dig "${HOST}" 2>&1 || true
   echo ""
 
+  # Reachability check (ping)
+  echo "=== ping -c 3 -W 3 ${HOST} ==="
+  ping -c 3 -W 3 "${HOST}" 2>&1 || true
+  echo ""
+
   if [ "${SCHEME}" = "tcp" ]; then
-    echo "=== nc -zv ${HOST} ${PORT} ==="
-    if nc -zv "${HOST}" "${PORT}" 2>&1; then
+    echo "=== nc -zv -w 5 ${HOST} ${PORT} ==="
+    if nc -zv -w 5 "${HOST}" "${PORT}" 2>&1; then
       echo "Connection to ${HOST} ${PORT} port [tcp/*] succeeded!"
     else
       echo "nc: connect to ${HOST} port ${PORT} (tcp) failed: Connection refused"
@@ -65,8 +70,8 @@ fi
       echo ""
     fi
 
-    echo "=== curl -sv --max-redirs 0 ${TARGET} ==="
-    curl -sv --max-redirs 0 "${TARGET}" 2>&1 || true
+    echo "=== curl -sv --max-redirs 0 --connect-timeout 10 ${TARGET} ==="
+    curl -sv --max-redirs 0 --connect-timeout 10 "${TARGET}" 2>&1 || true
   fi
 } > "${OUTDIR}/manual.txt"
 

@@ -54,6 +54,10 @@ check "nginx-403 returns 403" "403" \
   curl -sk -o /dev/null -w '%{http_code}' https://nginx-403
 check "nginx-500 returns 500" "500" \
   curl -sk -o /dev/null -w '%{http_code}' https://nginx-500
+check "nginx-429 returns 429" "429" \
+  curl -sk -o /dev/null -w '%{http_code}' https://nginx-429
+check "nginx-redirect returns 301" "301" \
+  curl -sk -o /dev/null -w '%{http_code}' --max-redirs 0 https://nginx-redirect
 
 echo ""
 echo "[TLS - failure scenarios]"
@@ -63,11 +67,25 @@ check "nginx-wronghost cert error" "certificate" \
   curl -s --resolve nginx-wronghost:443:172.28.0.15 https://nginx-wronghost
 check "nginx-selfsigned cert error" "certificate" \
   curl -s https://nginx-selfsigned
+check "nginx-chainbroken cert error" "unable to get local issuer" \
+  openssl s_client -connect nginx-chainbroken:443 -servername nginx-chainbroken </dev/null
+check "nginx-nocert TLS fails on plain HTTP" "wrong version" \
+  openssl s_client -connect nginx-nocert:8443 </dev/null
+
+echo ""
+echo "[TLS - expiring soon]"
+check "nginx-expiring cert valid but near expiry" "200" \
+  curl -sk -o /dev/null -w '%{http_code}' https://nginx-expiring
 
 echo ""
 echo "[TLS - version]"
 check "nginx-tls12 supports TLS 1.2" "TLSv1.2" \
   openssl s_client -connect nginx-tls12:443 -tls1_2 </dev/null
+
+echo ""
+echo "[Timeout - blackhole]"
+check "blackhole drops ICMP (ping times out)" "100% packet loss" \
+  ping -c 1 -W 2 172.28.0.201
 
 echo ""
 echo "=== Results: $PASS passed, $FAIL failed ==="

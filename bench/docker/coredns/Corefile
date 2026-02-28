@@ -4,3 +4,10 @@ bench.local:53 {
     errors
 }
 
+# dns-timeout zone: forward all queries to the blackhole IP.
+# The blackhole drops UDP:53 packets, causing DNS resolution timeout.
+dns-timeout.local:53 {
+    forward . 172.28.0.201
+    log
+    errors
+}

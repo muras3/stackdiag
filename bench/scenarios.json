@@ -7,12 +7,15 @@
     "required_evidence": [
       "query_name",
       "answers",
+      "probe_method",
+      "reachable",
       "remote_ip",
       "remote_port",
       "version",
       "cipher_suite",
       "cert_verified",
       "cert_subject",
+      "cert_san",
       "cert_issuer",
       "cert_not_after",
       "cert_days_until_expiry",
@@ -26,13 +29,6 @@
     "docker_service": "nginx-healthy"
   },
   {
-    "name": "tcp_refused",
-    "target": "tcp://nginx-healthy:9999",
-    "ground_truth": "TCP_REFUSED",
-    "required_evidence": [],
-    "docker_service": "nginx-healthy"
-  },
-  {
     "name": "dns_nxdomain",
     "target": "https://nonexistent.bench.local",
     "ground_truth": "DNS_NXDOMAIN",
@@ -42,6 +38,42 @@
     "docker_service": "coredns"
   },
   {
+    "name": "dns_timeout",
+    "target": "https://unreachable.dns-timeout.local",
+    "ground_truth": "DNS_TIMEOUT",
+    "required_evidence": [
+      "query_name"
+    ],
+    "docker_service": "coredns",
+    "note": "CoreDNS forwards dns-timeout.local queries to blackhole (172.28.0.201) which drops UDP:53"
+  },
+  {
+    "name": "reachability_timeout",
+    "target": "https://172.28.0.201",
+    "ground_truth": "REACHABILITY_TIMEOUT",
+    "required_evidence": [
+      "probe_method",
+      "reachable"
+    ],
+    "docker_service": "blackhole",
+    "note": "IP exists on network but drops all traffic via iptables"
+  },
+  {
+    "name": "tcp_refused",
+    "target": "tcp://nginx-healthy:9999",
+    "ground_truth": "TCP_REFUSED",
+    "required_evidence": [],
+    "docker_service": "nginx-healthy"
+  },
+  {
+    "name": "tcp_timeout",
+    "target": "tcp://172.28.0.201:443",
+    "ground_truth": "TCP_TIMEOUT",
+    "required_evidence": [],
+    "docker_service": "blackhole",
+    "note": "Blackhole container drops all TCP SYN packets"
+  },
+  {
     "name": "cert_expired",
     "target": "https://nginx-expired",
     "ground_truth": "TLS_CERT_EXPIRED",
@@ -49,11 +81,28 @@
       "version",
       "cert_verified",
       "cert_subject",
+      "cert_san",
       "cert_issuer",
       "cert_not_after",
       "cert_days_until_expiry"
     ],
     "docker_service": "nginx-expired"
+  },
+  {
+    "name": "cert_expiring_soon",
+    "target": "https://nginx-expiring",
+    "ground_truth": "TLS_CERT_EXPIRING_SOON",
+    "required_evidence": [
+      "version",
+      "cert_verified",
+      "cert_subject",
+      "cert_san",
+      "cert_issuer",
+      "cert_not_after",
+      "cert_days_until_expiry",
+      "cert_hostname_match"
+    ],
+    "docker_service": "nginx-expiring"
   },
   {
     "name": "hostname_mismatch",
@@ -63,6 +112,7 @@
       "version",
       "cert_verified",
       "cert_subject",
+      "cert_san",
       "cert_issuer",
       "cert_not_after",
       "cert_hostname_match"
@@ -77,25 +127,34 @@
       "version",
       "cert_verified",
       "cert_subject",
+      "cert_san",
       "cert_issuer",
       "cert_not_after"
     ],
     "docker_service": "nginx-selfsigned"
   },
   {
-    "name": "cert_expiring_soon",
-    "target": "https://nginx-expiring",
-    "ground_truth": "TLS_CERT_EXPIRING_SOON",
+    "name": "cert_chain_invalid",
+    "target": "https://nginx-chainbroken",
+    "ground_truth": "TLS_UNTRUSTED_CHAIN",
     "required_evidence": [
       "version",
       "cert_verified",
       "cert_subject",
+      "cert_san",
       "cert_issuer",
-      "cert_not_after",
-      "cert_days_until_expiry",
-      "cert_hostname_match"
+      "cert_not_after"
     ],
-    "docker_service": "nginx-expiring"
+    "docker_service": "nginx-chainbroken",
+    "note": "Leaf cert signed by intermediate CA, but intermediate not served"
+  },
+  {
+    "name": "tls_no_certs",
+    "target": "https://nginx-nocert:8443",
+    "ground_truth": "TLS_NO_CERTIFICATES",
+    "required_evidence": [],
+    "docker_service": "nginx-nocert",
+    "note": "Plain HTTP listener on port 8443, TLS handshake fails immediately"
   },
   {
     "name": "http_503",
@@ -168,6 +227,7 @@
       "cipher_suite",
       "cert_verified",
       "cert_subject",
+      "cert_san",
       "cert_issuer",
       "cert_not_after"
     ],
