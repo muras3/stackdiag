@@ -104,6 +104,8 @@ services:
       - nginx-selfsigned
       - nginx-tls12
       - coredns
+    volumes:
+      - ./verify.sh:/bench/verify.sh:ro
     dns:
       - 172.28.0.100
     networks:

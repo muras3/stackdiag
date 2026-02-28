@@ -2,7 +2,7 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo none)
 LDFLAGS  = -s -w -X main.version=$(VERSION) -X main.commit=$(COMMIT)
 
-.PHONY: build lint test test-race test-fuzz e2e fmt fmt-check clean release-dry release-check
+.PHONY: build lint test test-race test-fuzz e2e fmt fmt-check clean release-dry release-check bench
 
 build:
 	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/stdiag ./cmd/stackdiag
@@ -37,3 +37,6 @@ release-dry:
 
 release-check:
 	goreleaser check
+
+bench:
+	cd bench && ./run.sh
