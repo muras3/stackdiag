@@ -268,11 +268,16 @@ Layers not executed for a given scheme have `status: "skip"`.
 ### Skip Invariants
 
 When a layer has `status: "skip"`:
-- `duration_ms` is `0`
-- `observations` is `{}` (empty object)
 - `error` is `null`
+- For layers skipped because a prior layer failed or the layer is not applicable:
+  - `duration_ms` is `0`
+  - `observations` is `{}` (empty object)
+- For the **Reachability** layer skipped due to runtime conditions (e.g., ICMP permission denied, unsupported address):
+  - `duration_ms` reflects actual probe attempt time
+  - `observations` contains diagnostic fields: `probe_method`, `reachable` (null), `rtt_ms` (null), `skip_reason`
+  - This exception exists because the skip reason itself is diagnostic data useful to consumers
 
-When ICMP permission is denied, the Reachability layer uses `status: "skip"` (not `"fail"`), preserving the skip invariants above. This ensures that lack of ICMP privileges does not block downstream layers.
+When ICMP permission is denied or the address type is unsupported, the Reachability layer uses `status: "skip"` (not `"fail"`). This ensures that lack of ICMP privileges does not block downstream layers.
 
 ### Timeout Behavior
 

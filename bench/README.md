@@ -33,14 +33,17 @@ cd bench && ./run.sh --dry-run
 
 ## Output
 
-Results are written to `bench/results/` (git-ignored):
+Results are written to `bench/results/` (git-ignored), organized by timestamped run:
 
 ```
-results/<scenario_name>/
-  stdiag.json          # stdiag JSON output
-  manual.txt           # concatenated manual tool output
-  stdiag_tokens.json   # token counts for stdiag output
-  manual_tokens.json   # token counts for manual output
+results/<timestamp>/
+  <scenario_name>/
+    stdiag.json          # stdiag JSON output
+    manual.txt           # concatenated manual tool output
+    stdiag.tokens.json   # token counts for stdiag output
+    manual.tokens.json   # token counts for manual output
+  evaluation.json        # aggregate evaluation results
+results/latest -> <timestamp>   # symlink to most recent run
 ```
 
 ## Scenarios
