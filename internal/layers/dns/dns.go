@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/muras3/stackdiag/internal/core"
@@ -38,15 +39,24 @@ func NewDefault() *Layer {
 // trackingResolver wraps net.Resolver with a Dial hook to capture resolver address.
 type trackingResolver struct {
 	inner   *net.Resolver
+	mu      sync.Mutex
 	address string
 }
 
+// newTrackingResolver creates a resolver that captures the DNS server address.
+// PreferGo:true forces the pure Go DNS resolver over cgo, which:
+// - Enables the Dial hook (cgo resolver doesn't call it)
+// - May bypass platform-specific resolution (e.g., macOS mDNSResponder)
+// This trade-off is acceptable: resolver_address capture requires the hook,
+// and the pure Go resolver handles /etc/resolv.conf correctly on all targets.
 func newTrackingResolver() *trackingResolver {
 	tr := &trackingResolver{}
 	tr.inner = &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
+			tr.mu.Lock()
 			tr.address = address
+			tr.mu.Unlock()
 			var d net.Dialer
 			return d.DialContext(ctx, network, address)
 		},
@@ -59,6 +69,8 @@ func (tr *trackingResolver) LookupHost(ctx context.Context, host string) ([]stri
 }
 
 func (tr *trackingResolver) ResolverAddress() string {
+	tr.mu.Lock()
+	defer tr.mu.Unlock()
 	return tr.address
 }
 
