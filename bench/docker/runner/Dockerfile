@@ -16,21 +16,15 @@ RUN apk add --no-cache \
     openssl \
     curl \
     bash \
-    ca-certificates \
-    libfaketime
+    ca-certificates
 
 COPY --from=builder /usr/local/bin/stdiag /usr/local/bin/stdiag
 
-# Generate certs and install bench CA into system trust store
-COPY bench/docker/certs/generate.sh /tmp/generate.sh
-RUN mkdir -p /etc/bench/certs && \
-    cd /etc/bench/certs && \
-    bash /tmp/generate.sh && \
-    rm /tmp/generate.sh && \
-    cp /etc/bench/certs/ca.crt /usr/local/share/ca-certificates/bench-ca.crt && \
-    update-ca-certificates
+# CA cert is mounted at runtime; install it at container start
+COPY bench/docker/runner/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 WORKDIR /bench
 
-# Keep container running for interactive use
+ENTRYPOINT ["/entrypoint.sh"]
 CMD ["sleep", "infinity"]

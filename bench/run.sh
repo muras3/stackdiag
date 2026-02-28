@@ -46,6 +46,9 @@ SCENARIO_LIST="$(read_scenarios)"
 SCENARIO_COUNT="$(echo "${SCENARIO_LIST}" | wc -l | tr -d ' ')"
 log "Found ${SCENARIO_COUNT} scenarios"
 
+log "Generating TLS certificates..."
+run_cmd bash docker/certs/generate.sh
+
 log "Starting Docker services..."
 run_cmd docker compose up -d --build
 

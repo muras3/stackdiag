@@ -5,12 +5,16 @@ x-nginx-build: &nginx-build
     context: docker
     dockerfile: nginx/Dockerfile
 
+x-certs-volume: &certs-volume
+  ./docker/certs:/etc/nginx/certs:ro
+
 services:
   nginx-healthy:
     <<: *nginx-build
     hostname: nginx-healthy
     volumes:
       - ./docker/nginx/healthy.conf:/etc/nginx/conf.d/healthy.conf:ro
+      - *certs-volume
     networks:
       bench:
         ipv4_address: 172.28.0.10
@@ -20,6 +24,7 @@ services:
     hostname: nginx-503
     volumes:
       - ./docker/nginx/error-503.conf:/etc/nginx/conf.d/error-503.conf:ro
+      - *certs-volume
     networks:
       bench:
         ipv4_address: 172.28.0.11
@@ -29,6 +34,7 @@ services:
     hostname: nginx-403
     volumes:
       - ./docker/nginx/error-403.conf:/etc/nginx/conf.d/error-403.conf:ro
+      - *certs-volume
     networks:
       bench:
         ipv4_address: 172.28.0.12
@@ -38,6 +44,7 @@ services:
     hostname: nginx-500
     volumes:
       - ./docker/nginx/error-500.conf:/etc/nginx/conf.d/error-500.conf:ro
+      - *certs-volume
     networks:
       bench:
         ipv4_address: 172.28.0.13
@@ -47,6 +54,7 @@ services:
     hostname: nginx-expired
     volumes:
       - ./docker/nginx/expired.conf:/etc/nginx/conf.d/expired.conf:ro
+      - *certs-volume
     networks:
       bench:
         ipv4_address: 172.28.0.14
@@ -56,6 +64,7 @@ services:
     hostname: nginx-wronghost
     volumes:
       - ./docker/nginx/wronghost.conf:/etc/nginx/conf.d/wronghost.conf:ro
+      - *certs-volume
     networks:
       bench:
         ipv4_address: 172.28.0.15
@@ -65,6 +74,7 @@ services:
     hostname: nginx-selfsigned
     volumes:
       - ./docker/nginx/selfsigned.conf:/etc/nginx/conf.d/selfsigned.conf:ro
+      - *certs-volume
     networks:
       bench:
         ipv4_address: 172.28.0.16
@@ -74,6 +84,7 @@ services:
     hostname: nginx-tls12
     volumes:
       - ./docker/nginx/tls12only.conf:/etc/nginx/conf.d/tls12only.conf:ro
+      - *certs-volume
     networks:
       bench:
         ipv4_address: 172.28.0.17
@@ -106,6 +117,7 @@ services:
       - coredns
     volumes:
       - ./verify.sh:/bench/verify.sh:ro
+      - ./docker/certs:/etc/bench/certs:ro
     dns:
       - 172.28.0.100
     networks:
