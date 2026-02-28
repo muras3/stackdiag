@@ -547,6 +547,8 @@ func TestTLSGenericError(t *testing.T) {
 
 // Test: Cert expired less than 24h ago — must be EXPIRED, not EXPIRING_SOON.
 // Regression test for int truncation: int(-0.04) == 0 in Go.
+// Uses insecure=true to exercise the post-validation expiry check path
+// (with 2-phase handshake, insecure=false catches expired via x509.Verify).
 func TestTLSCertExpiredLessThan24h(t *testing.T) {
 	now := time.Now()
 	expiredAt := now.Add(-1 * time.Hour) // expired 1 hour ago
@@ -555,9 +557,6 @@ func TestTLSCertExpiredLessThan24h(t *testing.T) {
 		NotAfter: expiredAt,
 		DNSNames: []string{"localhost"},
 	}
-	certDER := []byte("fake") // not used by fake handshaker
-
-	_ = certDER
 	state := &tls.ConnectionState{
 		Version:          tls.VersionTLS13,
 		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
@@ -569,9 +568,10 @@ func TestTLSCertExpiredLessThan24h(t *testing.T) {
 		durationMS: 3.0,
 	})
 
-	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
-	if result.Status != core.StatusFail {
-		t.Fatalf("status = %q, want fail", result.Status)
+	// insecure=true to skip manual cert verification (fake cert can't pass x509.Verify)
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", true))
+	if result.Status != core.StatusWarn {
+		t.Fatalf("status = %q, want warn (insecure mode with expired cert)", result.Status)
 	}
 	if result.Error == nil || result.Error.Code != "TLS_CERT_EXPIRED" {
 		t.Fatalf("error = %v, want TLS_CERT_EXPIRED", result.Error)
@@ -805,7 +805,9 @@ func newScanHandshaker(normalState *tls.ConnectionState) *scanHandshaker {
 }
 
 func makeScanPctx() *core.ProbeContext {
-	pctx := makePctx("localhost", 443, "127.0.0.1", false)
+	// insecure=true: scan tests use fake certs that can't pass x509.Verify;
+	// these tests focus on TLS version scanning, not cert chain validation.
+	pctx := makePctx("localhost", 443, "127.0.0.1", true)
 	pctx.TLSScan = true
 	return pctx
 }
