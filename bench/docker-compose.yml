@@ -1,0 +1,97 @@
+version: "3.8"
+
+x-nginx-base: &nginx-base
+  build:
+    context: docker
+    dockerfile: nginx/Dockerfile
+  networks:
+    - bench
+
+services:
+  nginx-healthy:
+    <<: *nginx-base
+    hostname: nginx-healthy
+    volumes:
+      - ./docker/nginx/healthy.conf:/etc/nginx/conf.d/healthy.conf:ro
+
+  nginx-503:
+    <<: *nginx-base
+    hostname: nginx-503
+    volumes:
+      - ./docker/nginx/error-503.conf:/etc/nginx/conf.d/error-503.conf:ro
+
+  nginx-403:
+    <<: *nginx-base
+    hostname: nginx-403
+    volumes:
+      - ./docker/nginx/error-403.conf:/etc/nginx/conf.d/error-403.conf:ro
+
+  nginx-500:
+    <<: *nginx-base
+    hostname: nginx-500
+    volumes:
+      - ./docker/nginx/error-500.conf:/etc/nginx/conf.d/error-500.conf:ro
+
+  nginx-expired:
+    <<: *nginx-base
+    hostname: nginx-expired
+    volumes:
+      - ./docker/nginx/expired.conf:/etc/nginx/conf.d/expired.conf:ro
+
+  nginx-wronghost:
+    <<: *nginx-base
+    hostname: nginx-wronghost
+    volumes:
+      - ./docker/nginx/wronghost.conf:/etc/nginx/conf.d/wronghost.conf:ro
+
+  nginx-selfsigned:
+    <<: *nginx-base
+    hostname: nginx-selfsigned
+    volumes:
+      - ./docker/nginx/selfsigned.conf:/etc/nginx/conf.d/selfsigned.conf:ro
+
+  nginx-tls12:
+    <<: *nginx-base
+    hostname: nginx-tls12
+    volumes:
+      - ./docker/nginx/tls12only.conf:/etc/nginx/conf.d/tls12only.conf:ro
+
+  coredns:
+    image: coredns/coredns:latest
+    hostname: coredns
+    volumes:
+      - ./docker/coredns/Corefile:/etc/coredns/Corefile:ro
+      - ./docker/coredns/bench.local.db:/etc/coredns/bench.local.db:ro
+    command: ["-conf", "/etc/coredns/Corefile"]
+    networks:
+      bench:
+        ipv4_address: 172.28.0.100
+
+  runner:
+    build:
+      context: ..
+      dockerfile: bench/docker/runner/Dockerfile
+    hostname: runner
+    depends_on:
+      - nginx-healthy
+      - nginx-503
+      - nginx-403
+      - nginx-500
+      - nginx-expired
+      - nginx-wronghost
+      - nginx-selfsigned
+      - nginx-tls12
+      - coredns
+    dns:
+      - 172.28.0.100
+    networks:
+      - bench
+    stdin_open: true
+    tty: true
+
+networks:
+  bench:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
