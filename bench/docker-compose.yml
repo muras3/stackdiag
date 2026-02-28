@@ -116,6 +116,7 @@ services:
       - nginx-tls12
       - coredns
     volumes:
+      - ./capture.sh:/bench/capture.sh:ro
       - ./verify.sh:/bench/verify.sh:ro
       - ./docker/certs:/etc/bench/certs:ro
     dns:
