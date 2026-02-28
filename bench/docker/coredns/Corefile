@@ -4,9 +4,3 @@ bench.local:53 {
     errors
 }
 
-.:53 {
-    forward . 8.8.8.8 8.8.4.4
-    log
-    errors
-    cache 30
-}
