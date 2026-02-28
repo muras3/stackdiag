@@ -51,24 +51,17 @@ type trackingResolver struct {
 // This trade-off is acceptable: resolver_address capture requires the hook,
 // and the pure Go resolver handles /etc/resolv.conf correctly on all targets.
 //
-// The Dial hook skips IPv6 link-local nameservers (fe80::/10) to work around
-// Go issue #52839: the pure Go resolver hangs on macOS when /etc/resolv.conf
-// contains a link-local nameserver with a zone ID (e.g. fe80::1%en0).
+// The Dial hook skips link-local nameservers (IPv6 fe80::/10, IPv4 169.254.0.0/16)
+// to work around Go issue #52839: the pure Go resolver hangs on macOS when
+// /etc/resolv.conf contains a link-local nameserver with a zone ID (e.g. fe80::1%en0).
 // Returning an error causes Go's resolver to immediately try the next nameserver.
 func newTrackingResolver() *trackingResolver {
 	tr := &trackingResolver{}
 	tr.inner = &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			if host, _, err := net.SplitHostPort(address); err == nil {
-				// Strip zone ID (e.g. "%en0") before ParseIP; ParseIP rejects zones.
-				ipStr := host
-				if i := strings.IndexByte(host, '%'); i >= 0 {
-					ipStr = host[:i]
-				}
-				if ip := net.ParseIP(ipStr); ip != nil && ip.IsLinkLocalUnicast() {
-					return nil, fmt.Errorf("skipping link-local nameserver %s", address)
-				}
+			if isLinkLocalNameserver(address) {
+				return nil, fmt.Errorf("skipping link-local nameserver %s", address)
 			}
 			tr.mu.Lock()
 			tr.address = address
@@ -78,6 +71,22 @@ func newTrackingResolver() *trackingResolver {
 		},
 	}
 	return tr
+}
+
+// isLinkLocalNameserver reports whether address (host:port) is a link-local
+// unicast address. Handles IPv6 zone IDs (e.g. "fe80::1%en0") which
+// net.ParseIP cannot parse directly.
+func isLinkLocalNameserver(address string) bool {
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		return false
+	}
+	// Strip zone ID (e.g. "%en0") before ParseIP; ParseIP rejects zones.
+	if i := strings.IndexByte(host, '%'); i >= 0 {
+		host = host[:i]
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLinkLocalUnicast()
 }
 
 func (tr *trackingResolver) LookupHost(ctx context.Context, host string) ([]string, error) {

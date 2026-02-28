@@ -339,15 +339,47 @@ func TestDNSResolverAddressNilWhenInterfaceNotImplemented(t *testing.T) {
 	}
 }
 
-func TestTrackingResolverSkipsLinkLocal(t *testing.T) {
-	// Verify that the Dial hook in trackingResolver rejects link-local nameservers.
-	// This exercises the workaround for Go issue #52839.
+func TestIsLinkLocalNameserver(t *testing.T) {
+	// Pure function test for Go issue #52839 workaround.
+	// No network calls, no implementation detail access.
+	tests := []struct {
+		address string
+		want    bool
+	}{
+		// IPv6 link-local with zone ID (the actual Go #52839 trigger)
+		{"[fe80::1%en0]:53", true},
+		{"[fe80::34d2:25ff:feef:c79e%en0]:53", true},
+		// IPv6 link-local without zone ID
+		{"[fe80::1]:53", true},
+		// IPv4 link-local (169.254.0.0/16, common on WSL2/Docker)
+		{"169.254.0.1:53", true},
+		{"169.254.169.254:53", true},
+		// Non-link-local addresses must NOT be skipped
+		{"192.168.1.1:53", false},
+		{"8.8.8.8:53", false},
+		{"[2001:4860:4860::8888]:53", false},
+		{"[::1]:53", false},
+		// Malformed input
+		{"not-an-address", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.address, func(t *testing.T) {
+			got := isLinkLocalNameserver(tt.address)
+			if got != tt.want {
+				t.Errorf("isLinkLocalNameserver(%q) = %v, want %v", tt.address, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestTrackingResolverSkipsLinkLocalAddress(t *testing.T) {
+	// Verify that resolver_address is NOT set when the Dial hook skips a link-local server.
 	tr := newTrackingResolver()
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-	defer cancel()
+	t.Cleanup(cancel)
 
-	// Link-local IPv6 address should be rejected immediately.
-	_, err := tr.inner.Dial(ctx, "udp", "[fe80::1%25en0]:53")
+	// Dial with link-local address should return an error.
+	_, err := tr.inner.Dial(ctx, "udp", "[fe80::1%en0]:53")
 	if err == nil {
 		t.Fatal("expected error for link-local nameserver, got nil")
 	}
@@ -355,17 +387,10 @@ func TestTrackingResolverSkipsLinkLocal(t *testing.T) {
 		t.Errorf("error = %q, want substring 'link-local'", err.Error())
 	}
 
-	// Non-link-local should not be rejected by the hook (may fail to connect, that's fine).
-	// We just verify it doesn't return our specific link-local error.
-	_, err = tr.inner.Dial(ctx, "udp", "192.168.1.1:53")
-	if err != nil && strings.Contains(err.Error(), "link-local") {
-		t.Errorf("non-link-local address wrongly rejected: %v", err)
-	}
-
-	// Verify resolver_address is NOT set for the skipped link-local.
+	// resolver_address must remain empty (link-local was never stored).
 	addr := tr.ResolverAddress()
-	if addr == "[fe80::1%25en0]:53" {
-		t.Error("resolver_address should not be set for skipped link-local nameserver")
+	if addr != "" {
+		t.Errorf("ResolverAddress() = %q, want empty for skipped link-local", addr)
 	}
 }
 
