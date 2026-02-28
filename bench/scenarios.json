@@ -151,10 +151,10 @@
   {
     "name": "tls_no_certs",
     "target": "https://nginx-nocert:8443",
-    "ground_truth": "TLS_NO_CERTIFICATES",
+    "ground_truth": "TLS_PROTOCOL_ERROR",
     "required_evidence": [],
     "docker_service": "nginx-nocert",
-    "note": "Plain HTTP listener on port 8443, TLS handshake fails immediately"
+    "note": "Plain HTTP listener on port 8443, TLS handshake gets protocol error (not TLS_NO_CERTIFICATES because handshake itself fails before cert exchange)"
   },
   {
     "name": "http_503",
