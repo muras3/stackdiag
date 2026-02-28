@@ -46,9 +46,6 @@ SCENARIO_LIST="$(read_scenarios)"
 SCENARIO_COUNT="$(echo "${SCENARIO_LIST}" | wc -l | tr -d ' ')"
 log "Found ${SCENARIO_COUNT} scenarios"
 
-log "Building stdiag binary..."
-run_cmd go build -o docker/runner/stdiag ../cmd/stackdiag/
-
 log "Starting Docker services..."
 run_cmd docker compose up -d --build
 
