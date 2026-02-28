@@ -1395,6 +1395,22 @@ func TestTLSNoCertificates(t *testing.T) {
 	}
 }
 
+func TestTLSProtocolErrorOnPlainHTTP(t *testing.T) {
+	// When TLS connects to a plain HTTP server, Go returns this error.
+	layer := New(&fakeHandshaker{
+		durationMS: 1.0,
+		err:        errors.New("tls: first record does not look like a TLS handshake"),
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_PROTOCOL_ERROR" {
+		t.Fatalf("error code = %q, want TLS_PROTOCOL_ERROR", result.Error.Code)
+	}
+}
+
 func TestTLSUntrustedChainHasObservations(t *testing.T) {
 	now := time.Now()
 	cert, _ := generateCert(t, certOpts{

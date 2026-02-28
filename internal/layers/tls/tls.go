@@ -310,7 +310,8 @@ func isCertExpired(msg string) bool {
 func isProtocolError(msg string) bool {
 	return strings.Contains(msg, "protocol version") ||
 		strings.Contains(msg, "oversized record") ||
-		strings.Contains(msg, "tls: alert")
+		strings.Contains(msg, "tls: alert") ||
+		strings.Contains(msg, "first record does not look like a TLS handshake")
 }
 
 func isHandshakeTimeout(err error) bool {

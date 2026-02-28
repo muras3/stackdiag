@@ -45,7 +45,7 @@
       "query_name"
     ],
     "docker_service": "coredns",
-    "note": "CoreDNS forwards dns-timeout.local queries to blackhole (172.28.0.201) which drops UDP:53"
+    "note": "CoreDNS forwards dns-timeout.local queries to blackhole (172.28.0.201) which drops UDP:53. May yield DNS_ERROR if CoreDNS returns SERVFAIL before client timeout; ground_truth may need adjustment based on actual infra behavior."
   },
   {
     "name": "reachability_timeout",

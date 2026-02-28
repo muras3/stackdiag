@@ -58,10 +58,12 @@ fi
 
   if [ "${SCHEME}" = "tcp" ]; then
     echo "=== nc -zv -w 5 ${HOST} ${PORT} ==="
-    if nc -zv -w 5 "${HOST}" "${PORT}" 2>&1; then
+    nc -zv -w 5 "${HOST}" "${PORT}" 2>&1
+    NC_EXIT=$?
+    if [ $NC_EXIT -eq 0 ]; then
       echo "Connection to ${HOST} ${PORT} port [tcp/*] succeeded!"
     else
-      echo "nc: connect to ${HOST} port ${PORT} (tcp) failed: Connection refused"
+      echo "nc: connect to ${HOST} port ${PORT} (tcp) failed (exit code ${NC_EXIT})"
     fi
   else
     if [ "${SCHEME}" = "https" ]; then
