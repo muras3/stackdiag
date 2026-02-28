@@ -276,11 +276,21 @@ func TestHelpTextContainsOptions(t *testing.T) {
 
 func TestHelpTextContainsExitCodes(t *testing.T) {
 	text := HelpText()
-	codes := []string{"0 ", "1 ", "2 ", "10 ", "20 ", "30 ", "40 "}
+	codes := []string{"0 ", "1 ", "2 ", "10 ", "15 ", "20 ", "30 ", "40 "}
 	for _, code := range codes {
 		if !strings.Contains(text, code) {
 			t.Errorf("HelpText() missing exit code %q", code)
 		}
+	}
+}
+
+func TestHelpTextContainsExitCode15Reachability(t *testing.T) {
+	text := HelpText()
+	if !strings.Contains(text, "15") {
+		t.Error("HelpText() does not contain exit code 15")
+	}
+	if !strings.Contains(text, "Reachability failure") {
+		t.Error("HelpText() does not mention 'Reachability failure' for exit code 15")
 	}
 }
 

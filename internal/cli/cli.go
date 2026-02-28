@@ -68,6 +68,7 @@ EXIT CODES:
   1   Tool error
   2   Warning (e.g. certificate expiring soon)
   10  DNS failure
+  15  Reachability failure
   20  TCP failure
   30  TLS failure
   40  HTTP failure
