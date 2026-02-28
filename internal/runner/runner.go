@@ -58,8 +58,8 @@ func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 		lr := layer.Probe(pctx)
 		result.Layers[name] = lr
 
-		// Track first non-ok layer.
-		if firstNonOK == "" && !lr.Status.IsOK() {
+		// Track first non-ok layer (skip does not count as an issue).
+		if firstNonOK == "" && lr.Status != core.StatusOK && lr.Status != core.StatusSkip {
 			firstNonOK = name
 		}
 
