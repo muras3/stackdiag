@@ -129,9 +129,15 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 		conn.SetDeadline(deadline)
 	}
 	// Watch for context cancellation (handles cancel without deadline).
+	// The done channel prevents the goroutine from leaking on success.
+	done := make(chan struct{})
+	defer close(done)
 	go func() {
-		<-ctx.Done()
-		conn.Close()
+		select {
+		case <-ctx.Done():
+			conn.Close()
+		case <-done:
+		}
 	}()
 
 	// Build ICMP Echo Request (type=8, code=0)
