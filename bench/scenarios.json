@@ -67,11 +67,11 @@
   },
   {
     "name": "tcp_timeout",
-    "target": "tcp://172.28.0.201:443",
+    "target": "tcp://172.28.0.202:443",
     "ground_truth": "TCP_TIMEOUT",
     "required_evidence": [],
-    "docker_service": "blackhole",
-    "note": "Blackhole container drops all TCP SYN packets"
+    "docker_service": "blackhole-tcp",
+    "note": "blackhole-tcp drops TCP only (ICMP allowed), so reachability passes and TCP times out"
   },
   {
     "name": "cert_expired",

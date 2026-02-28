@@ -142,11 +142,25 @@ services:
     build:
       context: docker/blackhole
     hostname: blackhole
+    environment:
+      BLACKHOLE_MODE: all
     cap_add:
       - NET_ADMIN
     networks:
       bench:
         ipv4_address: 172.28.0.201
+
+  blackhole-tcp:
+    build:
+      context: docker/blackhole
+    hostname: blackhole-tcp
+    environment:
+      BLACKHOLE_MODE: tcp-only
+    cap_add:
+      - NET_ADMIN
+    networks:
+      bench:
+        ipv4_address: 172.28.0.202
 
   coredns:
     image: coredns/coredns:latest
@@ -179,6 +193,7 @@ services:
       - nginx-chainbroken
       - nginx-nocert
       - blackhole
+      - blackhole-tcp
       - coredns
     volumes:
       - ./capture.sh:/bench/capture.sh:ro
