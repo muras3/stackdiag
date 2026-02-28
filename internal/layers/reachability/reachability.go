@@ -124,12 +124,19 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 	}
 	defer conn.Close()
 
+	// Ensure conn.Read unblocks when the context is canceled or has a deadline.
 	if deadline, ok := ctx.Deadline(); ok {
 		conn.SetDeadline(deadline)
 	}
+	// Watch for context cancellation (handles cancel without deadline).
+	go func() {
+		<-ctx.Done()
+		conn.Close()
+	}()
 
 	// Build ICMP Echo Request (type=8, code=0)
-	msg := buildICMPEchoRequest(0, 1)
+	id := uint16(os.Getpid() & 0xffff)
+	msg := buildICMPEchoRequest(id, 1)
 
 	start := time.Now()
 	if _, err := conn.Write(msg); err != nil {
@@ -140,6 +147,10 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
+			// Map close-after-cancel to context error for clean reporting.
+			if ctx.Err() != nil {
+				return 0, ctx.Err()
+			}
 			return 0, err
 		}
 
@@ -153,9 +164,12 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 		}
 		icmpData := buf[ipHeaderLen:n]
 
-		// Check for Echo Reply (type=0, code=0)
-		if icmpData[0] == 0 && icmpData[1] == 0 {
-			return time.Since(start), nil
+		// Check for Echo Reply (type=0, code=0) with matching ID
+		if icmpData[0] == 0 && icmpData[1] == 0 && len(icmpData) >= 6 {
+			replyID := binary.BigEndian.Uint16(icmpData[4:6])
+			if replyID == id {
+				return time.Since(start), nil
+			}
 		}
 	}
 }
