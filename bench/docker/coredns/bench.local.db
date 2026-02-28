@@ -1,0 +1,24 @@
+$ORIGIN bench.local.
+@       IN SOA  ns.bench.local. admin.bench.local. (
+        2024010101 ; serial
+        3600       ; refresh
+        600        ; retry
+        86400      ; expire
+        60         ; minimum TTL
+)
+
+@               IN NS   ns.bench.local.
+ns              IN A    172.28.0.100
+
+; nginx services — Docker internal DNS resolves these via container hostnames,
+; but we include them here so dig queries against coredns also work.
+nginx-healthy   IN A    172.28.0.10
+nginx-503       IN A    172.28.0.11
+nginx-403       IN A    172.28.0.12
+nginx-500       IN A    172.28.0.13
+nginx-expired   IN A    172.28.0.14
+nginx-wronghost IN A    172.28.0.15
+nginx-selfsigned IN A   172.28.0.16
+nginx-tls12     IN A    172.28.0.17
+
+; nonexistent.bench.local is NOT listed → NXDOMAIN

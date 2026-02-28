@@ -1,60 +1,82 @@
 version: "3.8"
 
-x-nginx-base: &nginx-base
+x-nginx-build: &nginx-build
   build:
     context: docker
     dockerfile: nginx/Dockerfile
-  networks:
-    - bench
 
 services:
   nginx-healthy:
-    <<: *nginx-base
+    <<: *nginx-build
     hostname: nginx-healthy
     volumes:
       - ./docker/nginx/healthy.conf:/etc/nginx/conf.d/healthy.conf:ro
+    networks:
+      bench:
+        ipv4_address: 172.28.0.10
 
   nginx-503:
-    <<: *nginx-base
+    <<: *nginx-build
     hostname: nginx-503
     volumes:
       - ./docker/nginx/error-503.conf:/etc/nginx/conf.d/error-503.conf:ro
+    networks:
+      bench:
+        ipv4_address: 172.28.0.11
 
   nginx-403:
-    <<: *nginx-base
+    <<: *nginx-build
     hostname: nginx-403
     volumes:
       - ./docker/nginx/error-403.conf:/etc/nginx/conf.d/error-403.conf:ro
+    networks:
+      bench:
+        ipv4_address: 172.28.0.12
 
   nginx-500:
-    <<: *nginx-base
+    <<: *nginx-build
     hostname: nginx-500
     volumes:
       - ./docker/nginx/error-500.conf:/etc/nginx/conf.d/error-500.conf:ro
+    networks:
+      bench:
+        ipv4_address: 172.28.0.13
 
   nginx-expired:
-    <<: *nginx-base
+    <<: *nginx-build
     hostname: nginx-expired
     volumes:
       - ./docker/nginx/expired.conf:/etc/nginx/conf.d/expired.conf:ro
+    networks:
+      bench:
+        ipv4_address: 172.28.0.14
 
   nginx-wronghost:
-    <<: *nginx-base
+    <<: *nginx-build
     hostname: nginx-wronghost
     volumes:
       - ./docker/nginx/wronghost.conf:/etc/nginx/conf.d/wronghost.conf:ro
+    networks:
+      bench:
+        ipv4_address: 172.28.0.15
 
   nginx-selfsigned:
-    <<: *nginx-base
+    <<: *nginx-build
     hostname: nginx-selfsigned
     volumes:
       - ./docker/nginx/selfsigned.conf:/etc/nginx/conf.d/selfsigned.conf:ro
+    networks:
+      bench:
+        ipv4_address: 172.28.0.16
 
   nginx-tls12:
-    <<: *nginx-base
+    <<: *nginx-build
     hostname: nginx-tls12
     volumes:
       - ./docker/nginx/tls12only.conf:/etc/nginx/conf.d/tls12only.conf:ro
+    networks:
+      bench:
+        ipv4_address: 172.28.0.17
 
   coredns:
     image: coredns/coredns:latest
