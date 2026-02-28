@@ -950,6 +950,41 @@ func TestJSONPrettyImpliesJSON(t *testing.T) {
 	}
 }
 
+func TestJSONPrettyWithCount(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, _, _ := runStackdiag(t, "--json-pretty", "--count", "2", "--timeout", "3",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	if len(stdout) == 0 {
+		t.Fatal("expected JSON output on stdout")
+	}
+
+	// Must be valid JSON.
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+
+	// Must be multi-line (pretty-printed).
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	if len(lines) <= 1 {
+		t.Error("--json-pretty --count should produce multi-line indented output")
+	}
+
+	// Count mode has specific top-level fields.
+	for _, key := range []string{"schema_version", "target", "count", "attempts", "statistics"} {
+		if _, ok := result[key]; !ok {
+			t.Errorf("missing required field: %q", key)
+		}
+	}
+}
+
 func TestBearerEnvNoRedactShowsRaw(t *testing.T) {
 	srv, _ := headerCaptureServer(t)
 
