@@ -78,12 +78,26 @@ def evaluate_evidence_recall(stdiag: dict, scenario: dict) -> float:
 
 
 def count_tokens_file(path: Path) -> dict:
-    """Read token counts from a .tokens.json sidecar file."""
+    """Read token counts from a .tokens.json sidecar file.
+
+    Normalizes keys to canonical model names:
+      claude_tokens / claude_tokens_approx -> claude
+      gpt4o_tokens -> gpt4o
+    """
     tokens_path = path.parent / (path.stem + ".tokens.json")
-    if tokens_path.exists():
-        with open(tokens_path) as f:
-            return json.load(f)
-    return {}
+    if not tokens_path.exists():
+        return {}
+    with open(tokens_path) as f:
+        raw = json.load(f)
+    result = {}
+    # Claude: prefer exact count, fall back to approximation
+    if "claude_tokens" in raw:
+        result["claude"] = raw["claude_tokens"]
+    elif "claude_tokens_approx" in raw:
+        result["claude"] = raw["claude_tokens_approx"]
+    if "gpt4o_tokens" in raw:
+        result["gpt4o"] = raw["gpt4o_tokens"]
+    return result
 
 
 def evaluate(scenarios_path: Path, results_dir: Path) -> dict:
