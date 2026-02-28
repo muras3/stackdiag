@@ -13,7 +13,9 @@ if [ "${1:-}" = "--dry-run" ]; then
 fi
 
 SCENARIOS_FILE="scenarios.json"
-RESULTS_DIR="results"
+RESULTS_BASE="results"
+RUN_TIMESTAMP="$(date +%Y-%m-%dT%H%M%S)"
+RESULTS_DIR="${RESULTS_BASE}/${RUN_TIMESTAMP}"
 
 # Activate venv if present (for tiktoken / anthropic dependencies)
 if [ -f "${SCRIPT_DIR}/.venv/bin/activate" ]; then
@@ -69,9 +71,9 @@ while IFS=$'\t' read -r NAME TARGET; do
   run_cmd docker compose exec -T runner ./capture.sh "${NAME}" "${TARGET}" /bench/results </dev/null
 done <<< "${SCENARIO_LIST}"
 
-log "Copying results from container..."
-rm -rf "${RESULTS_DIR}"
-run_cmd docker compose cp runner:/bench/results "${RESULTS_DIR}/"
+log "Copying results to ${RESULTS_DIR}..."
+mkdir -p "${RESULTS_DIR}"
+run_cmd docker compose cp runner:/bench/results/. "${RESULTS_DIR}/"
 
 log "Counting tokens..."
 while IFS=$'\t' read -r NAME _TARGET; do
@@ -87,9 +89,18 @@ while IFS=$'\t' read -r NAME _TARGET; do
 done <<< "${SCENARIO_LIST}"
 
 log "Running evaluation..."
-run_cmd python3 evaluate.py --scenarios "${SCENARIOS_FILE}" --results-dir "${RESULTS_DIR}/"
+if [ "${DRY_RUN}" = true ]; then
+  run_cmd python3 evaluate.py --scenarios "${SCENARIOS_FILE}" --results-dir "${RESULTS_DIR}/"
+else
+  python3 evaluate.py --scenarios "${SCENARIOS_FILE}" --results-dir "${RESULTS_DIR}/" \
+    | tee "${RESULTS_DIR}/evaluation.json"
+fi
 
 log "Tearing down Docker services..."
 run_cmd docker compose down
 
+# Update 'latest' symlink (never overwrites past runs)
+ln -sfn "${RUN_TIMESTAMP}" "${RESULTS_BASE}/latest"
+
+log "Results saved to ${RESULTS_DIR}"
 log "Done."
