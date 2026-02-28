@@ -45,8 +45,8 @@ def main():
             messages=[{"role": "user", "content": text}],
         )
         result["claude_tokens"] = count_resp.input_tokens
-    except Exception:
-        # Fallback: use cl100k_base as approximation for Claude
+    except Exception as e:
+        print(f"warn: claude token count unavailable ({type(e).__name__}), using approximation", file=sys.stderr)
         result["claude_tokens_approx"] = gpt4o_tokens
 
     json.dump(result, sys.stdout)
