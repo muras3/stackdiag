@@ -66,16 +66,19 @@ func NewDefault() *Layer {
 func (l *Layer) Name() string { return "tls" }
 
 // Probe performs the TLS handshake and inspects the certificate.
+// It uses a 2-phase approach: first handshake with InsecureSkipVerify=true
+// to always collect connection state, then manual cert validation.
 func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	addr := buildAddr(pctx)
 	cfg := &tls.Config{
 		ServerName:         pctx.Target.Host,
-		InsecureSkipVerify: pctx.Insecure,
+		InsecureSkipVerify: true, // Phase 1: always skip verify; validate manually below
 		MinVersion:         tls.VersionTLS12,
 	}
 
 	state, durationMS, err := l.handshaker.Handshake(pctx.Context, addr, cfg)
 	if err != nil {
+		// Handshake itself failed (protocol error, timeout, etc.) — no state available
 		result := &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   durationMS,
@@ -89,6 +92,42 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	}
 
 	obs := buildObservations(state, pctx.Target.Host)
+
+	// Phase 2: Manual cert validation (unless insecure mode)
+	if !pctx.Insecure {
+		if len(state.PeerCertificates) == 0 {
+			return &core.LayerResult{
+				Status:       core.StatusFail,
+				DurationMS:   durationMS,
+				Observations: obs,
+				Error:        &core.ProbeError{Code: "TLS_NO_CERTIFICATES", Message: "server presented no certificates"},
+			}
+		}
+
+		leaf := state.PeerCertificates[0]
+
+		verifyOpts := x509.VerifyOptions{
+			DNSName:       pctx.Target.Host,
+			Intermediates: x509.NewCertPool(),
+			Roots:         cfg.RootCAs, // nil = system roots; test handshakers inject custom roots
+		}
+		for _, cert := range state.PeerCertificates[1:] {
+			verifyOpts.Intermediates.AddCert(cert)
+		}
+
+		if _, verifyErr := leaf.Verify(verifyOpts); verifyErr != nil {
+			result := &core.LayerResult{
+				Status:       core.StatusFail,
+				DurationMS:   durationMS,
+				Observations: obs,
+				Error:        classifyTLSError(verifyErr),
+			}
+			if pctx.TLSScan {
+				l.performTLSScan(pctx, addr, result)
+			}
+			return result
+		}
+	}
 
 	// Check certificate expiry, not-yet-valid, and hostname even on successful handshake.
 	if len(state.PeerCertificates) > 0 {
