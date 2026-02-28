@@ -7,10 +7,9 @@
 
 ## Key Documents
 
-- `docs/product-design.md` — プロダクト設計、JSONスキーマ、MVP scope
-- `docs/development-guide.md` — チーム構成、開発手法、CI/CD、ディレクトリ構造
+- `docs/schema.md` — JSONスキーマ仕様、レイヤー定義、exit codes
 - `docs/design-decisions.md` — Claude-Codex合意の意思決定ログ
-- `docs/test-strategy.md` — テスト戦略、障害マトリクス、実環境検証
+- `docs/plans/` — 実装計画
 
 ## Rules
 
