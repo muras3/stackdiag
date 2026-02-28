@@ -18,9 +18,9 @@ RESULTS_DIR="results"
 # Read scenario names and targets from scenarios.json.
 # Uses python3 for JSON parsing (portable, no jq dependency).
 read_scenarios() {
-  python3 -c "
-import json
-with open('${SCENARIOS_FILE}') as f:
+  SCENARIOS_FILE="${SCENARIOS_FILE}" python3 -c "
+import os, json
+with open(os.environ['SCENARIOS_FILE']) as f:
     scenarios = json.load(f)
 for s in scenarios:
     print(s['name'] + '\t' + s['target'])
