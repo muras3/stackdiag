@@ -18,7 +18,8 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.26.x"
+          go-version-file: go.mod
+          cache: true
 
       - name: Install gofumpt
         run: go install mvdan.cc/gofumpt@latest
@@ -28,6 +29,13 @@ jobs:
 
       - name: Build
         run: make build
+
+      - name: Cross-compile release targets
+        run: |
+          for pair in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64; do
+            GOOS=${pair%/*} GOARCH=${pair#*/} CGO_ENABLED=0 go build -trimpath -o /dev/null ./cmd/stackdiag
+            echo "✓ ${pair}"
+          done
 
       - name: Test (race detector)
         run: make test-race
@@ -47,6 +55,12 @@ jobs:
           echo "- Passed: $passed" >> $GITHUB_STEP_SUMMARY
           echo "- Failed: $failed" >> $GITHUB_STEP_SUMMARY
           echo "- Skipped: $skipped" >> $GITHUB_STEP_SUMMARY
+
+      - name: Validate GoReleaser config
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          args: check
 
       - name: Check binary size
         run: |
