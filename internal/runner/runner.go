@@ -49,7 +49,7 @@ func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 			result.Layers[name] = &core.LayerResult{
 				Status:       core.StatusSkip,
 				DurationMS:   0,
-				Observations: nil,
+				Observations: map[string]any{},
 				Error:        nil,
 			}
 			continue
@@ -77,7 +77,7 @@ func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 		result.Layers[name] = &core.LayerResult{
 			Status:       core.StatusSkip,
 			DurationMS:   0,
-			Observations: nil,
+			Observations: map[string]any{},
 			Error:        nil,
 		}
 	}
