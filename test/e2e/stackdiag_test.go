@@ -410,11 +410,7 @@ func TestHeaderFlag(t *testing.T) {
 	}
 }
 
-func TestExitCodeWarn(t *testing.T) {
-	// Exit code 2 = warn. This is hard to trigger reliably without an expired cert.
-	// Use expired.badssl.com but with --insecure to avoid TLS fail and check for HTTP warn.
-	t.Skip("exit code 2 (warn) is difficult to trigger reliably in E2E without a controlled environment")
-}
+// TestExitCodeWarn is covered by TestExitCodeWarnInsecureExpired in feature_flags_test.go.
 
 func TestExitCodeDNSFailure(t *testing.T) {
 	_, _, exitCode := runStackdiag(t, "https://this-domain-does-not-exist-xyz123.example", "--json", "--timeout", "5")
