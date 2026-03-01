@@ -1,0 +1,368 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/muras3/stackdiag/schema/stackdiag-v0.2.schema.json",
+  "title": "stackdiag v0.2 Output Schema",
+  "description": "JSON Schema for stackdiag --json output (schema version v0.2)",
+  "oneOf": [
+    { "$ref": "#/$defs/Result" },
+    { "$ref": "#/$defs/CountResult" },
+    { "$ref": "#/$defs/ToolError" }
+  ],
+  "$defs": {
+    "Status": {
+      "type": "string",
+      "enum": ["ok", "warn", "fail", "skip"]
+    },
+    "ProbeError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "DNS_NXDOMAIN",
+            "DNS_TIMEOUT",
+            "DNS_ERROR",
+            "REACHABILITY_TIMEOUT",
+            "REACHABILITY_ERROR",
+            "TCP_TIMEOUT",
+            "TCP_REFUSED",
+            "TCP_HOST_UNREACHABLE",
+            "TCP_NETWORK_UNREACHABLE",
+            "TCP_ERROR",
+            "TLS_CERT_EXPIRED",
+            "TLS_CERT_NOT_YET_VALID",
+            "TLS_CERT_EXPIRING_SOON",
+            "TLS_HOSTNAME_MISMATCH",
+            "TLS_UNTRUSTED_CHAIN",
+            "TLS_NO_CERTIFICATES",
+            "TLS_HANDSHAKE_TIMEOUT",
+            "TLS_PROTOCOL_ERROR",
+            "TLS_DEPRECATED_VERSION_ENABLED",
+            "TLS_ERROR",
+            "HTTP_401",
+            "HTTP_403",
+            "HTTP_404",
+            "HTTP_429",
+            "HTTP_500",
+            "HTTP_502",
+            "HTTP_503",
+            "HTTP_504",
+            "HTTP_5XX",
+            "HTTP_TIMEOUT",
+            "HTTP_ERROR",
+            "INVALID_TARGET",
+            "INVALID_ARGS"
+          ]
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false
+    },
+    "DNSObservations": {
+      "type": "object",
+      "properties": {
+        "query_name": { "type": "string" },
+        "answers": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "dns_error_hint": {
+          "type": ["string", "null"]
+        },
+        "ttl": {
+          "type": ["integer", "null"]
+        },
+        "resolver_address": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["query_name", "answers", "dns_error_hint", "ttl", "resolver_address"],
+      "additionalProperties": false
+    },
+    "ReachabilityObservations": {
+      "type": "object",
+      "properties": {
+        "probe_method": { "type": "string" },
+        "reachable": {
+          "type": ["boolean", "null"]
+        },
+        "rtt_ms": {
+          "type": ["number", "null"]
+        },
+        "skip_reason": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["probe_method", "reachable", "rtt_ms", "skip_reason"],
+      "additionalProperties": false
+    },
+    "TCPObservations": {
+      "type": "object",
+      "properties": {
+        "remote_ip": { "type": "string" },
+        "remote_port": { "type": "integer" }
+      },
+      "required": ["remote_ip", "remote_port"],
+      "additionalProperties": false
+    },
+    "CertChainEntry": {
+      "type": "object",
+      "properties": {
+        "subject": { "type": "string" },
+        "issuer": { "type": "string" },
+        "not_after": { "type": "string" }
+      },
+      "required": ["subject", "issuer", "not_after"],
+      "additionalProperties": false
+    },
+    "TLSScanAttempt": {
+      "type": "object",
+      "properties": {
+        "version": { "type": "string" },
+        "supported": { "type": "boolean" },
+        "duration_ms": { "type": "number" },
+        "error": {
+          "oneOf": [
+            { "$ref": "#/$defs/ProbeError" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["version", "supported", "duration_ms", "error"],
+      "additionalProperties": false
+    },
+    "TLSScan": {
+      "type": "object",
+      "properties": {
+        "performed": { "type": "boolean" },
+        "attempts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/TLSScanAttempt" }
+        },
+        "supported_versions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "deprecated_versions_enabled": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      },
+      "required": ["performed", "attempts", "supported_versions", "deprecated_versions_enabled"],
+      "additionalProperties": false
+    },
+    "TLSObservations": {
+      "type": "object",
+      "properties": {
+        "version": { "type": "string" },
+        "cipher_suite": { "type": "string" },
+        "cert_days_until_expiry": { "type": "integer" },
+        "cert_hostname_match": { "type": "boolean" },
+        "cert_verified": { "type": "boolean" },
+        "cert_subject": { "type": "string" },
+        "cert_san": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "cert_issuer": { "type": "string" },
+        "cert_not_after": { "type": "string" },
+        "cert_not_before": {
+          "type": ["string", "null"]
+        },
+        "cert_chain": {
+          "oneOf": [
+            {
+              "type": "array",
+              "items": { "$ref": "#/$defs/CertChainEntry" }
+            },
+            { "type": "null" }
+          ]
+        },
+        "tls_scan": { "$ref": "#/$defs/TLSScan" }
+      },
+      "required": [
+        "version",
+        "cipher_suite",
+        "cert_days_until_expiry",
+        "cert_hostname_match",
+        "cert_verified",
+        "cert_subject",
+        "cert_san",
+        "cert_issuer",
+        "cert_not_after",
+        "cert_not_before",
+        "cert_chain"
+      ],
+      "additionalProperties": false
+    },
+    "HTTPObservations": {
+      "type": "object",
+      "properties": {
+        "method": { "type": "string" },
+        "protocol": { "type": "string" },
+        "status_code": { "type": "integer" },
+        "status_text": { "type": "string" },
+        "request_headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "response_headers": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        }
+      },
+      "required": ["method", "protocol", "status_code", "status_text", "request_headers", "response_headers"],
+      "additionalProperties": false
+    },
+    "EmptyObservations": {
+      "type": "object",
+      "maxProperties": 0
+    },
+    "LayerResult": {
+      "type": "object",
+      "properties": {
+        "status": { "$ref": "#/$defs/Status" },
+        "duration_ms": { "type": "number" },
+        "observations": {
+          "type": "object"
+        },
+        "error": {
+          "oneOf": [
+            { "$ref": "#/$defs/ProbeError" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["status", "duration_ms", "observations", "error"],
+      "additionalProperties": false
+    },
+    "Layers": {
+      "type": "object",
+      "properties": {
+        "dns": { "$ref": "#/$defs/LayerResult" },
+        "reachability": { "$ref": "#/$defs/LayerResult" },
+        "tcp": { "$ref": "#/$defs/LayerResult" },
+        "tls": { "$ref": "#/$defs/LayerResult" },
+        "http": { "$ref": "#/$defs/LayerResult" }
+      },
+      "required": ["dns", "reachability", "tcp", "tls", "http"],
+      "additionalProperties": false
+    },
+    "Summary": {
+      "type": "object",
+      "properties": {
+        "wall_clock_ms": { "type": "number" },
+        "first_non_ok_layer": { "type": "string" },
+        "exit_code": {
+          "type": "integer",
+          "enum": [0, 1, 2, 10, 15, 20, 30, 40]
+        }
+      },
+      "required": ["wall_clock_ms", "first_non_ok_layer", "exit_code"],
+      "additionalProperties": false
+    },
+    "Result": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "v0.2"
+        },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "target": { "type": "string" },
+        "layers": { "$ref": "#/$defs/Layers" },
+        "summary": { "$ref": "#/$defs/Summary" }
+      },
+      "required": ["schema_version", "started_at", "target", "layers", "summary"],
+      "additionalProperties": false
+    },
+    "LayerStatistics": {
+      "type": "object",
+      "properties": {
+        "p50_ms": {
+          "type": ["number", "null"]
+        },
+        "p95_ms": {
+          "type": ["number", "null"]
+        },
+        "success_count": { "type": "integer" },
+        "fail_count": { "type": "integer" },
+        "skip_count": { "type": "integer" },
+        "sample_count": { "type": "integer" },
+        "loss_ratio": { "type": "number" }
+      },
+      "required": ["p50_ms", "p95_ms", "success_count", "fail_count", "skip_count", "sample_count", "loss_ratio"],
+      "additionalProperties": false
+    },
+    "Statistics": {
+      "type": "object",
+      "properties": {
+        "dns": { "$ref": "#/$defs/LayerStatistics" },
+        "reachability": { "$ref": "#/$defs/LayerStatistics" },
+        "tcp": { "$ref": "#/$defs/LayerStatistics" },
+        "tls": { "$ref": "#/$defs/LayerStatistics" },
+        "http": { "$ref": "#/$defs/LayerStatistics" }
+      },
+      "required": ["dns", "reachability", "tcp", "tls", "http"],
+      "additionalProperties": false
+    },
+    "AttemptResult": {
+      "type": "object",
+      "properties": {
+        "attempt": { "type": "integer" },
+        "started_at": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "layers": { "$ref": "#/$defs/Layers" },
+        "summary": { "$ref": "#/$defs/Summary" }
+      },
+      "required": ["attempt", "started_at", "layers", "summary"],
+      "additionalProperties": false
+    },
+    "CountResult": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "v0.2"
+        },
+        "target": { "type": "string" },
+        "count": { "type": "integer" },
+        "exit_code": {
+          "type": "integer",
+          "enum": [0, 1, 2, 10, 15, 20, 30, 40]
+        },
+        "attempts": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/AttemptResult" }
+        },
+        "statistics": { "$ref": "#/$defs/Statistics" }
+      },
+      "required": ["schema_version", "target", "count", "exit_code", "attempts", "statistics"],
+      "additionalProperties": false
+    },
+    "ToolError": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "type": "string",
+          "const": "v0.2"
+        },
+        "error": { "$ref": "#/$defs/ProbeError" },
+        "exit_code": {
+          "type": "integer",
+          "const": 1
+        }
+      },
+      "required": ["schema_version", "error", "exit_code"],
+      "additionalProperties": false
+    }
+  }
+}
