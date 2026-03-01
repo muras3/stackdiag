@@ -235,14 +235,119 @@
       "required": ["status", "duration_ms", "observations", "error"],
       "additionalProperties": false
     },
+    "DNSLayerResult": {
+      "type": "object",
+      "properties": {
+        "status": { "$ref": "#/$defs/Status" },
+        "duration_ms": { "type": "number" },
+        "observations": {
+          "oneOf": [
+            { "$ref": "#/$defs/DNSObservations" },
+            { "type": "object", "maxProperties": 0 }
+          ]
+        },
+        "error": {
+          "oneOf": [
+            { "$ref": "#/$defs/ProbeError" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["status", "duration_ms", "observations", "error"],
+      "additionalProperties": false
+    },
+    "ReachabilityLayerResult": {
+      "type": "object",
+      "properties": {
+        "status": { "$ref": "#/$defs/Status" },
+        "duration_ms": { "type": "number" },
+        "observations": {
+          "oneOf": [
+            { "$ref": "#/$defs/ReachabilityObservations" },
+            { "type": "object", "maxProperties": 0 }
+          ]
+        },
+        "error": {
+          "oneOf": [
+            { "$ref": "#/$defs/ProbeError" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["status", "duration_ms", "observations", "error"],
+      "additionalProperties": false
+    },
+    "TCPLayerResult": {
+      "type": "object",
+      "properties": {
+        "status": { "$ref": "#/$defs/Status" },
+        "duration_ms": { "type": "number" },
+        "observations": {
+          "oneOf": [
+            { "$ref": "#/$defs/TCPObservations" },
+            { "type": "object", "maxProperties": 0 }
+          ]
+        },
+        "error": {
+          "oneOf": [
+            { "$ref": "#/$defs/ProbeError" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["status", "duration_ms", "observations", "error"],
+      "additionalProperties": false
+    },
+    "TLSLayerResult": {
+      "type": "object",
+      "properties": {
+        "status": { "$ref": "#/$defs/Status" },
+        "duration_ms": { "type": "number" },
+        "observations": {
+          "oneOf": [
+            { "$ref": "#/$defs/TLSObservations" },
+            { "type": "object", "maxProperties": 0 }
+          ]
+        },
+        "error": {
+          "oneOf": [
+            { "$ref": "#/$defs/ProbeError" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["status", "duration_ms", "observations", "error"],
+      "additionalProperties": false
+    },
+    "HTTPLayerResult": {
+      "type": "object",
+      "properties": {
+        "status": { "$ref": "#/$defs/Status" },
+        "duration_ms": { "type": "number" },
+        "observations": {
+          "oneOf": [
+            { "$ref": "#/$defs/HTTPObservations" },
+            { "type": "object", "maxProperties": 0 }
+          ]
+        },
+        "error": {
+          "oneOf": [
+            { "$ref": "#/$defs/ProbeError" },
+            { "type": "null" }
+          ]
+        }
+      },
+      "required": ["status", "duration_ms", "observations", "error"],
+      "additionalProperties": false
+    },
     "Layers": {
       "type": "object",
       "properties": {
-        "dns": { "$ref": "#/$defs/LayerResult" },
-        "reachability": { "$ref": "#/$defs/LayerResult" },
-        "tcp": { "$ref": "#/$defs/LayerResult" },
-        "tls": { "$ref": "#/$defs/LayerResult" },
-        "http": { "$ref": "#/$defs/LayerResult" }
+        "dns": { "$ref": "#/$defs/DNSLayerResult" },
+        "reachability": { "$ref": "#/$defs/ReachabilityLayerResult" },
+        "tcp": { "$ref": "#/$defs/TCPLayerResult" },
+        "tls": { "$ref": "#/$defs/TLSLayerResult" },
+        "http": { "$ref": "#/$defs/HTTPLayerResult" }
       },
       "required": ["dns", "reachability", "tcp", "tls", "http"],
       "additionalProperties": false

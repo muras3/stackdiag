@@ -60,6 +60,11 @@ func TestSchemaDefinitionsExist(t *testing.T) {
 		"TLSScan",
 		"TLSScanAttempt",
 		"LayerResult",
+		"DNSLayerResult",
+		"ReachabilityLayerResult",
+		"TCPLayerResult",
+		"TLSLayerResult",
+		"HTTPLayerResult",
 		"Layers",
 		"Summary",
 		"Result",
@@ -208,6 +213,71 @@ func TestSchemaLayerNames(t *testing.T) {
 
 	if !reflect.DeepEqual(requiredLayers, goLayers) {
 		t.Errorf("required layer mismatch: schema=%v, go=%v", requiredLayers, goLayers)
+	}
+}
+
+// TestSchemaLayersUseTypedResults verifies each layer in Layers references a layer-specific
+// result type (e.g., DNSLayerResult) instead of the generic LayerResult.
+func TestSchemaLayersUseTypedResults(t *testing.T) {
+	parsed := loadSchema(t)
+	defs := parsed["$defs"].(map[string]any)
+	layersDef := defs["Layers"].(map[string]any)
+	props := layersDef["properties"].(map[string]any)
+
+	expectedRefs := map[string]string{
+		"dns":          "#/$defs/DNSLayerResult",
+		"reachability": "#/$defs/ReachabilityLayerResult",
+		"tcp":          "#/$defs/TCPLayerResult",
+		"tls":          "#/$defs/TLSLayerResult",
+		"http":         "#/$defs/HTTPLayerResult",
+	}
+
+	for layer, expectedRef := range expectedRefs {
+		prop, ok := props[layer].(map[string]any)
+		if !ok {
+			t.Errorf("layer %q not found in Layers properties", layer)
+			continue
+		}
+		ref, ok := prop["$ref"].(string)
+		if !ok {
+			t.Errorf("layer %q has no $ref", layer)
+			continue
+		}
+		if ref != expectedRef {
+			t.Errorf("layer %q: $ref = %q, want %q", layer, ref, expectedRef)
+		}
+	}
+
+	// Verify each typed LayerResult has observations referencing the correct Observations type
+	layerObsRefs := map[string]string{
+		"DNSLayerResult":          "#/$defs/DNSObservations",
+		"ReachabilityLayerResult": "#/$defs/ReachabilityObservations",
+		"TCPLayerResult":          "#/$defs/TCPObservations",
+		"TLSLayerResult":          "#/$defs/TLSObservations",
+		"HTTPLayerResult":         "#/$defs/HTTPObservations",
+	}
+
+	for defName, expectedObsRef := range layerObsRefs {
+		def := defs[defName].(map[string]any)
+		obsProps := def["properties"].(map[string]any)["observations"].(map[string]any)
+		oneOf := obsProps["oneOf"].([]any)
+
+		// First oneOf entry should be the typed $ref
+		firstAlt := oneOf[0].(map[string]any)
+		ref, ok := firstAlt["$ref"].(string)
+		if !ok {
+			t.Errorf("%s observations oneOf[0] has no $ref", defName)
+			continue
+		}
+		if ref != expectedObsRef {
+			t.Errorf("%s observations $ref = %q, want %q", defName, ref, expectedObsRef)
+		}
+
+		// Second oneOf entry should allow empty object
+		secondAlt := oneOf[1].(map[string]any)
+		if secondAlt["type"] != "object" || secondAlt["maxProperties"] != float64(0) {
+			t.Errorf("%s observations oneOf[1] should be empty object constraint", defName)
+		}
 	}
 }
 
