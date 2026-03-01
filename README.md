@@ -55,6 +55,8 @@ Wrap `stdiag --json <target>` as a tool in any MCP server — no adapter needed.
 
 Full schema: [docs/schema.md](docs/schema.md)
 
+Note: HTTP layer respects `HTTP_PROXY`/`HTTPS_PROXY` env vars. TCP/TLS/ICMP layers connect directly.
+
 ## Docs
 
 - [`stdiag --help`](docs/schema.md) — All CLI flags and options

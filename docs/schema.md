@@ -296,6 +296,13 @@ Uses the system resolver via Go's `net.LookupHost`. No custom DNS server configu
 
 `--insecure` sets `InsecureSkipVerify: true` on the TLS config, skipping both certificate chain validation and hostname verification.
 
+### Proxy Behavior
+
+- **HTTP layer**: Go's `net/http` respects `HTTP_PROXY`, `HTTPS_PROXY`, and `NO_PROXY` environment variables by default via `http.ProxyFromEnvironment`. When set, HTTP layer diagnostics are routed through the configured proxy.
+- **TCP and TLS layers**: Use raw `net.Dialer` for direct connections. Proxy environment variables are **not** respected. This is by design — these layers diagnose the actual network path, not the proxied path.
+- **Reachability layer**: Uses raw ICMP sockets. No proxy concept applies.
+- **DNS layer**: Uses the system resolver or `--dns-server`. No proxy concept applies.
+
 ### Partial Observations on Failure
 
 Layers may return partial `observations` on failure. For example, an HTTP layer that fails to connect still includes `"method"` in observations.
