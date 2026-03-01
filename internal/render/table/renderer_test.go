@@ -412,7 +412,7 @@ func TestRenderTimingAlignment(t *testing.T) {
 // tlsScanResult returns a Result with tls_scan observations.
 func tlsScanResult() *core.Result {
 	r := allOKResult()
-	r.Layers["tls"].Observations["tls_scan"] = map[string]any{
+	r.Layers["tls"].Observations.(map[string]any)["tls_scan"] = map[string]any{
 		"performed": true,
 		"attempts": []any{
 			map[string]any{"version": "TLSv1.0", "supported": true},

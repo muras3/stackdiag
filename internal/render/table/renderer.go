@@ -116,6 +116,15 @@ func formatDuration(ms float64) string {
 	return fmt.Sprintf("%dms", int(math.Round(ms)))
 }
 
+// obsMap extracts a map[string]any from the Observations field.
+// Returns nil if Observations is not a map.
+func obsMap(lr *core.LayerResult) map[string]any {
+	if m, ok := lr.Observations.(map[string]any); ok {
+		return m
+	}
+	return nil
+}
+
 // layerDescription builds the description string for a layer line.
 func layerDescription(name string, lr *core.LayerResult, useColor bool) string {
 	// If the layer failed or warned and has an error, use error message for fail.
@@ -127,14 +136,22 @@ func layerDescription(name string, lr *core.LayerResult, useColor bool) string {
 	if lr.Status == core.StatusSkip {
 		// Reachability skip shows skip_reason.
 		if name == "reachability" {
-			if reason, ok := lr.Observations["skip_reason"].(string); ok {
-				return strings.ReplaceAll(reason, "_", " ")
+			if obs := obsMap(lr); obs != nil {
+				if reason, ok := obs["skip_reason"].(string); ok {
+					return strings.ReplaceAll(reason, "_", " ")
+				}
 			}
 		}
 		return ""
 	}
 
-	obs := lr.Observations
+	obs := obsMap(lr)
+	if obs == nil {
+		if lr.Error != nil {
+			return lr.Error.Message
+		}
+		return ""
+	}
 
 	switch name {
 	case "dns":
@@ -318,7 +335,11 @@ var deprecatedVersions = map[string]bool{
 
 // renderTLSScanLine writes the TLS scan sub-line if tls_scan data is present.
 func renderTLSScanLine(w io.Writer, lr *core.LayerResult, useColor bool) error {
-	scanData, ok := lr.Observations["tls_scan"]
+	obs := obsMap(lr)
+	if obs == nil {
+		return nil
+	}
+	scanData, ok := obs["tls_scan"]
 	if !ok {
 		return nil
 	}
@@ -417,7 +438,11 @@ func scanStatusSymbol(s core.Status, useColor bool) string {
 
 // renderResponseHeadersLines writes HTTP response_headers as sub-lines.
 func renderResponseHeadersLines(w io.Writer, lr *core.LayerResult) error {
-	headersRaw, ok := lr.Observations["response_headers"]
+	obs := obsMap(lr)
+	if obs == nil {
+		return nil
+	}
+	headersRaw, ok := obs["response_headers"]
 	if !ok {
 		return nil
 	}

@@ -29,6 +29,7 @@ type Config struct {
 	BasicEnv  string // --basic-env ENV_VAR
 	TLSScan   bool   // --tls-scan
 	Count     int    // --count N
+	DNSServer string // --dns-server host:port
 }
 
 // HelpText returns the full help message for stdiag.
@@ -58,6 +59,9 @@ OPTIONS:
 AUTHENTICATION:
   --bearer-env VAR      Read Bearer token from environment variable
   --basic-env VAR       Read Basic auth (user:pass) from environment variable
+
+DNS:
+  --dns-server HOST     Use custom DNS resolver (ip:port or ip, default port 53)
 
 DIAGNOSTICS:
   --tls-scan            Probe TLS 1.0/1.1/1.2/1.3 version support
@@ -142,6 +146,7 @@ func ParseArgs(args []string) (*Config, error) {
 	fs.StringVar(&cfg.BasicEnv, "basic-env", "", "environment variable for Basic auth")
 	fs.BoolVar(&cfg.TLSScan, "tls-scan", false, "probe TLS version support")
 	fs.StringVar(&countStr, "count", "", "number of attempts")
+	fs.StringVar(&cfg.DNSServer, "dns-server", "", "custom DNS resolver address")
 
 	if err := fs.Parse(flagArgs); err != nil {
 		if err.Error() == "flag: help requested" {
@@ -232,7 +237,7 @@ func ParseArgs(args []string) (*Config, error) {
 // needsValue returns true for flags that require an argument.
 func needsValue(name string) bool {
 	switch name {
-	case "method", "header", "timeout", "bearer-env", "basic-env", "count":
+	case "method", "header", "timeout", "bearer-env", "basic-env", "count", "dns-server":
 		return true
 	}
 	return false

@@ -37,6 +37,16 @@ func NewDefault() *Layer {
 	return &Layer{resolver: newTrackingResolver()}
 }
 
+// NewWithServer creates a DNS Layer using a custom resolver that dials the specified address.
+// addr can be "ip:port" or just "ip" (default port 53).
+func NewWithServer(addr string) *Layer {
+	// Normalize: add default port if not specified.
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		addr = net.JoinHostPort(addr, "53")
+	}
+	return &Layer{resolver: newTrackingResolverWithServer(addr)}
+}
+
 // trackingResolver wraps net.Resolver with a Dial hook to capture resolver address.
 type trackingResolver struct {
 	inner   *net.Resolver
@@ -89,6 +99,26 @@ func isLinkLocalNameserver(address string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLinkLocalUnicast()
+}
+
+// newTrackingResolverWithServer creates a resolver that always dials the specified server.
+// It still captures the resolver address and skips link-local nameservers.
+func newTrackingResolverWithServer(server string) *trackingResolver {
+	tr := &trackingResolver{}
+	tr.inner = &net.Resolver{
+		PreferGo: true,
+		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
+			if isLinkLocalNameserver(server) {
+				return nil, fmt.Errorf("skipping link-local nameserver %s", server)
+			}
+			tr.mu.Lock()
+			tr.address = server
+			tr.mu.Unlock()
+			var d net.Dialer
+			return d.DialContext(ctx, network, server)
+		},
+	}
+	return tr
 }
 
 func (tr *trackingResolver) LookupHost(ctx context.Context, host string) ([]string, error) {

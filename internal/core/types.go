@@ -46,7 +46,7 @@ func (e *ProbeError) Error() string {
 type LayerResult struct {
 	Status       Status         `json:"status"`
 	DurationMS   float64        `json:"duration_ms"`
-	Observations map[string]any `json:"observations"`
+	Observations any `json:"observations"`
 	Error        *ProbeError    `json:"error"`
 }
 
@@ -303,7 +303,8 @@ type ProbeContext struct {
 	Redact      bool
 	Method      string
 	Headers     map[string]string
-	TLSScan     bool // --tls-scan: probe TLS version support
+	TLSScan   bool   // --tls-scan: probe TLS version support
+	DNSServer string // --dns-server: custom DNS resolver address
 }
 
 // Layer is the interface that each network layer must implement.

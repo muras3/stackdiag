@@ -386,11 +386,14 @@ func (l *Layer) performTLSScan(pctx *core.ProbeContext, addr string, result *cor
 		deprecatedEnabled = []string{}
 	}
 
-	result.Observations["tls_scan"] = map[string]any{
+	tlsScanData := map[string]any{
 		"performed":                   true,
 		"attempts":                    attempts,
 		"supported_versions":          supportedVersions,
 		"deprecated_versions_enabled": deprecatedEnabled,
+	}
+	if m, ok := result.Observations.(map[string]any); ok {
+		m["tls_scan"] = tlsScanData
 	}
 
 	// If deprecated versions found and normal probe was ok → warn

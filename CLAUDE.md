@@ -23,6 +23,8 @@
 - TDD必須。テストを先に書く。例外なし。
 - コミットは小刻みに
 - Makefileでローカル/CI同一性を保証
+- `/simplify` を実装完了後に必ず実行（コード再利用・品質・効率の3軸レビュー）
+- `/batch` を大規模リファクタリング（3ファイル以上の横断的変更）時に使用
 
 ### Agent Teams
 - Agent Teamsを最大限活用する（TeamCreate → TaskCreate → Task with team_name）

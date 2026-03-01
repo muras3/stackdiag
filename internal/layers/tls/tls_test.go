@@ -174,20 +174,20 @@ func TestTLSSuccess(t *testing.T) {
 	}
 
 	// Check observations.
-	if _, ok := result.Observations["version"]; !ok {
+	if _, ok := result.Observations.(map[string]any)["version"]; !ok {
 		t.Error("missing 'version' observation")
 	}
-	if _, ok := result.Observations["cipher_suite"]; !ok {
+	if _, ok := result.Observations.(map[string]any)["cipher_suite"]; !ok {
 		t.Error("missing 'cipher_suite' observation")
 	}
-	days, ok := result.Observations["cert_days_until_expiry"]
+	days, ok := result.Observations.(map[string]any)["cert_days_until_expiry"]
 	if !ok {
 		t.Error("missing 'cert_days_until_expiry' observation")
 	}
 	if d, ok := days.(int); ok && d < 300 {
 		t.Errorf("cert_days_until_expiry = %d, expected > 300", d)
 	}
-	match, ok := result.Observations["cert_hostname_match"]
+	match, ok := result.Observations.(map[string]any)["cert_hostname_match"]
 	if !ok {
 		t.Error("missing 'cert_hostname_match' observation")
 	}
@@ -300,7 +300,7 @@ func TestTLSCertExpiringSoon(t *testing.T) {
 		t.Errorf("error = %v, want TLS_CERT_EXPIRING_SOON", result.Error)
 	}
 
-	days, ok := result.Observations["cert_days_until_expiry"]
+	days, ok := result.Observations.(map[string]any)["cert_days_until_expiry"]
 	if !ok {
 		t.Fatal("missing cert_days_until_expiry observation")
 	}
@@ -840,7 +840,7 @@ func TestTLSScanAllVersions(t *testing.T) {
 
 	result := layer.Probe(pctx)
 
-	scanRaw, ok := result.Observations["tls_scan"]
+	scanRaw, ok := result.Observations.(map[string]any)["tls_scan"]
 	if !ok {
 		t.Fatal("missing tls_scan in observations")
 	}
@@ -930,7 +930,7 @@ func TestTLSScanNotPerformedByDefault(t *testing.T) {
 
 	result := layer.Probe(pctx)
 
-	if _, ok := result.Observations["tls_scan"]; ok {
+	if _, ok := result.Observations.(map[string]any)["tls_scan"]; ok {
 		t.Error("tls_scan should not be in observations when --tls-scan is not set")
 	}
 }
@@ -964,7 +964,7 @@ func TestTLSScanWithFailedNormalProbe(t *testing.T) {
 	}
 
 	// Scan results should still be in observations
-	scanRaw, ok := result.Observations["tls_scan"]
+	scanRaw, ok := result.Observations.(map[string]any)["tls_scan"]
 	if !ok {
 		t.Fatal("missing tls_scan in observations even with failed normal probe")
 	}
@@ -1002,7 +1002,7 @@ func TestTLSScanNoDeprecated(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	scan := result.Observations["tls_scan"].(map[string]any)
+	scan := result.Observations.(map[string]any)["tls_scan"].(map[string]any)
 	dv := scan["deprecated_versions_enabled"].([]string)
 	if len(dv) != 0 {
 		t.Errorf("deprecated_versions_enabled = %v, want empty", dv)
@@ -1075,16 +1075,16 @@ func TestTLSNoCertificatesViaFakeHandshaker(t *testing.T) {
 func assertHasObservations(t *testing.T, result *core.LayerResult) {
 	t.Helper()
 
-	if _, ok := result.Observations["version"]; !ok {
+	if _, ok := result.Observations.(map[string]any)["version"]; !ok {
 		t.Error("missing 'version' in observations")
 	}
-	if _, ok := result.Observations["cipher_suite"]; !ok {
+	if _, ok := result.Observations.(map[string]any)["cipher_suite"]; !ok {
 		t.Error("missing 'cipher_suite' in observations")
 	}
-	if _, ok := result.Observations["cert_days_until_expiry"]; !ok {
+	if _, ok := result.Observations.(map[string]any)["cert_days_until_expiry"]; !ok {
 		t.Error("missing 'cert_days_until_expiry' in observations")
 	}
-	if _, ok := result.Observations["cert_hostname_match"]; !ok {
+	if _, ok := result.Observations.(map[string]any)["cert_hostname_match"]; !ok {
 		t.Error("missing 'cert_hostname_match' in observations")
 	}
 }

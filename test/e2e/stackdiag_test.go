@@ -13,7 +13,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // binaryPath returns the path to the built stdiag binary.
@@ -1075,5 +1077,84 @@ func TestBearerEnvNoRedactShowsRaw(t *testing.T) {
 	want := "Bearer " + token
 	if headers["Authorization"] != want {
 		t.Errorf("Authorization = %v, want %q", headers["Authorization"], want)
+	}
+}
+
+// --- Signal handling E2E tests ---
+
+func TestSignalHandlingSIGINT(t *testing.T) {
+	// Send SIGINT while binary is running against a non-routable address (RFC 5737 TEST-NET-1).
+	// Verify: stdout is empty OR valid JSON (never partial/corrupt output).
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "--json", "--timeout", "30", "tcp://192.0.2.1:1")
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start binary: %v", err)
+	}
+
+	// Wait briefly for the process to initialize, then send SIGINT.
+	time.Sleep(100 * time.Millisecond)
+	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+		t.Fatalf("failed to send SIGINT: %v", err)
+	}
+
+	// Wait for process to exit.
+	err := cmd.Wait()
+	if err == nil {
+		t.Log("process exited with code 0 (unexpected but acceptable)")
+	}
+
+	stdout := outBuf.String()
+
+	// stdout must be either empty or valid JSON — never partial/corrupt.
+	if len(stdout) > 0 {
+		var result map[string]any
+		if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+			t.Fatalf("SIGINT produced partial/invalid JSON output: %v\nstdout: %s", err, stdout)
+		}
+	}
+
+	// Process should have exited with non-zero code.
+	if err != nil {
+		exitErr, ok := err.(*exec.ExitError)
+		if !ok {
+			t.Fatalf("unexpected error type: %T: %v", err, err)
+		}
+		if exitErr.ExitCode() == 0 {
+			t.Error("expected non-zero exit code after SIGINT")
+		}
+	}
+}
+
+func TestSignalHandlingNormalCompletion(t *testing.T) {
+	// Verify normal operation is unchanged after adding output buffering.
+	// Run binary against a local TCP listener — should complete normally with valid output.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, _, _ := runStackdiag(t, "--json", "--timeout", "3",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	if len(stdout) == 0 {
+		t.Fatal("expected JSON output on stdout for normal completion")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON after buffering change: %v\n%s", err, stdout)
+	}
+
+	// Verify required fields are present (buffering should not change output structure).
+	for _, key := range []string{"schema_version", "target", "layers", "summary"} {
+		if _, ok := result[key]; !ok {
+			t.Errorf("missing required field: %q", key)
+		}
 	}
 }

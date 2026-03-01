@@ -549,6 +549,45 @@ func TestParseArgsJSONPrettyDefault(t *testing.T) {
 	}
 }
 
+// --- v0.2 expansion: dns-server flag ---
+
+func TestParseArgsDNSServer(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--dns-server", "8.8.8.8:53", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DNSServer != "8.8.8.8:53" {
+		t.Errorf("DNSServer = %q, want 8.8.8.8:53", cfg.DNSServer)
+	}
+}
+
+func TestParseArgsDNSServerDefault(t *testing.T) {
+	cfg, err := ParseArgs([]string{"https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DNSServer != "" {
+		t.Errorf("DNSServer = %q, want empty", cfg.DNSServer)
+	}
+}
+
+func TestParseArgsDNSServerAfterTarget(t *testing.T) {
+	cfg, err := ParseArgs([]string{"https://example.com", "--dns-server", "1.1.1.1:53"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DNSServer != "1.1.1.1:53" {
+		t.Errorf("DNSServer = %q, want 1.1.1.1:53", cfg.DNSServer)
+	}
+}
+
+func TestHelpTextContainsDNSServer(t *testing.T) {
+	text := HelpText()
+	if !strings.Contains(text, "--dns-server") {
+		t.Error("HelpText() missing --dns-server option")
+	}
+}
+
 func TestParseArgsTimeoutRange(t *testing.T) {
 	tests := []struct {
 		name    string

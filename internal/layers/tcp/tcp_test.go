@@ -63,7 +63,7 @@ func TestTCPSuccess(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	remoteIP, ok := result.Observations["remote_ip"]
+	remoteIP, ok := result.Observations.(map[string]any)["remote_ip"]
 	if !ok {
 		t.Fatal("missing remote_ip observation")
 	}
@@ -71,7 +71,7 @@ func TestTCPSuccess(t *testing.T) {
 		t.Errorf("remote_ip = %v, want 127.0.0.1", remoteIP)
 	}
 
-	remotePort, ok := result.Observations["remote_port"]
+	remotePort, ok := result.Observations.(map[string]any)["remote_port"]
 	if !ok {
 		t.Fatal("missing remote_port observation")
 	}
@@ -298,7 +298,7 @@ func TestTCPEmptyObservationsOnFailure(t *testing.T) {
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	if len(result.Observations) != 0 {
+	if obs, ok := result.Observations.(map[string]any); !ok || len(obs) != 0 {
 		t.Errorf("observations = %v, want empty map on failure", result.Observations)
 	}
 }

@@ -674,13 +674,14 @@ func TestContractReachabilitySkipRender(t *testing.T) {
 
 func TestContractNewTLSObservations(t *testing.T) {
 	r := contractResult()
-	r.Layers["tls"].Observations["cert_verified"] = true
-	r.Layers["tls"].Observations["cert_subject"] = "CN=api.example.com"
-	r.Layers["tls"].Observations["cert_san"] = []string{"api.example.com", "*.example.com"}
-	r.Layers["tls"].Observations["cert_issuer"] = "CN=Let's Encrypt Authority X3"
-	r.Layers["tls"].Observations["cert_not_after"] = "2026-03-05T00:00:00Z"
-	r.Layers["tls"].Observations["cert_not_before"] = "2025-12-05T00:00:00Z"
-	r.Layers["tls"].Observations["cert_chain"] = []string{"CN=api.example.com", "CN=Let's Encrypt Authority X3", "CN=DST Root CA X3"}
+	tlsObs := r.Layers["tls"].Observations.(map[string]any)
+	tlsObs["cert_verified"] = true
+	tlsObs["cert_subject"] = "CN=api.example.com"
+	tlsObs["cert_san"] = []string{"api.example.com", "*.example.com"}
+	tlsObs["cert_issuer"] = "CN=Let's Encrypt Authority X3"
+	tlsObs["cert_not_after"] = "2026-03-05T00:00:00Z"
+	tlsObs["cert_not_before"] = "2025-12-05T00:00:00Z"
+	tlsObs["cert_chain"] = []string{"CN=api.example.com", "CN=Let's Encrypt Authority X3", "CN=DST Root CA X3"}
 
 	var buf bytes.Buffer
 	if err := Render(&buf, r); err != nil {
@@ -692,9 +693,9 @@ func TestContractNewTLSObservations(t *testing.T) {
 		t.Fatalf("JSON parse error: %v", err)
 	}
 
-	tlsObs := m["layers"].(map[string]any)["tls"].(map[string]any)["observations"].(map[string]any)
+	parsedTLSObs := m["layers"].(map[string]any)["tls"].(map[string]any)["observations"].(map[string]any)
 	for _, field := range []string{"cert_verified", "cert_subject", "cert_san", "cert_issuer", "cert_not_after", "cert_not_before", "cert_chain"} {
-		if _, ok := tlsObs[field]; !ok {
+		if _, ok := parsedTLSObs[field]; !ok {
 			t.Errorf("tls observations missing %q", field)
 		}
 	}
@@ -702,7 +703,7 @@ func TestContractNewTLSObservations(t *testing.T) {
 
 func TestContractDNSErrorHint(t *testing.T) {
 	r := contractResult()
-	r.Layers["dns"].Observations["dns_error_hint"] = "servfail"
+	r.Layers["dns"].Observations.(map[string]any)["dns_error_hint"] = "servfail"
 
 	var buf bytes.Buffer
 	if err := Render(&buf, r); err != nil {
@@ -722,7 +723,7 @@ func TestContractDNSErrorHint(t *testing.T) {
 
 func TestContractHTTPResponseHeaders(t *testing.T) {
 	r := contractResult()
-	r.Layers["http"].Observations["response_headers"] = map[string]string{
+	r.Layers["http"].Observations.(map[string]any)["response_headers"] = map[string]string{
 		"Content-Type": "application/json",
 		"Server":       "nginx",
 	}

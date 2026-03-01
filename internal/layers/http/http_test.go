@@ -50,14 +50,14 @@ func TestHTTPSuccess(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	sc, ok := result.Observations["status_code"]
+	sc, ok := result.Observations.(map[string]any)["status_code"]
 	if !ok {
 		t.Fatal("missing status_code observation")
 	}
 	if sc.(int) != 200 {
 		t.Errorf("status_code = %v, want 200", sc)
 	}
-	method, ok := result.Observations["method"]
+	method, ok := result.Observations.(map[string]any)["method"]
 	if !ok {
 		t.Fatal("missing method observation")
 	}
@@ -296,8 +296,8 @@ func TestHTTPCustomMethodAndHeaders(t *testing.T) {
 	if receivedHeader != "test-value" {
 		t.Errorf("server received X-Custom = %q, want test-value", receivedHeader)
 	}
-	if m, ok := result.Observations["method"]; !ok || m.(string) != "POST" {
-		t.Errorf("method observation = %v, want POST", result.Observations["method"])
+	if m, ok := result.Observations.(map[string]any)["method"]; !ok || m.(string) != "POST" {
+		t.Errorf("method observation = %v, want POST", result.Observations.(map[string]any)["method"])
 	}
 }
 
@@ -391,7 +391,7 @@ func TestHTTP3xxStatusOk(t *testing.T) {
 	if result.Status != core.StatusOK {
 		t.Errorf("status = %q, want ok for 3xx; error = %v", result.Status, result.Error)
 	}
-	sc, ok := result.Observations["status_code"]
+	sc, ok := result.Observations.(map[string]any)["status_code"]
 	if !ok {
 		t.Fatal("missing status_code")
 	}
@@ -433,7 +433,7 @@ func TestHTTPProtocolObservation(t *testing.T) {
 	if result.Status != core.StatusOK {
 		t.Fatalf("status = %q, want ok; error = %v", result.Status, result.Error)
 	}
-	proto, ok := result.Observations["protocol"]
+	proto, ok := result.Observations.(map[string]any)["protocol"]
 	if !ok {
 		t.Fatal("missing protocol observation")
 	}
@@ -446,7 +446,7 @@ func TestHTTPProtocolObservation(t *testing.T) {
 // requestHeadersObs extracts request_headers from observations as map[string]string.
 func requestHeadersObs(t *testing.T, result *core.LayerResult) map[string]string {
 	t.Helper()
-	raw, ok := result.Observations["request_headers"]
+	raw, ok := result.Observations.(map[string]any)["request_headers"]
 	if !ok {
 		t.Fatal("missing request_headers observation")
 	}
@@ -670,7 +670,7 @@ func TestHTTPRequestHeadersEmptyMap(t *testing.T) {
 // responseHeadersObs extracts response_headers from observations as map[string]string.
 func responseHeadersObs(t *testing.T, result *core.LayerResult) map[string]string {
 	t.Helper()
-	raw, ok := result.Observations["response_headers"]
+	raw, ok := result.Observations.(map[string]any)["response_headers"]
 	if !ok {
 		t.Fatal("missing response_headers observation")
 	}

@@ -42,7 +42,7 @@ func TestReachabilityOK(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	reachable, ok := result.Observations["reachable"]
+	reachable, ok := result.Observations.(map[string]any)["reachable"]
 	if !ok {
 		t.Fatal("missing reachable observation")
 	}
@@ -50,7 +50,7 @@ func TestReachabilityOK(t *testing.T) {
 		t.Errorf("reachable = %v, want true", reachable)
 	}
 
-	method, ok := result.Observations["probe_method"]
+	method, ok := result.Observations.(map[string]any)["probe_method"]
 	if !ok {
 		t.Fatal("missing probe_method observation")
 	}
@@ -58,7 +58,7 @@ func TestReachabilityOK(t *testing.T) {
 		t.Errorf("probe_method = %v, want icmp", method)
 	}
 
-	rtt, ok := result.Observations["rtt_ms"]
+	rtt, ok := result.Observations.(map[string]any)["rtt_ms"]
 	if !ok {
 		t.Fatal("missing rtt_ms observation")
 	}
@@ -79,7 +79,7 @@ func TestReachabilityTimeout(t *testing.T) {
 		t.Errorf("error code = %v, want REACHABILITY_TIMEOUT", result.Error)
 	}
 
-	reachable, ok := result.Observations["reachable"]
+	reachable, ok := result.Observations.(map[string]any)["reachable"]
 	if !ok {
 		t.Fatal("missing reachable observation")
 	}
@@ -99,12 +99,12 @@ func TestReachabilityPermissionDenied(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	reachable := result.Observations["reachable"]
+	reachable := result.Observations.(map[string]any)["reachable"]
 	if reachable != nil {
 		t.Errorf("reachable = %v, want nil", reachable)
 	}
 
-	method, ok := result.Observations["probe_method"]
+	method, ok := result.Observations.(map[string]any)["probe_method"]
 	if !ok {
 		t.Fatal("missing probe_method observation")
 	}
@@ -112,7 +112,7 @@ func TestReachabilityPermissionDenied(t *testing.T) {
 		t.Errorf("probe_method = %v, want none", method)
 	}
 
-	skipReason, ok := result.Observations["skip_reason"]
+	skipReason, ok := result.Observations.(map[string]any)["skip_reason"]
 	if !ok {
 		t.Fatal("missing skip_reason observation")
 	}
@@ -132,7 +132,7 @@ func TestReachabilityError(t *testing.T) {
 		t.Errorf("error code = %v, want REACHABILITY_ERROR", result.Error)
 	}
 
-	reachable, ok := result.Observations["reachable"]
+	reachable, ok := result.Observations.(map[string]any)["reachable"]
 	if !ok {
 		t.Fatal("missing reachable observation")
 	}
@@ -180,7 +180,7 @@ func TestReachabilityPermissionDeniedEACCES(t *testing.T) {
 	if result.Status != core.StatusSkip {
 		t.Errorf("status = %q, want skip", result.Status)
 	}
-	skipReason := result.Observations["skip_reason"]
+	skipReason := result.Observations.(map[string]any)["skip_reason"]
 	if skipReason != "permission_denied" {
 		t.Errorf("skip_reason = %v, want permission_denied", skipReason)
 	}
