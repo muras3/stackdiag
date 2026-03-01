@@ -1,4 +1,4 @@
-# stdiag
+# stackdiag
 
 [![CI](https://github.com/muras3/stackdiag/actions/workflows/ci.yml/badge.svg)](https://github.com/muras3/stackdiag/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
@@ -9,7 +9,7 @@ Structured evidence for AI agents. Layer-by-layer network diagnostics for humans
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/before-after.svg">
-  <img alt="stdiag compresses 4 commands × 4 agent loops into 1 command × 1 loop" src="docs/before-after.svg" width="820">
+  <img alt="stackdiag compresses 4 commands × 4 agent loops into 1 command × 1 loop" src="docs/before-after.svg" width="820">
 </picture>
 
 ```bash
@@ -50,9 +50,9 @@ Exit codes tell you which layer broke — no JSON parsing needed:
 | 10 / 15 / 20 / 30 / 40 | DNS / Reachability / TCP / TLS / HTTP |
 | 1 | Tool error |
 
-## Why stdiag
+## Why stackdiag
 
-- **Compression, not replacement.** stdiag compresses the common `dig` → `openssl` → `curl` triage path into one deterministic command. ~80% fewer tokens than running each tool separately. Use raw tools when you need deep manual forensics.
+- **Compression, not replacement.** stackdiag compresses the common `dig` → `openssl` → `curl` triage path into one deterministic command. ~80% fewer tokens than running each tool separately. Use raw tools when you need deep manual forensics.
 
 - **Deterministic classification.** Error codes like `TLS_CERT_EXPIRED` and `DNS_NXDOMAIN` are type-based, not regex. Stable across OS, locale, and tool version. Agents can branch on `error.code` without string matching.
 

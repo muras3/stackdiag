@@ -57,9 +57,9 @@
   <!-- Divider -->
   <line class="divider" x1="410" y1="10" x2="410" y2="330"/>
 
-  <!-- Right panel: stdiag -->
+  <!-- Right panel: stackdiag -->
   <rect class="bg-right" x="420" y="0" width="400" height="340" rx="8"/>
-  <text class="title" x="440" y="28">stdiag: 1 command × 1 agent loop</text>
+  <text class="title" x="440" y="28">stackdiag: 1 command × 1 agent loop</text>
 
   <rect x="432" y="40" width="376" height="52" fill="none" stroke="#3fb950" stroke-width="1.5" rx="6"/>
   <text class="badge accent" x="748" y="56">loop 1</text>
