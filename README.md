@@ -77,6 +77,11 @@ Exit codes tell you which layer broke — no JSON parsing needed:
 - [Design Decisions](docs/design-decisions.md) — architecture rationale
 - [Benchmarks](bench/) — reproducible token efficiency measurements
 
+## Contribution & Security (Temporary)
+
+- Contributions via GitHub Issues/PRs are welcome. Detailed contribution guidelines will be added later.
+- For security issues, please do not open a public issue. Contact the maintainer via X (Twitter) DM: [@tomatolinux](https://x.com/tomatolinux)
+
 ## License
 
 [MIT](LICENSE)
