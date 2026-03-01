@@ -1,0 +1,22 @@
+bench.local:53 {
+    file /etc/coredns/bench.local.db
+    log
+    errors
+}
+
+# dns-timeout zone: forward all queries to the blackhole IP.
+# The blackhole drops UDP:53 packets, causing DNS resolution timeout.
+dns-timeout.local:53 {
+    forward . 172.28.0.201
+    log
+    errors
+}
+
+# Catch-all zone: forward all other queries to Docker's internal DNS.
+# This allows --dns-server 172.28.0.100 to resolve bare hostnames
+# like "nginx-healthy" that Docker's embedded DNS handles.
+.:53 {
+    forward . 127.0.0.11
+    log
+    errors
+}

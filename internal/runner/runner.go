@@ -31,8 +31,8 @@ func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 	start := time.Now()
 	allLayerNames := core.LayerOrder
 	result := &core.Result{
-		SchemaVersion: "v0.1",
-		StartedAt:     start.UTC(),
+		SchemaVersion: core.SchemaVersion,
+		StartedAt:     start.UTC().Truncate(time.Second),
 		Target:        pctx.Target.Original,
 		Layers:        make(map[string]*core.LayerResult),
 		Summary:       &core.Summary{},
@@ -58,8 +58,8 @@ func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 		lr := layer.Probe(pctx)
 		result.Layers[name] = lr
 
-		// Track first non-ok layer.
-		if firstNonOK == "" && !lr.Status.IsOK() {
+		// Track first non-ok layer (skip does not count as an issue).
+		if firstNonOK == "" && lr.Status != core.StatusOK && lr.Status != core.StatusSkip {
 			firstNonOK = name
 		}
 
@@ -96,7 +96,7 @@ func (r *Runner) RunOnce(pctx *core.ProbeContext) *core.Result {
 // cancel after each attempt to prevent context/timer goroutine leaks.
 func (r *Runner) RunCount(n int, factory func(attempt int) (*core.ProbeContext, context.CancelFunc)) *core.CountResult {
 	cr := &core.CountResult{
-		SchemaVersion: "v0.1",
+		SchemaVersion: core.SchemaVersion,
 		Count:         n,
 		Attempts:      make([]*core.AttemptResult, 0, n),
 		Statistics:    make(map[string]*core.LayerStatistics),

@@ -1,0 +1,1 @@
+SSL certificate hostname mismatch - the certificate does not match the requested hostname.

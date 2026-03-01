@@ -83,6 +83,10 @@ func TestRunAllSuccess(t *testing.T) {
 			t.Errorf("layer %q status = %q, want ok", name, lr.Status)
 		}
 	}
+	// Reachability layer should be present as skip (not in runner's layer list).
+	if result.Layers["reachability"] == nil {
+		t.Error("missing reachability layer")
+	}
 }
 
 func TestRunDNSFail(t *testing.T) {
@@ -181,8 +185,8 @@ func TestRunTCPOnly(t *testing.T) {
 		Target:  core.Target{Original: "tcp://example.com:8080", Scheme: "tcp", Host: "example.com", Port: 8080},
 	})
 
-	if len(result.Layers) != 4 {
-		t.Errorf("layers count = %d, want 4", len(result.Layers))
+	if len(result.Layers) != 5 {
+		t.Errorf("layers count = %d, want 5", len(result.Layers))
 	}
 	if result.Layers["tls"].Status != core.StatusSkip {
 		t.Errorf("tls status = %q, want skip", result.Layers["tls"].Status)
@@ -207,10 +211,13 @@ func TestRunDNSTCPIncludesSkippedTLSHTTP(t *testing.T) {
 		Target:  core.Target{Original: "tcp://example.com:8080", Scheme: "tcp", Host: "example.com", Port: 8080},
 	})
 
-	for _, name := range []string{"dns", "tcp", "tls", "http"} {
+	for _, name := range []string{"dns", "reachability", "tcp", "tls", "http"} {
 		if _, ok := result.Layers[name]; !ok {
 			t.Fatalf("missing layer %q", name)
 		}
+	}
+	if result.Layers["reachability"].Status != core.StatusSkip {
+		t.Errorf("reachability status = %q, want skip", result.Layers["reachability"].Status)
 	}
 	if result.Layers["tls"].Status != core.StatusSkip {
 		t.Errorf("tls status = %q, want skip", result.Layers["tls"].Status)
@@ -304,7 +311,7 @@ func TestRunEmptyLayers(t *testing.T) {
 	})
 
 	// All layers should be skip.
-	for _, name := range []string{"dns", "tcp", "tls", "http"} {
+	for _, name := range []string{"dns", "reachability", "tcp", "tls", "http"} {
 		lr, ok := result.Layers[name]
 		if !ok {
 			t.Errorf("missing layer %q", name)
@@ -349,7 +356,7 @@ func TestRunCountBasic(t *testing.T) {
 			t.Errorf("Attempt[%d].Attempt = %d, want %d", i, a.Attempt, i+1)
 		}
 	}
-	// All layers should have statistics with 0 loss
+	// Executed layers should have statistics with 0 loss.
 	for _, name := range []string{"dns", "tcp", "tls", "http"} {
 		ls, ok := cr.Statistics[name]
 		if !ok {
@@ -365,6 +372,10 @@ func TestRunCountBasic(t *testing.T) {
 		if ls.P50MS == nil {
 			t.Errorf("%s P50MS should not be nil", name)
 		}
+	}
+	// Reachability layer should have statistics (skip counts since not in runner).
+	if _, ok := cr.Statistics["reachability"]; !ok {
+		t.Error("missing statistics for reachability")
 	}
 }
 
@@ -524,8 +535,9 @@ func TestRunStartedAtAndWallClock(t *testing.T) {
 	})
 	after := time.Now()
 
-	if result.StartedAt.Before(before) || result.StartedAt.After(after) {
-		t.Errorf("StartedAt = %v, expected between %v and %v", result.StartedAt, before, after)
+	// StartedAt is truncated to second precision, so compare with truncated bounds.
+	if result.StartedAt.Before(before.Truncate(time.Second)) || result.StartedAt.After(after) {
+		t.Errorf("StartedAt = %v, expected between %v and %v", result.StartedAt, before.Truncate(time.Second), after)
 	}
 	if result.Summary.WallClockMS <= 0 {
 		t.Errorf("WallClockMS = %v, want > 0", result.Summary.WallClockMS)

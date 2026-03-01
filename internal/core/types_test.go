@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -48,8 +49,8 @@ func TestStatusShouldContinue(t *testing.T) {
 	if StatusFail.ShouldContinue() {
 		t.Error("StatusFail should not continue")
 	}
-	if StatusSkip.ShouldContinue() {
-		t.Error("StatusSkip should not continue")
+	if !StatusSkip.ShouldContinue() {
+		t.Error("StatusSkip should continue (skip is non-blocking)")
 	}
 }
 
@@ -104,10 +105,11 @@ func TestAttemptResultMarshalJSON(t *testing.T) {
 		Attempt:   1,
 		StartedAt: time.Date(2026, 2, 27, 8, 0, 0, 0, time.UTC),
 		Layers: map[string]*LayerResult{
-			"http": {Status: StatusOK, DurationMS: 57, Observations: map[string]any{}, Error: nil},
-			"dns":  {Status: StatusOK, DurationMS: 9, Observations: map[string]any{}, Error: nil},
-			"tls":  {Status: StatusOK, DurationMS: 31, Observations: map[string]any{}, Error: nil},
-			"tcp":  {Status: StatusOK, DurationMS: 16, Observations: map[string]any{}, Error: nil},
+			"http":         {Status: StatusOK, DurationMS: 57, Observations: map[string]any{}, Error: nil},
+			"dns":          {Status: StatusOK, DurationMS: 9, Observations: map[string]any{}, Error: nil},
+			"reachability": {Status: StatusOK, DurationMS: 4, Observations: map[string]any{}, Error: nil},
+			"tls":          {Status: StatusOK, DurationMS: 31, Observations: map[string]any{}, Error: nil},
+			"tcp":          {Status: StatusOK, DurationMS: 16, Observations: map[string]any{}, Error: nil},
 		},
 		Summary: &Summary{WallClockMS: 122, ExitCode: 0},
 	}
@@ -117,7 +119,7 @@ func TestAttemptResultMarshalJSON(t *testing.T) {
 		t.Fatalf("MarshalJSON error: %v", err)
 	}
 
-	// Verify layer order: dns must come before tcp, tcp before tls, tls before http
+	// Verify layer order: dns→reachability→tcp→tls→http
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(b, &raw); err != nil {
 		t.Fatalf("Unmarshal error: %v", err)
@@ -125,12 +127,13 @@ func TestAttemptResultMarshalJSON(t *testing.T) {
 
 	s := string(b)
 	dnsIdx := indexOf(s, `"dns"`)
+	reachIdx := indexOf(s, `"reachability"`)
 	tcpIdx := indexOf(s, `"tcp"`)
 	tlsIdx := indexOf(s, `"tls"`)
 	httpIdx := indexOf(s, `"http"`)
 
-	if dnsIdx >= tcpIdx || tcpIdx >= tlsIdx || tlsIdx >= httpIdx {
-		t.Errorf("layers not in order dns→tcp→tls→http in JSON: %s", s)
+	if dnsIdx >= reachIdx || reachIdx >= tcpIdx || tcpIdx >= tlsIdx || tlsIdx >= httpIdx {
+		t.Errorf("layers not in order dns→reachability→tcp→tls→http in JSON: %s", s)
 	}
 }
 
@@ -182,10 +185,11 @@ func TestCountResultStatisticsOrder(t *testing.T) {
 		ExitCode:      0,
 		Attempts:      []*AttemptResult{},
 		Statistics: map[string]*LayerStatistics{
-			"http": {SampleCount: 1},
-			"dns":  {SampleCount: 1},
-			"tls":  {SampleCount: 1},
-			"tcp":  {SampleCount: 1},
+			"http":         {SampleCount: 1},
+			"dns":          {SampleCount: 1},
+			"reachability": {SampleCount: 1},
+			"tls":          {SampleCount: 1},
+			"tcp":          {SampleCount: 1},
 		},
 	}
 
@@ -196,16 +200,17 @@ func TestCountResultStatisticsOrder(t *testing.T) {
 
 	s := string(b)
 	dnsIdx := indexOf(s, `"dns"`)
+	reachIdx := indexOf(s, `"reachability"`)
 	tcpIdx := indexOf(s, `"tcp"`)
 	tlsIdx := indexOf(s, `"tls"`)
 	httpIdx := indexOf(s, `"http"`)
 
-	if dnsIdx >= tcpIdx || tcpIdx >= tlsIdx || tlsIdx >= httpIdx {
-		t.Errorf("statistics not in order dns→tcp→tls→http in JSON: %s", s)
+	if dnsIdx >= reachIdx || reachIdx >= tcpIdx || tcpIdx >= tlsIdx || tlsIdx >= httpIdx {
+		t.Errorf("statistics not in order dns→reachability→tcp→tls→http in JSON: %s", s)
 	}
 }
 
-func TestLayerStatisticsOmitsNilPercentiles(t *testing.T) {
+func TestLayerStatisticsNilPercentilesEmitNull(t *testing.T) {
 	ls := &LayerStatistics{
 		SuccessCount: 0,
 		FailCount:    3,
@@ -219,11 +224,62 @@ func TestLayerStatisticsOmitsNilPercentiles(t *testing.T) {
 	}
 
 	s := string(b)
-	if indexOf(s, "p50_ms") != -1 {
-		t.Errorf("nil p50_ms should be omitted, got: %s", s)
+	if !strings.Contains(s, `"p50_ms":null`) {
+		t.Errorf("nil p50_ms should emit null, got: %s", s)
 	}
-	if indexOf(s, "p95_ms") != -1 {
-		t.Errorf("nil p95_ms should be omitted, got: %s", s)
+	if !strings.Contains(s, `"p95_ms":null`) {
+		t.Errorf("nil p95_ms should emit null, got: %s", s)
+	}
+}
+
+func TestSchemaVersionV02(t *testing.T) {
+	if SchemaVersion != "v0.1" {
+		t.Errorf("SchemaVersion = %q, want v0.1", SchemaVersion)
+	}
+}
+
+func TestLayerOrderV02(t *testing.T) {
+	expected := []string{"dns", "reachability", "tcp", "tls", "http"}
+	if len(LayerOrder) != len(expected) {
+		t.Fatalf("LayerOrder length = %d, want %d", len(LayerOrder), len(expected))
+	}
+	for i, name := range expected {
+		if LayerOrder[i] != name {
+			t.Errorf("LayerOrder[%d] = %q, want %q", i, LayerOrder[i], name)
+		}
+	}
+}
+
+func TestResultMarshalJSONV02(t *testing.T) {
+	now := time.Now().UTC()
+	r := &Result{
+		SchemaVersion: "v0.1",
+		StartedAt:     now,
+		Target:        "https://example.com",
+		Layers: map[string]*LayerResult{
+			"http":         {Status: StatusOK, DurationMS: 57, Observations: map[string]any{}, Error: nil},
+			"dns":          {Status: StatusOK, DurationMS: 9, Observations: map[string]any{}, Error: nil},
+			"reachability": {Status: StatusOK, DurationMS: 4, Observations: map[string]any{}, Error: nil},
+			"tls":          {Status: StatusOK, DurationMS: 31, Observations: map[string]any{}, Error: nil},
+			"tcp":          {Status: StatusOK, DurationMS: 16, Observations: map[string]any{}, Error: nil},
+		},
+		Summary: &Summary{WallClockMS: 122, ExitCode: 0},
+	}
+
+	b, err := json.Marshal(r)
+	if err != nil {
+		t.Fatalf("MarshalJSON error: %v", err)
+	}
+
+	s := string(b)
+	dnsIdx := indexOf(s, `"dns"`)
+	reachIdx := indexOf(s, `"reachability"`)
+	tcpIdx := indexOf(s, `"tcp"`)
+	tlsIdx := indexOf(s, `"tls"`)
+	httpIdx := indexOf(s, `"http"`)
+
+	if dnsIdx >= reachIdx || reachIdx >= tcpIdx || tcpIdx >= tlsIdx || tlsIdx >= httpIdx {
+		t.Errorf("layers not in order dns→reachability→tcp→tls→http in JSON: %s", s)
 	}
 }
 

@@ -15,19 +15,21 @@ const (
 
 // Config holds parsed CLI options.
 type Config struct {
-	Target    string
-	JSON      bool
-	Method    string
-	Headers   map[string]string
-	Timeout   int
-	Insecure  bool
-	Redact    bool
-	Version   bool
-	Help      bool
-	BearerEnv string // --bearer-env ENV_VAR
-	BasicEnv  string // --basic-env ENV_VAR
-	TLSScan   bool   // --tls-scan
-	Count     int    // --count N
+	Target     string
+	JSON       bool
+	JSONPretty bool
+	Method     string
+	Headers    map[string]string
+	Timeout    int
+	Insecure   bool
+	Redact     bool
+	Version    bool
+	Help       bool
+	BearerEnv  string // --bearer-env ENV_VAR
+	BasicEnv   string // --basic-env ENV_VAR
+	TLSScan    bool   // --tls-scan
+	Count      int    // --count N
+	DNSServer  string // --dns-server host:port
 }
 
 // HelpText returns the full help message for stdiag.
@@ -39,13 +41,14 @@ USAGE:
   stdiag <url> [options]
 
 TARGETS:
-  https://host/path     Full HTTPS check (DNS → TCP → TLS → HTTP)
-  http://host/path      HTTP check (DNS → TCP → HTTP, no TLS)
-  tcp://host:port       TCP connectivity only (DNS → TCP)
+  https://host/path     Full HTTPS check (DNS → Reachability → TCP → TLS → HTTP)
+  http://host/path      HTTP check (DNS → Reachability → TCP → HTTP, no TLS)
+  tcp://host:port       TCP connectivity only (DNS → Reachability → TCP)
   host                  Bare hostname defaults to https://
 
 OPTIONS:
   --json                Output as JSON (default: table)
+  --json-pretty         Output as pretty-printed JSON
   --method METHOD       HTTP method (default: GET)
   --header KEY:VALUE    HTTP header (repeatable)
   --timeout N           Timeout in seconds (1-300, default: 10)
@@ -57,6 +60,9 @@ AUTHENTICATION:
   --bearer-env VAR      Read Bearer token from environment variable
   --basic-env VAR       Read Basic auth (user:pass) from environment variable
 
+DNS:
+  --dns-server HOST     Use custom DNS resolver (ip:port or ip, default port 53)
+
 DIAGNOSTICS:
   --tls-scan            Probe TLS 1.0/1.1/1.2/1.3 version support
   --count N             Run N attempts and show statistics
@@ -66,6 +72,7 @@ EXIT CODES:
   1   Tool error
   2   Warning (e.g. certificate expiring soon)
   10  DNS failure
+  15  Reachability failure
   20  TCP failure
   30  TLS failure
   40  HTTP failure
@@ -127,6 +134,7 @@ func ParseArgs(args []string) (*Config, error) {
 	var countStr string
 
 	fs.BoolVar(&cfg.JSON, "json", false, "output as JSON")
+	fs.BoolVar(&cfg.JSONPretty, "json-pretty", false, "output as pretty-printed JSON")
 	fs.StringVar(&cfg.Method, "method", "GET", "HTTP method")
 	fs.Var(&headers, "header", "HTTP header (repeatable, format: Key: Value)")
 	fs.IntVar(&cfg.Timeout, "timeout", 10, "timeout in seconds")
@@ -138,12 +146,18 @@ func ParseArgs(args []string) (*Config, error) {
 	fs.StringVar(&cfg.BasicEnv, "basic-env", "", "environment variable for Basic auth")
 	fs.BoolVar(&cfg.TLSScan, "tls-scan", false, "probe TLS version support")
 	fs.StringVar(&countStr, "count", "", "number of attempts")
+	fs.StringVar(&cfg.DNSServer, "dns-server", "", "custom DNS resolver address")
 
 	if err := fs.Parse(flagArgs); err != nil {
 		if err.Error() == "flag: help requested" {
 			return &Config{Help: true}, nil
 		}
 		return nil, err
+	}
+
+	// --json-pretty implies --json.
+	if cfg.JSONPretty {
+		cfg.JSON = true
 	}
 
 	// --no-redact is the canonical toggle; --redact is just sugar.
@@ -212,6 +226,9 @@ func ParseArgs(args []string) (*Config, error) {
 	if len(positional) == 0 {
 		return nil, fmt.Errorf("target URL required")
 	}
+	if len(positional) > 1 {
+		return nil, fmt.Errorf("unexpected arguments: %s", strings.Join(positional[1:], ", "))
+	}
 	cfg.Target = positional[0]
 	if strings.TrimSpace(cfg.Target) == "" {
 		return nil, fmt.Errorf("target URL required")
@@ -223,7 +240,7 @@ func ParseArgs(args []string) (*Config, error) {
 // needsValue returns true for flags that require an argument.
 func needsValue(name string) bool {
 	switch name {
-	case "method", "header", "timeout", "bearer-env", "basic-env", "count":
+	case "method", "header", "timeout", "bearer-env", "basic-env", "count", "dns-server":
 		return true
 	}
 	return false

@@ -66,7 +66,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		return &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   0,
-			Observations: map[string]any{"method": method},
+			Observations: &core.HTTPObservations{Method: method},
 			Error:        &core.ProbeError{Code: "HTTP_ERROR", Message: err.Error()},
 		}
 	}
@@ -89,18 +89,19 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		return &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   durationMS,
-			Observations: map[string]any{"method": method},
+			Observations: &core.HTTPObservations{Method: method},
 			Error:        classifyHTTPError(err),
 		}
 	}
 	defer resp.Body.Close()
 
-	obs := map[string]any{
-		"method":          method,
-		"protocol":        resp.Proto,
-		"status_code":     resp.StatusCode,
-		"status_text":     http.StatusText(resp.StatusCode),
-		"request_headers": buildRequestHeaders(pctx.Headers, pctx.Redact),
+	obs := &core.HTTPObservations{
+		Method:          method,
+		Protocol:        resp.Proto,
+		StatusCode:      resp.StatusCode,
+		StatusText:      http.StatusText(resp.StatusCode),
+		RequestHeaders:  buildRequestHeaders(pctx.Headers, pctx.Redact),
+		ResponseHeaders: buildResponseHeaders(resp.Header, pctx.Redact),
 	}
 
 	if resp.StatusCode >= 400 {
@@ -141,6 +142,46 @@ func buildURL(pctx *core.ProbeContext) string {
 	}
 
 	return fmt.Sprintf("%s://%s%s", scheme, hostPort, path)
+}
+
+// importantResponseHeaders is the allowlist of response headers to capture.
+// Keys use http.CanonicalHeaderKey casing to match net/http's canonical form,
+// avoiding a strings.ToLower call on every header during lookup.
+var importantResponseHeaders = map[string]bool{
+	"Content-Type":              true,
+	"Server":                    true,
+	"X-Request-Id":              true,
+	"X-Correlation-Id":          true,
+	"Retry-After":               true,
+	"Www-Authenticate":          true,
+	"Location":                  true,
+	"X-Ratelimit-Limit":         true,
+	"X-Ratelimit-Remaining":     true,
+	"X-Ratelimit-Reset":         true,
+	"Strict-Transport-Security": true,
+	"X-Content-Type-Options":    true,
+	"X-Frame-Options":           true,
+	"Cache-Control":             true,
+	"Age":                       true,
+	"Cf-Ray":                    true,
+	"X-Served-By":               true,
+}
+
+// buildResponseHeaders returns allowlisted response headers, with sensitive
+// values masked when redact is true.
+func buildResponseHeaders(header http.Header, redact bool) map[string]string {
+	result := make(map[string]string)
+	for name, values := range header {
+		if !importantResponseHeaders[name] {
+			continue
+		}
+		val := strings.Join(values, ", ")
+		if redact && isSensitiveHeader(name) {
+			val = "[REDACTED]"
+		}
+		result[name] = val
+	}
+	return result
 }
 
 func classifyHTTPError(err error) *core.ProbeError {
@@ -186,6 +227,7 @@ func isSensitiveHeader(name string) bool {
 		"cookie",
 		"proxy-authorization",
 		"set-cookie",
+		"x-access-token",
 		"x-api-key",
 		"x-auth-token":
 		return true
@@ -218,6 +260,9 @@ func classifyStatusCode(code int) *core.ProbeError {
 	}
 
 	// Generic categories.
+	if code >= 400 && code < 500 {
+		return &core.ProbeError{Code: "HTTP_4XX", Message: msg}
+	}
 	if code >= 500 {
 		return &core.ProbeError{Code: "HTTP_5XX", Message: msg}
 	}

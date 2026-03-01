@@ -66,20 +66,23 @@ func NewDefault() *Layer {
 func (l *Layer) Name() string { return "tls" }
 
 // Probe performs the TLS handshake and inspects the certificate.
+// It uses a 2-phase approach: first handshake with InsecureSkipVerify=true
+// to always collect connection state, then manual cert validation.
 func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	addr := buildAddr(pctx)
 	cfg := &tls.Config{
 		ServerName:         pctx.Target.Host,
-		InsecureSkipVerify: pctx.Insecure,
+		InsecureSkipVerify: true, // Phase 1: always skip verify; validate manually below
 		MinVersion:         tls.VersionTLS12,
 	}
 
 	state, durationMS, err := l.handshaker.Handshake(pctx.Context, addr, cfg)
 	if err != nil {
+		// Handshake itself failed (protocol error, timeout, etc.) — no state available
 		result := &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   durationMS,
-			Observations: map[string]any{},
+			Observations: &core.TLSObservations{},
 			Error:        classifyTLSError(err),
 		}
 		if pctx.TLSScan {
@@ -88,7 +91,49 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		return result
 	}
 
-	obs := buildObservations(state, pctx.Target.Host)
+	// Start with verified=false; set to true only after successful Phase 2 validation.
+	verified := false
+	obs := buildObservations(state, pctx.Target.Host, verified)
+
+	// Phase 2: Manual cert validation (unless insecure mode)
+	if !pctx.Insecure {
+		if len(state.PeerCertificates) == 0 {
+			return &core.LayerResult{
+				Status:       core.StatusFail,
+				DurationMS:   durationMS,
+				Observations: obs,
+				Error:        &core.ProbeError{Code: "TLS_NO_CERTIFICATES", Message: "server presented no certificates"},
+			}
+		}
+
+		leaf := state.PeerCertificates[0]
+
+		verifyOpts := x509.VerifyOptions{
+			DNSName:       pctx.Target.Host,
+			Intermediates: x509.NewCertPool(),
+			Roots:         cfg.RootCAs, // nil = system roots; test handshakers inject custom roots
+		}
+		for _, cert := range state.PeerCertificates[1:] {
+			verifyOpts.Intermediates.AddCert(cert)
+		}
+
+		if _, verifyErr := leaf.Verify(verifyOpts); verifyErr != nil {
+			result := &core.LayerResult{
+				Status:       core.StatusFail,
+				DurationMS:   durationMS,
+				Observations: obs,
+				Error:        classifyTLSError(verifyErr),
+			}
+			if pctx.TLSScan {
+				l.performTLSScan(pctx, addr, result)
+			}
+			return result
+		}
+
+		// Verification passed — update cert_verified in observations.
+		verified = true
+		obs.CertVerified = &verified
+	}
 
 	// Check certificate expiry, not-yet-valid, and hostname even on successful handshake.
 	if len(state.PeerCertificates) > 0 {
@@ -170,18 +215,48 @@ func buildAddr(pctx *core.ProbeContext) string {
 	return net.JoinHostPort(host, strconv.Itoa(pctx.Target.Port))
 }
 
-// buildObservations creates the observations map from the TLS connection state.
-func buildObservations(state *tls.ConnectionState, serverName string) map[string]any {
-	obs := map[string]any{
-		"version":      tlsVersionString(state.Version),
-		"cipher_suite": tls.CipherSuiteName(state.CipherSuite),
+// buildObservations creates the typed TLS observations from the connection state.
+// The verified parameter indicates whether the certificate was validated through
+// normal verification (true) or retrieved via InsecureSkipVerify (false).
+func buildObservations(state *tls.ConnectionState, serverName string, verified bool) *core.TLSObservations {
+	obs := &core.TLSObservations{
+		Version:     tlsVersionString(state.Version),
+		CipherSuite: tls.CipherSuiteName(state.CipherSuite),
 	}
 
 	if len(state.PeerCertificates) > 0 {
 		leaf := state.PeerCertificates[0]
 		daysUntilExpiry := int(time.Until(leaf.NotAfter).Hours() / 24)
-		obs["cert_days_until_expiry"] = daysUntilExpiry
-		obs["cert_hostname_match"] = certMatchesHost(leaf, serverName)
+		hostnameMatch := certMatchesHost(leaf, serverName)
+		subject := leaf.Subject.CommonName
+		issuer := leaf.Issuer.CommonName
+		notAfter := leaf.NotAfter.UTC().Format(time.RFC3339)
+		notBefore := leaf.NotBefore.UTC().Format(time.RFC3339)
+
+		obs.CertDaysUntilExpiry = &daysUntilExpiry
+		obs.CertHostnameMatch = &hostnameMatch
+		obs.CertVerified = &verified
+		obs.CertSubject = &subject
+		obs.CertIssuer = &issuer
+		obs.CertNotAfter = &notAfter
+		obs.CertNotBefore = &notBefore
+
+		san := leaf.DNSNames
+		if san == nil {
+			san = []string{}
+		}
+		obs.CertSAN = &san
+
+		// cert_chain: summary of each certificate in the chain
+		chain := make([]core.CertChainEntry, len(state.PeerCertificates))
+		for i, cert := range state.PeerCertificates {
+			chain[i] = core.CertChainEntry{
+				Subject:  cert.Subject.CommonName,
+				Issuer:   cert.Issuer.CommonName,
+				NotAfter: cert.NotAfter.UTC().Format(time.RFC3339),
+			}
+		}
+		obs.CertChain = chain
 	}
 
 	return obs
@@ -193,21 +268,33 @@ func certMatchesHost(cert *x509.Certificate, host string) bool {
 }
 
 // classifyTLSError converts a TLS error into a structured ProbeError.
+// Uses Go type assertions for x509 errors where possible for reliability.
 func classifyTLSError(err error) *core.ProbeError {
 	msg := err.Error()
 
+	// Type-based classification (preferred — reliable across Go versions).
+	// Note: x509.HostnameError and x509.UnknownAuthorityError implement error
+	// on the value receiver, so errors.As targets must be value types.
+	var hostErr x509.HostnameError
+	if errors.As(err, &hostErr) {
+		return &core.ProbeError{Code: "TLS_HOSTNAME_MISMATCH", Message: msg}
+	}
+
+	var unknownAuth x509.UnknownAuthorityError
+	if errors.As(err, &unknownAuth) {
+		return &core.ProbeError{Code: "TLS_UNTRUSTED_CHAIN", Message: msg}
+	}
+
+	// String-based classification (for errors without exported types)
 	switch {
 	case isCertNotYetValid(msg):
 		return &core.ProbeError{Code: "TLS_CERT_NOT_YET_VALID", Message: msg}
 	case isCertExpired(msg):
 		return &core.ProbeError{Code: "TLS_CERT_EXPIRED", Message: msg}
-	case isHostnameMismatch(msg):
-		return &core.ProbeError{Code: "TLS_HOSTNAME_MISMATCH", Message: msg}
-	case isUntrustedChain(msg):
-		return &core.ProbeError{Code: "TLS_UNTRUSTED_CHAIN", Message: msg}
 	case isHandshakeTimeout(err):
 		return &core.ProbeError{Code: "TLS_HANDSHAKE_TIMEOUT", Message: msg}
 	case isProtocolError(msg):
+		// TLS_PROTOCOL_ERROR is a best-effort classification (not type-based)
 		return &core.ProbeError{Code: "TLS_PROTOCOL_ERROR", Message: msg}
 	default:
 		return &core.ProbeError{Code: "TLS_ERROR", Message: msg}
@@ -225,21 +312,11 @@ func isCertExpired(msg string) bool {
 		strings.Contains(msg, "x509: certificate has expired or is not yet valid")
 }
 
-func isHostnameMismatch(msg string) bool {
-	return strings.Contains(msg, "x509: certificate is valid for") ||
-		strings.Contains(msg, "doesn't match") ||
-		strings.Contains(msg, "certificate is not valid for")
-}
-
-func isUntrustedChain(msg string) bool {
-	return strings.Contains(msg, "x509: certificate signed by unknown authority") ||
-		strings.Contains(msg, "unknown authority")
-}
-
 func isProtocolError(msg string) bool {
 	return strings.Contains(msg, "protocol version") ||
 		strings.Contains(msg, "oversized record") ||
-		strings.Contains(msg, "tls: alert")
+		strings.Contains(msg, "tls: alert") ||
+		strings.Contains(msg, "first record does not look like a TLS handshake")
 }
 
 func isHandshakeTimeout(err error) bool {
@@ -314,12 +391,13 @@ func (l *Layer) performTLSScan(pctx *core.ProbeContext, addr string, result *cor
 		deprecatedEnabled = []string{}
 	}
 
-	result.Observations["tls_scan"] = map[string]any{
+	tlsScanData := map[string]any{
 		"performed":                   true,
 		"attempts":                    attempts,
 		"supported_versions":          supportedVersions,
 		"deprecated_versions_enabled": deprecatedEnabled,
 	}
+	result.Observations.(*core.TLSObservations).TLSScan = tlsScanData
 
 	// If deprecated versions found and normal probe was ok → warn
 	if len(deprecatedEnabled) > 0 && result.Status == core.StatusOK {

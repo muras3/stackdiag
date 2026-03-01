@@ -47,7 +47,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		return &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   durationMS,
-			Observations: map[string]any{},
+			Observations: &core.TCPObservations{},
 			Error:        classifyTCPError(err),
 		}
 	}
@@ -73,9 +73,9 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	return &core.LayerResult{
 		Status:     core.StatusOK,
 		DurationMS: durationMS,
-		Observations: map[string]any{
-			"remote_ip":   remoteIP,
-			"remote_port": remotePort,
+		Observations: &core.TCPObservations{
+			RemoteIP:   remoteIP,
+			RemotePort: remotePort,
 		},
 		Error: nil,
 	}
@@ -85,7 +85,7 @@ func classifyTCPError(err error) *core.ProbeError {
 	// Check for timeout via net.Error interface.
 	var netErr net.Error
 	if errors.As(err, &netErr) && netErr.Timeout() {
-		return &core.ProbeError{Code: "TCP_TIMEOUT", Message: err.Error()}
+		return &core.ProbeError{Code: "TCP_TIMEOUT", Message: "connection timed out"}
 	}
 
 	// Use syscall errno for robust, OS-independent classification.
@@ -93,17 +93,14 @@ func classifyTCPError(err error) *core.ProbeError {
 	if errors.As(err, &opErr) {
 		var sysErr *os.SyscallError
 		if errors.As(opErr.Err, &sysErr) {
-			if errors.Is(sysErr.Err, syscall.ECONNRESET) {
-				return &core.ProbeError{Code: "TCP_RESET", Message: err.Error()}
-			}
 			if errors.Is(sysErr.Err, syscall.ECONNREFUSED) {
-				return &core.ProbeError{Code: "TCP_REFUSED", Message: err.Error()}
+				return &core.ProbeError{Code: "TCP_REFUSED", Message: "connection refused"}
 			}
 			if errors.Is(sysErr.Err, syscall.EHOSTUNREACH) {
-				return &core.ProbeError{Code: "TCP_HOST_UNREACHABLE", Message: err.Error()}
+				return &core.ProbeError{Code: "TCP_HOST_UNREACHABLE", Message: "host unreachable"}
 			}
 			if errors.Is(sysErr.Err, syscall.ENETUNREACH) {
-				return &core.ProbeError{Code: "TCP_NETWORK_UNREACHABLE", Message: err.Error()}
+				return &core.ProbeError{Code: "TCP_NETWORK_UNREACHABLE", Message: "network unreachable"}
 			}
 		}
 	}

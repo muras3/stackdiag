@@ -1,0 +1,85 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 820 340" font-family="ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace" font-size="13">
+  <style>
+    .bg-left  { fill: #1a1a2e; }
+    .bg-right { fill: #0d1117; }
+    .title    { fill: #8b949e; font-size: 11px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase; }
+    .cmd      { fill: #c9d1d9; font-size: 12.5px; }
+    .prompt   { fill: #6e7681; }
+    .highlight{ fill: #58a6ff; }
+    .dim      { fill: #484f58; }
+    .accent   { fill: #3fb950; }
+    .warn     { fill: #d29922; }
+    .arrow    { fill: none; stroke: #58a6ff; stroke-width: 2; marker-end: url(#arrowhead); }
+    .divider  { stroke: #30363d; stroke-width: 1; stroke-dasharray: 4 4; }
+    .badge    { font-size: 11px; font-weight: 600; }
+    .loop-box { fill: none; stroke: #d29922; stroke-width: 1.5; rx: 6; stroke-dasharray: 6 3; }
+    .result-box { fill: #161b22; stroke: #30363d; stroke-width: 1; rx: 6; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#58a6ff"/>
+    </marker>
+  </defs>
+
+  <!-- Left panel: Manual -->
+  <rect class="bg-left" x="0" y="0" width="400" height="340" rx="8"/>
+  <text class="title" x="20" y="28">Manual: 4 commands × 4 agent loops</text>
+
+  <!-- Loop indicators -->
+  <rect class="loop-box" x="12" y="40" width="376" height="52"/>
+  <text class="badge warn" x="330" y="56">loop 1</text>
+  <text class="prompt" x="20" y="60">$</text>
+  <text class="cmd" x="32" y="60">dig api.example.com</text>
+  <text class="dim" x="20" y="78">→ agent parses raw text, decides next step</text>
+
+  <rect class="loop-box" x="12" y="98" width="376" height="52"/>
+  <text class="badge warn" x="330" y="114">loop 2</text>
+  <text class="prompt" x="20" y="118">$</text>
+  <text class="cmd" x="32" y="118">ping -c3 api.example.com</text>
+  <text class="dim" x="20" y="136">→ agent parses raw text, decides next step</text>
+
+  <rect class="loop-box" x="12" y="156" width="376" height="52"/>
+  <text class="badge warn" x="330" y="172">loop 3</text>
+  <text class="prompt" x="20" y="176">$</text>
+  <text class="cmd" x="32" y="176">openssl s_client -connect …</text>
+  <text class="dim" x="20" y="194">→ agent parses raw text, decides next step</text>
+
+  <rect class="loop-box" x="12" y="214" width="376" height="52"/>
+  <text class="badge warn" x="330" y="230">loop 4</text>
+  <text class="prompt" x="20" y="234">$</text>
+  <text class="cmd" x="32" y="234">curl -sv https://api.example.com</text>
+  <text class="dim" x="20" y="252">→ agent parses raw text, makes diagnosis</text>
+
+  <rect class="result-box" x="12" y="276" width="376" height="50"/>
+  <text class="warn" x="20" y="296">~2,000 tokens consumed</text>
+  <text class="dim" x="20" y="314">unstructured text, no error classification</text>
+
+  <!-- Divider -->
+  <line class="divider" x1="410" y1="10" x2="410" y2="330"/>
+
+  <!-- Right panel: stackdiag -->
+  <rect class="bg-right" x="420" y="0" width="400" height="340" rx="8"/>
+  <text class="title" x="440" y="28">stackdiag: 1 command × 1 agent loop</text>
+
+  <rect x="432" y="40" width="376" height="52" fill="none" stroke="#3fb950" stroke-width="1.5" rx="6"/>
+  <text class="badge accent" x="748" y="56">loop 1</text>
+  <text class="prompt" x="440" y="60">$</text>
+  <text class="cmd" x="452" y="60">stdiag --json https://api.example.com</text>
+  <text class="dim" x="440" y="78">→ structured JSON, deterministic error code</text>
+
+  <!-- JSON output preview -->
+  <rect class="result-box" x="432" y="104" width="376" height="170"/>
+  <text class="dim" x="444" y="124">{</text>
+  <text class="dim" x="456" y="142">"layers": {</text>
+  <text class="dim" x="468" y="160">"dns":   { "status": "</text><text class="accent" x="634" y="160">ok</text><text class="dim" x="650" y="160">" },</text>
+  <text class="dim" x="468" y="178">"tcp":   { "status": "</text><text class="accent" x="634" y="178">ok</text><text class="dim" x="650" y="178">" },</text>
+  <text class="dim" x="468" y="196">"tls":   { "status": "</text><text class="highlight" x="634" y="196">fail</text><text class="dim" x="660" y="196">",</text>
+  <text class="dim" x="480" y="214">"error": { "code": "</text><text class="highlight" x="649" y="214">TLS_CERT_EXPIRED</text><text class="dim" x="786" y="214">"}</text>
+  <text class="dim" x="456" y="232">},</text>
+  <text class="dim" x="456" y="250">"exit_code":</text><text class="highlight" x="544" y="250">30</text>
+  <text class="dim" x="444" y="268">}</text>
+
+  <rect class="result-box" x="432" y="281" width="376" height="50"/>
+  <text class="accent" x="440" y="301">~400 tokens consumed</text>
+  <text class="dim" x="440" y="319">typed fields, schema contract, exit code</text>
+</svg>

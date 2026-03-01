@@ -1,0 +1,351 @@
+[
+  {
+    "name": "healthy_https",
+    "target": "https://nginx-healthy",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "required_evidence": [
+      "query_name",
+      "answers",
+      "probe_method",
+      "reachable",
+      "remote_ip",
+      "remote_port",
+      "version",
+      "cipher_suite",
+      "cert_verified",
+      "cert_subject",
+      "cert_san",
+      "cert_issuer",
+      "cert_not_after",
+      "cert_days_until_expiry",
+      "cert_hostname_match",
+      "method",
+      "protocol",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-healthy"
+  },
+  {
+    "name": "dns_nxdomain",
+    "target": "https://nonexistent.bench.local",
+    "ground_truth": "DNS_NXDOMAIN",
+    "required_evidence": [
+      "query_name"
+    ],
+    "docker_service": "coredns"
+  },
+  {
+    "name": "dns_timeout",
+    "target": "https://unreachable.dns-timeout.local",
+    "ground_truth": "DNS_TIMEOUT",
+    "required_evidence": [
+      "query_name"
+    ],
+    "docker_service": "coredns",
+    "note": "CoreDNS forwards dns-timeout.local queries to blackhole (172.28.0.201) which drops UDP:53. May yield DNS_ERROR if CoreDNS returns SERVFAIL before client timeout; ground_truth may need adjustment based on actual infra behavior."
+  },
+  {
+    "name": "reachability_timeout",
+    "target": "https://172.28.0.201",
+    "ground_truth": "REACHABILITY_TIMEOUT",
+    "required_evidence": [
+      "probe_method",
+      "reachable"
+    ],
+    "docker_service": "blackhole",
+    "note": "IP exists on network but drops all traffic via iptables"
+  },
+  {
+    "name": "tcp_refused",
+    "target": "tcp://nginx-healthy:9999",
+    "ground_truth": "TCP_REFUSED",
+    "required_evidence": [],
+    "docker_service": "nginx-healthy"
+  },
+  {
+    "name": "tcp_timeout",
+    "target": "tcp://172.28.0.202:443",
+    "ground_truth": "TCP_TIMEOUT",
+    "required_evidence": [],
+    "docker_service": "blackhole-tcp",
+    "note": "blackhole-tcp drops TCP only (ICMP allowed), so reachability passes and TCP times out"
+  },
+  {
+    "name": "cert_expired",
+    "target": "https://nginx-expired",
+    "ground_truth": "TLS_CERT_EXPIRED",
+    "required_evidence": [
+      "version",
+      "cert_verified",
+      "cert_subject",
+      "cert_san",
+      "cert_issuer",
+      "cert_not_after",
+      "cert_days_until_expiry"
+    ],
+    "docker_service": "nginx-expired"
+  },
+  {
+    "name": "cert_expiring_soon",
+    "target": "https://nginx-expiring",
+    "ground_truth": "TLS_CERT_EXPIRING_SOON",
+    "required_evidence": [
+      "version",
+      "cert_verified",
+      "cert_subject",
+      "cert_san",
+      "cert_issuer",
+      "cert_not_after",
+      "cert_days_until_expiry",
+      "cert_hostname_match"
+    ],
+    "docker_service": "nginx-expiring"
+  },
+  {
+    "name": "hostname_mismatch",
+    "target": "https://nginx-wronghost",
+    "ground_truth": "TLS_HOSTNAME_MISMATCH",
+    "required_evidence": [
+      "version",
+      "cert_verified",
+      "cert_subject",
+      "cert_san",
+      "cert_issuer",
+      "cert_not_after",
+      "cert_hostname_match"
+    ],
+    "docker_service": "nginx-wronghost"
+  },
+  {
+    "name": "self_signed",
+    "target": "https://nginx-selfsigned",
+    "ground_truth": "TLS_UNTRUSTED_CHAIN",
+    "required_evidence": [
+      "version",
+      "cert_verified",
+      "cert_subject",
+      "cert_san",
+      "cert_issuer",
+      "cert_not_after"
+    ],
+    "docker_service": "nginx-selfsigned"
+  },
+  {
+    "name": "cert_chain_invalid",
+    "target": "https://nginx-chainbroken",
+    "ground_truth": "TLS_UNTRUSTED_CHAIN",
+    "required_evidence": [
+      "version",
+      "cert_verified",
+      "cert_subject",
+      "cert_san",
+      "cert_issuer",
+      "cert_not_after"
+    ],
+    "docker_service": "nginx-chainbroken",
+    "note": "Leaf cert signed by intermediate CA, but intermediate not served"
+  },
+  {
+    "name": "tls_no_certs",
+    "target": "https://nginx-nocert:8443",
+    "ground_truth": "TLS_PROTOCOL_ERROR",
+    "required_evidence": [],
+    "docker_service": "nginx-nocert",
+    "note": "Plain HTTP listener on port 8443, TLS handshake gets protocol error (not TLS_NO_CERTIFICATES because handshake itself fails before cert exchange)"
+  },
+  {
+    "name": "http_503",
+    "target": "https://nginx-503",
+    "ground_truth": "HTTP_503",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-503"
+  },
+  {
+    "name": "http_403",
+    "target": "https://nginx-403",
+    "ground_truth": "HTTP_403",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-403"
+  },
+  {
+    "name": "http_500",
+    "target": "https://nginx-500",
+    "ground_truth": "HTTP_500",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-500"
+  },
+  {
+    "name": "http_429",
+    "target": "https://nginx-429",
+    "ground_truth": "HTTP_429",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-429"
+  },
+  {
+    "name": "http_redirect",
+    "target": "https://nginx-redirect",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-redirect"
+  },
+  {
+    "name": "tls12_only",
+    "target": "https://nginx-tls12",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "required_evidence": [
+      "version",
+      "cipher_suite",
+      "cert_verified",
+      "cert_subject",
+      "cert_san",
+      "cert_issuer",
+      "cert_not_after"
+    ],
+    "docker_service": "nginx-tls12"
+  },
+  {
+    "name": "http_plain",
+    "target": "http://nginx-healthy:80",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "required_evidence": [
+      "query_name",
+      "answers",
+      "probe_method",
+      "reachable",
+      "remote_ip",
+      "remote_port",
+      "method",
+      "protocol",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-healthy",
+    "note": "HTTP plain (no TLS) — demonstrates TLS layer skip and token savings"
+  },
+  {
+    "name": "tcp_direct",
+    "target": "tcp://nginx-healthy:443",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "required_evidence": [
+      "query_name",
+      "answers",
+      "probe_method",
+      "reachable",
+      "remote_ip",
+      "remote_port"
+    ],
+    "docker_service": "nginx-healthy",
+    "note": "TCP direct — minimal path (DNS+Reachability+TCP), TLS/HTTP skipped"
+  },
+  {
+    "name": "http_401",
+    "target": "https://nginx-401",
+    "ground_truth": "HTTP_401",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-401",
+    "note": "HTTP 401 — authentication error classification"
+  },
+  {
+    "name": "count_healthy",
+    "target": "https://nginx-healthy",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok_count",
+    "extra_flags": ["--count", "3"],
+    "required_evidence": [
+      "query_name",
+      "answers",
+      "probe_method",
+      "reachable",
+      "remote_ip",
+      "remote_port",
+      "version",
+      "cipher_suite",
+      "cert_verified",
+      "method",
+      "status_code"
+    ],
+    "docker_service": "nginx-healthy",
+    "note": "--count mode — stdiag aggregation vs N manual runs"
+  },
+  {
+    "name": "tls_scan",
+    "target": "https://nginx-tls12",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "extra_flags": ["--tls-scan"],
+    "required_evidence": [
+      "version",
+      "cipher_suite",
+      "cert_verified",
+      "cert_subject",
+      "cert_san",
+      "cert_issuer",
+      "cert_not_after",
+      "tls_scan.performed",
+      "tls_scan.supported_versions"
+    ],
+    "docker_service": "nginx-tls12",
+    "note": "--tls-scan — 1 command vs 4x openssl s_client per TLS version"
+  },
+  {
+    "name": "dns_custom",
+    "target": "https://nginx-healthy",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "extra_flags": ["--dns-server", "172.28.0.100"],
+    "required_evidence": [
+      "query_name",
+      "answers",
+      "resolver_address",
+      "probe_method",
+      "reachable",
+      "remote_ip",
+      "remote_port",
+      "version",
+      "cipher_suite",
+      "cert_verified",
+      "method",
+      "status_code"
+    ],
+    "docker_service": "nginx-healthy",
+    "note": "--dns-server — custom DNS resolver diagnostics"
+  }
+]

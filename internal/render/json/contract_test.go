@@ -23,6 +23,12 @@ func contractResult() *core.Result {
 				Observations: map[string]any{"query_name": "api.example.com", "answers": []string{"203.0.113.10"}},
 				Error:        nil,
 			},
+			"reachability": {
+				Status:       core.StatusOK,
+				DurationMS:   2,
+				Observations: map[string]any{"method": "icmp"},
+				Error:        nil,
+			},
 			"tcp": {
 				Status:       core.StatusOK,
 				DurationMS:   16,
@@ -93,7 +99,7 @@ func TestContractLayerFields(t *testing.T) {
 		t.Fatal("layers is not an object")
 	}
 
-	requiredLayers := []string{"dns", "tcp", "tls", "http"}
+	requiredLayers := []string{"dns", "reachability", "tcp", "tls", "http"}
 	for _, name := range requiredLayers {
 		layer, ok := layers[name].(map[string]any)
 		if !ok {
@@ -146,6 +152,12 @@ func contractResultWithSkip() *core.Result {
 				Status:       core.StatusOK,
 				DurationMS:   9,
 				Observations: map[string]any{"query_name": "db.example.com", "answers": []string{"203.0.113.10"}},
+				Error:        nil,
+			},
+			"reachability": {
+				Status:       core.StatusOK,
+				DurationMS:   2,
+				Observations: map[string]any{"method": "icmp"},
 				Error:        nil,
 			},
 			"tcp": {
@@ -317,9 +329,9 @@ func TestContractLayerOrder(t *testing.T) {
 		t.Fatalf("Render error: %v", err)
 	}
 
-	// The raw JSON must have layers in execution order: dns, tcp, tls, http.
+	// The raw JSON must have layers in execution order: dns, reachability, tcp, tls, http.
 	raw := buf.String()
-	expectedOrder := []string{"dns", "tcp", "tls", "http"}
+	expectedOrder := []string{"dns", "reachability", "tcp", "tls", "http"}
 	lastIdx := -1
 	for _, name := range expectedOrder {
 		key := `"` + name + `"`
@@ -344,6 +356,8 @@ func TestContractLayerOrder(t *testing.T) {
 func contractCountResult() *core.CountResult {
 	p50dns := 9.0
 	p95dns := 12.0
+	p50reach := 2.0
+	p95reach := 3.0
 	p50tcp := 16.0
 	p95tcp := 20.0
 	p50tls := 30.0
@@ -360,10 +374,11 @@ func contractCountResult() *core.CountResult {
 				Attempt:   1,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":  {Status: core.StatusOK, DurationMS: 9, Observations: map[string]any{"query_name": "api.example.com"}, Error: nil},
-					"tcp":  {Status: core.StatusOK, DurationMS: 16, Observations: map[string]any{"remote_ip": "203.0.113.10"}, Error: nil},
-					"tls":  {Status: core.StatusOK, DurationMS: 31, Observations: map[string]any{"version": "TLSv1.3"}, Error: nil},
-					"http": {Status: core.StatusFail, DurationMS: 57, Observations: map[string]any{"status_code": 503}, Error: &core.ProbeError{Code: "HTTP_503", Message: "503 Service Unavailable"}},
+					"dns":          {Status: core.StatusOK, DurationMS: 9, Observations: map[string]any{"query_name": "api.example.com"}, Error: nil},
+					"reachability": {Status: core.StatusOK, DurationMS: 2, Observations: map[string]any{"method": "icmp"}, Error: nil},
+					"tcp":          {Status: core.StatusOK, DurationMS: 16, Observations: map[string]any{"remote_ip": "203.0.113.10"}, Error: nil},
+					"tls":          {Status: core.StatusOK, DurationMS: 31, Observations: map[string]any{"version": "TLSv1.3"}, Error: nil},
+					"http":         {Status: core.StatusFail, DurationMS: 57, Observations: map[string]any{"status_code": 503}, Error: &core.ProbeError{Code: "HTTP_503", Message: "503 Service Unavailable"}},
 				},
 				Summary: &core.Summary{WallClockMS: 122, FirstNonOKLayer: "http", ExitCode: 1},
 			},
@@ -371,19 +386,21 @@ func contractCountResult() *core.CountResult {
 				Attempt:   2,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 4, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":  {Status: core.StatusOK, DurationMS: 12, Observations: map[string]any{"query_name": "api.example.com"}, Error: nil},
-					"tcp":  {Status: core.StatusOK, DurationMS: 20, Observations: map[string]any{"remote_ip": "203.0.113.10"}, Error: nil},
-					"tls":  {Status: core.StatusOK, DurationMS: 35, Observations: map[string]any{"version": "TLSv1.3"}, Error: nil},
-					"http": {Status: core.StatusOK, DurationMS: 60, Observations: map[string]any{"status_code": 200}, Error: nil},
+					"dns":          {Status: core.StatusOK, DurationMS: 12, Observations: map[string]any{"query_name": "api.example.com"}, Error: nil},
+					"reachability": {Status: core.StatusOK, DurationMS: 3, Observations: map[string]any{"method": "icmp"}, Error: nil},
+					"tcp":          {Status: core.StatusOK, DurationMS: 20, Observations: map[string]any{"remote_ip": "203.0.113.10"}, Error: nil},
+					"tls":          {Status: core.StatusOK, DurationMS: 35, Observations: map[string]any{"version": "TLSv1.3"}, Error: nil},
+					"http":         {Status: core.StatusOK, DurationMS: 60, Observations: map[string]any{"status_code": 200}, Error: nil},
 				},
 				Summary: &core.Summary{WallClockMS: 127, FirstNonOKLayer: "", ExitCode: 0},
 			},
 		},
 		Statistics: map[string]*core.LayerStatistics{
-			"dns":  {P50MS: &p50dns, P95MS: &p95dns, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
-			"tcp":  {P50MS: &p50tcp, P95MS: &p95tcp, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
-			"tls":  {P50MS: &p50tls, P95MS: &p95tls, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
-			"http": {P50MS: &p50http, P95MS: &p95http, SuccessCount: 1, FailCount: 1, SkipCount: 0, SampleCount: 2, LossRatio: 0.5},
+			"dns":          {P50MS: &p50dns, P95MS: &p95dns, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
+			"reachability": {P50MS: &p50reach, P95MS: &p95reach, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
+			"tcp":          {P50MS: &p50tcp, P95MS: &p95tcp, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
+			"tls":          {P50MS: &p50tls, P95MS: &p95tls, SuccessCount: 2, FailCount: 0, SkipCount: 0, SampleCount: 2, LossRatio: 0},
+			"http":         {P50MS: &p50http, P95MS: &p95http, SuccessCount: 1, FailCount: 1, SkipCount: 0, SampleCount: 2, LossRatio: 0.5},
 		},
 	}
 }
@@ -448,7 +465,7 @@ func TestContractCountResultLayerOrder(t *testing.T) {
 
 	raw := buf.String()
 	// Find each attempt's layers and verify order.
-	expectedOrder := []string{"dns", "tcp", "tls", "http"}
+	expectedOrder := []string{"dns", "reachability", "tcp", "tls", "http"}
 
 	var m map[string]any
 	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
@@ -524,7 +541,7 @@ func TestContractCountResultStatisticsOrder(t *testing.T) {
 	}
 
 	raw := buf.String()
-	expectedOrder := []string{"dns", "tcp", "tls", "http"}
+	expectedOrder := []string{"dns", "reachability", "tcp", "tls", "http"}
 
 	// Find the statistics section and verify key order.
 	statsIdx := strings.Index(raw, `"statistics"`)
@@ -544,6 +561,193 @@ func TestContractCountResultStatisticsOrder(t *testing.T) {
 			t.Errorf("statistics key %q (pos %d) appears before previous key (pos %d); want dns→tcp→tls→http", name, pos, lastIdx)
 		}
 		lastIdx = pos
+	}
+}
+
+func TestContractSchemaVersion(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResult()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	if v, ok := m["schema_version"].(string); !ok || v != "v0.1" {
+		t.Errorf("schema_version = %v, want \"v0.1\"", m["schema_version"])
+	}
+}
+
+func TestContractFiveLayersPresent(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResult()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	layers := m["layers"].(map[string]any)
+	expected := []string{"dns", "reachability", "tcp", "tls", "http"}
+	for _, name := range expected {
+		if _, ok := layers[name]; !ok {
+			t.Errorf("missing layer %q in output", name)
+		}
+	}
+	if len(layers) != 5 {
+		t.Errorf("expected 5 layers, got %d", len(layers))
+	}
+}
+
+// contractResultReachabilitySkip returns a Result where reachability is skipped with permission_denied.
+func contractResultReachabilitySkip() *core.Result {
+	return &core.Result{
+		SchemaVersion: "v0.1",
+		StartedAt:     time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
+		Target:        "https://api.example.com/health",
+		Layers: map[string]*core.LayerResult{
+			"dns": {
+				Status:       core.StatusOK,
+				DurationMS:   9,
+				Observations: map[string]any{"query_name": "api.example.com", "answers": []string{"203.0.113.10"}},
+			},
+			"reachability": {
+				Status:       core.StatusSkip,
+				DurationMS:   0,
+				Observations: map[string]any{"skip_reason": "permission_denied"},
+			},
+			"tcp": {
+				Status:       core.StatusOK,
+				DurationMS:   16,
+				Observations: map[string]any{"remote_ip": "203.0.113.10", "remote_port": 443},
+			},
+			"tls": {
+				Status:     core.StatusOK,
+				DurationMS: 31,
+				Observations: map[string]any{
+					"version":      "TLSv1.3",
+					"cipher_suite": "TLS_AES_256_GCM_SHA384",
+				},
+			},
+			"http": {
+				Status:     core.StatusOK,
+				DurationMS: 57,
+				Observations: map[string]any{
+					"method":      "GET",
+					"status_code": 200,
+				},
+			},
+		},
+		Summary: &core.Summary{
+			WallClockMS:     122,
+			FirstNonOKLayer: "",
+			ExitCode:        0,
+		},
+	}
+}
+
+func TestContractReachabilitySkipRender(t *testing.T) {
+	var buf bytes.Buffer
+	if err := Render(&buf, contractResultReachabilitySkip()); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	layers := m["layers"].(map[string]any)
+	reach := layers["reachability"].(map[string]any)
+	if reach["status"] != "skip" {
+		t.Errorf("reachability status = %v, want \"skip\"", reach["status"])
+	}
+	obs := reach["observations"].(map[string]any)
+	if obs["skip_reason"] != "permission_denied" {
+		t.Errorf("reachability skip_reason = %v, want \"permission_denied\"", obs["skip_reason"])
+	}
+}
+
+func TestContractNewTLSObservations(t *testing.T) {
+	r := contractResult()
+	tlsObs := r.Layers["tls"].Observations.(map[string]any)
+	tlsObs["cert_verified"] = true
+	tlsObs["cert_subject"] = "CN=api.example.com"
+	tlsObs["cert_san"] = []string{"api.example.com", "*.example.com"}
+	tlsObs["cert_issuer"] = "CN=Let's Encrypt Authority X3"
+	tlsObs["cert_not_after"] = "2026-03-05T00:00:00Z"
+	tlsObs["cert_not_before"] = "2025-12-05T00:00:00Z"
+	tlsObs["cert_chain"] = []string{"CN=api.example.com", "CN=Let's Encrypt Authority X3", "CN=DST Root CA X3"}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, r); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	parsedTLSObs := m["layers"].(map[string]any)["tls"].(map[string]any)["observations"].(map[string]any)
+	for _, field := range []string{"cert_verified", "cert_subject", "cert_san", "cert_issuer", "cert_not_after", "cert_not_before", "cert_chain"} {
+		if _, ok := parsedTLSObs[field]; !ok {
+			t.Errorf("tls observations missing %q", field)
+		}
+	}
+}
+
+func TestContractDNSErrorHint(t *testing.T) {
+	r := contractResult()
+	r.Layers["dns"].Observations.(map[string]any)["dns_error_hint"] = "servfail"
+
+	var buf bytes.Buffer
+	if err := Render(&buf, r); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	dnsObs := m["layers"].(map[string]any)["dns"].(map[string]any)["observations"].(map[string]any)
+	if v, ok := dnsObs["dns_error_hint"]; !ok || v != "servfail" {
+		t.Errorf("dns_error_hint = %v, want \"servfail\"", v)
+	}
+}
+
+func TestContractHTTPResponseHeaders(t *testing.T) {
+	r := contractResult()
+	r.Layers["http"].Observations.(map[string]any)["response_headers"] = map[string]string{
+		"Content-Type": "application/json",
+		"Server":       "nginx",
+	}
+
+	var buf bytes.Buffer
+	if err := Render(&buf, r); err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(buf.Bytes(), &m); err != nil {
+		t.Fatalf("JSON parse error: %v", err)
+	}
+
+	httpObs := m["layers"].(map[string]any)["http"].(map[string]any)["observations"].(map[string]any)
+	headers, ok := httpObs["response_headers"].(map[string]any)
+	if !ok {
+		t.Fatal("http observations missing response_headers or not an object")
+	}
+	if headers["Content-Type"] != "application/json" {
+		t.Errorf("response_headers Content-Type = %v", headers["Content-Type"])
+	}
+	if headers["Server"] != "nginx" {
+		t.Errorf("response_headers Server = %v", headers["Server"])
 	}
 }
 

@@ -13,7 +13,9 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"testing"
+	"time"
 )
 
 // binaryPath returns the path to the built stdiag binary.
@@ -150,6 +152,54 @@ func TestJSONOutputStructure(t *testing.T) {
 	}
 }
 
+func TestJSONOutputContainsReachabilityLayer(t *testing.T) {
+	// Verify reachability layer appears in JSON output between dns and tcp.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, _, _ := runStackdiag(t, "--json", "--timeout", "3",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	if len(stdout) == 0 {
+		t.Fatal("expected JSON output on stdout")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON output: %v\n%s", err, stdout)
+	}
+
+	layers, ok := result["layers"].(map[string]any)
+	if !ok {
+		t.Fatal("missing or invalid layers field")
+	}
+
+	// Reachability layer must be present.
+	reach, ok := layers["reachability"].(map[string]any)
+	if !ok {
+		t.Fatal("missing reachability layer in JSON output")
+	}
+
+	// Verify structure: must have status, duration_ms, observations.
+	for _, key := range []string{"status", "duration_ms", "observations"} {
+		if _, ok := reach[key]; !ok {
+			t.Errorf("reachability layer missing field: %q", key)
+		}
+	}
+
+	// In CI/test environments, reachability will likely be "skip" (no ICMP permission).
+	// Accept ok, skip, or fail — just verify it's a valid status.
+	status, _ := reach["status"].(string)
+	validStatuses := map[string]bool{"ok": true, "warn": true, "fail": true, "skip": true}
+	if !validStatuses[status] {
+		t.Errorf("reachability status = %q, want one of ok/warn/fail/skip", status)
+	}
+}
+
 // --- New E2E tests ---
 
 func TestHelpFlag(t *testing.T) {
@@ -216,13 +266,17 @@ func TestTableOutputDefault(t *testing.T) {
 	stdout, _, _ := runStackdiag(t, "--timeout", "3",
 		fmt.Sprintf("tcp://127.0.0.1:%d", port))
 
-	// Table output should contain status symbols or text indicators.
-	hasSymbol := strings.ContainsAny(stdout, "✓⚠✗") ||
+	// Table output should contain status indicators (brackets or symbols).
+	hasIndicator := strings.ContainsAny(stdout, "✓⚠✗") ||
+		strings.Contains(stdout, "[ok]") ||
+		strings.Contains(stdout, "[skip]") ||
+		strings.Contains(stdout, "[fail]") ||
+		strings.Contains(stdout, "[warn]") ||
 		strings.Contains(stdout, "OK") ||
 		strings.Contains(stdout, "WARN") ||
 		strings.Contains(stdout, "FAIL")
-	if !hasSymbol {
-		t.Errorf("table output missing status symbols, got:\n%s", stdout)
+	if !hasIndicator {
+		t.Errorf("table output missing status indicators, got:\n%s", stdout)
 	}
 
 	// Should NOT be valid JSON.
@@ -317,10 +371,18 @@ func TestMethodFlag(t *testing.T) {
 		t.Fatalf("invalid JSON: %v", err)
 	}
 
-	// Check that the target or HTTP layer reflects the method.
+	// Check that the HTTP layer reflects the method.
 	if layers, ok := result["layers"].(map[string]any); ok {
 		if httpLayer, ok := layers["http"].(map[string]any); ok {
-			if method, ok := httpLayer["method"].(string); ok && method != "HEAD" {
+			obs, ok := httpLayer["observations"].(map[string]any)
+			if !ok {
+				t.Fatal("http layer missing observations")
+			}
+			method, ok := obs["method"].(string)
+			if !ok {
+				t.Fatal("observations missing method field")
+			}
+			if method != "HEAD" {
 				t.Errorf("method = %q, want HEAD", method)
 			}
 		}
@@ -348,11 +410,7 @@ func TestHeaderFlag(t *testing.T) {
 	}
 }
 
-func TestExitCodeWarn(t *testing.T) {
-	// Exit code 2 = warn. This is hard to trigger reliably without an expired cert.
-	// Use expired.badssl.com but with --insecure to avoid TLS fail and check for HTTP warn.
-	t.Skip("exit code 2 (warn) is difficult to trigger reliably in E2E without a controlled environment")
-}
+// TestExitCodeWarn is covered by TestExitCodeWarnInsecureExpired in feature_flags_test.go.
 
 func TestExitCodeDNSFailure(t *testing.T) {
 	_, _, exitCode := runStackdiag(t, "https://this-domain-does-not-exist-xyz123.example", "--json", "--timeout", "5")
@@ -841,6 +899,160 @@ func TestJSONNoArgsStructuredError(t *testing.T) {
 	}
 }
 
+func TestJSONPrettyOutputIsIndented(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, _, _ := runStackdiag(t, "--json-pretty", "--timeout", "3",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	if len(stdout) == 0 {
+		t.Fatal("expected JSON output on stdout")
+	}
+
+	// Must be valid JSON.
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+
+	// Must be multi-line (pretty-printed).
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	if len(lines) <= 1 {
+		t.Error("--json-pretty should produce multi-line indented output")
+	}
+
+	// Must contain indentation.
+	if !strings.Contains(stdout, "  ") {
+		t.Error("--json-pretty output should be indented with spaces")
+	}
+}
+
+func TestJSONPrettyImpliesJSON(t *testing.T) {
+	// --json-pretty without --json should still produce JSON.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, _, _ := runStackdiag(t, "--json-pretty", "--timeout", "3",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("--json-pretty should produce valid JSON without --json: %v", err)
+	}
+
+	for _, key := range []string{"schema_version", "target", "layers", "summary"} {
+		if _, ok := result[key]; !ok {
+			t.Errorf("missing required field: %q", key)
+		}
+	}
+}
+
+func TestJSONPrettyParseErrorIsIndented(t *testing.T) {
+	// --json-pretty with invalid args should produce indented JSON error.
+	stdout, _, exitCode := runStackdiag(t, "--json-pretty", "ftp://example.com")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("expected valid JSON: %v\n%s", err, stdout)
+	}
+
+	// Must be multi-line (indented).
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	if len(lines) <= 1 {
+		t.Error("--json-pretty parse error should produce indented JSON")
+	}
+
+	errObj, ok := result["error"].(map[string]any)
+	if !ok {
+		t.Fatal("missing error object")
+	}
+	if errObj["code"] != "INVALID_TARGET" {
+		t.Errorf("error code = %v, want INVALID_TARGET", errObj["code"])
+	}
+}
+
+func TestJSONFalseDoesNotForceJSON(t *testing.T) {
+	// --json=false with invalid args should NOT produce JSON output.
+	_, stderr, exitCode := runStackdiag(t, "--json=false")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+	// stderr should have plain text error, not JSON.
+	if !strings.Contains(stderr, "Error:") && !strings.Contains(stderr, "USAGE:") {
+		t.Errorf("expected plain text error on stderr with --json=false, got: %s", stderr)
+	}
+}
+
+func TestJSONFlagOverrideLastWins(t *testing.T) {
+	// --json followed by --json=false should NOT produce JSON.
+	_, stderr, exitCode := runStackdiag(t, "--json", "--json=false")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+	if !strings.Contains(stderr, "Error:") && !strings.Contains(stderr, "USAGE:") {
+		t.Errorf("expected plain text error with --json --json=false, got stderr: %s", stderr)
+	}
+}
+
+func TestJSONPrettyFlagOverrideLastWins(t *testing.T) {
+	// --json-pretty followed by --json-pretty=false should NOT produce pretty JSON.
+	stdout, stderr, exitCode := runStackdiag(t, "--json-pretty", "--json-pretty=false")
+	if exitCode != 1 {
+		t.Errorf("exit code = %d, want 1", exitCode)
+	}
+	// Should fall back to plain text since pretty is disabled.
+	if !strings.Contains(stderr, "Error:") && !strings.Contains(stderr, "USAGE:") {
+		t.Errorf("expected plain text error with --json-pretty --json-pretty=false, stdout: %s, stderr: %s", stdout, stderr)
+	}
+}
+
+func TestJSONPrettyWithCount(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, _, _ := runStackdiag(t, "--json-pretty", "--count", "2", "--timeout", "3",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	if len(stdout) == 0 {
+		t.Fatal("expected JSON output on stdout")
+	}
+
+	// Must be valid JSON.
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, stdout)
+	}
+
+	// Must be multi-line (pretty-printed).
+	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
+	if len(lines) <= 1 {
+		t.Error("--json-pretty --count should produce multi-line indented output")
+	}
+
+	// Count mode has specific top-level fields.
+	for _, key := range []string{"schema_version", "target", "count", "attempts", "statistics"} {
+		if _, ok := result[key]; !ok {
+			t.Errorf("missing required field: %q", key)
+		}
+	}
+}
+
 func TestBearerEnvNoRedactShowsRaw(t *testing.T) {
 	srv, _ := headerCaptureServer(t)
 
@@ -869,5 +1081,84 @@ func TestBearerEnvNoRedactShowsRaw(t *testing.T) {
 	want := "Bearer " + token
 	if headers["Authorization"] != want {
 		t.Errorf("Authorization = %v, want %q", headers["Authorization"], want)
+	}
+}
+
+// --- Signal handling E2E tests ---
+
+func TestSignalHandlingSIGINT(t *testing.T) {
+	// Send SIGINT while binary is running against a non-routable address (RFC 5737 TEST-NET-1).
+	// Verify: stdout is empty OR valid JSON (never partial/corrupt output).
+	bin := binaryPath(t)
+	cmd := exec.Command(bin, "--json", "--timeout", "30", "tcp://192.0.2.1:1")
+	var outBuf, errBuf bytes.Buffer
+	cmd.Stdout = &outBuf
+	cmd.Stderr = &errBuf
+
+	if err := cmd.Start(); err != nil {
+		t.Fatalf("failed to start binary: %v", err)
+	}
+
+	// Wait briefly for the process to initialize, then send SIGINT.
+	time.Sleep(100 * time.Millisecond)
+	if err := cmd.Process.Signal(syscall.SIGINT); err != nil {
+		t.Fatalf("failed to send SIGINT: %v", err)
+	}
+
+	// Wait for process to exit.
+	err := cmd.Wait()
+	if err == nil {
+		t.Log("process exited with code 0 (unexpected but acceptable)")
+	}
+
+	stdout := outBuf.String()
+
+	// stdout must be either empty or valid JSON — never partial/corrupt.
+	if len(stdout) > 0 {
+		var result map[string]any
+		if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+			t.Fatalf("SIGINT produced partial/invalid JSON output: %v\nstdout: %s", err, stdout)
+		}
+	}
+
+	// Process should have exited with non-zero code.
+	if err != nil {
+		exitErr, ok := err.(*exec.ExitError)
+		if !ok {
+			t.Fatalf("unexpected error type: %T: %v", err, err)
+		}
+		if exitErr.ExitCode() == 0 {
+			t.Error("expected non-zero exit code after SIGINT")
+		}
+	}
+}
+
+func TestSignalHandlingNormalCompletion(t *testing.T) {
+	// Verify normal operation is unchanged after adding output buffering.
+	// Run binary against a local TCP listener — should complete normally with valid output.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+	port := ln.Addr().(*net.TCPAddr).Port
+
+	stdout, _, _ := runStackdiag(t, "--json", "--timeout", "3",
+		fmt.Sprintf("tcp://127.0.0.1:%d", port))
+
+	if len(stdout) == 0 {
+		t.Fatal("expected JSON output on stdout for normal completion")
+	}
+
+	var result map[string]any
+	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
+		t.Fatalf("invalid JSON after buffering change: %v\n%s", err, stdout)
+	}
+
+	// Verify required fields are present (buffering should not change output structure).
+	for _, key := range []string{"schema_version", "target", "layers", "summary"} {
+		if _, ok := result[key]; !ok {
+			t.Errorf("missing required field: %q", key)
+		}
 	}
 }

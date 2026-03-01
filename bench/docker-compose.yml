@@ -1,0 +1,225 @@
+version: "3.8"
+
+x-nginx-build: &nginx-build
+  build:
+    context: docker
+    dockerfile: nginx/Dockerfile
+
+x-certs-volume: &certs-volume
+  ./docker/certs:/etc/nginx/certs:ro
+
+services:
+  nginx-healthy:
+    <<: *nginx-build
+    hostname: nginx-healthy
+    volumes:
+      - ./docker/nginx/healthy.conf:/etc/nginx/conf.d/healthy.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.10
+
+  nginx-503:
+    <<: *nginx-build
+    hostname: nginx-503
+    volumes:
+      - ./docker/nginx/error-503.conf:/etc/nginx/conf.d/error-503.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.11
+
+  nginx-403:
+    <<: *nginx-build
+    hostname: nginx-403
+    volumes:
+      - ./docker/nginx/error-403.conf:/etc/nginx/conf.d/error-403.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.12
+
+  nginx-500:
+    <<: *nginx-build
+    hostname: nginx-500
+    volumes:
+      - ./docker/nginx/error-500.conf:/etc/nginx/conf.d/error-500.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.13
+
+  nginx-expired:
+    <<: *nginx-build
+    hostname: nginx-expired
+    volumes:
+      - ./docker/nginx/expired.conf:/etc/nginx/conf.d/expired.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.14
+
+  nginx-wronghost:
+    <<: *nginx-build
+    hostname: nginx-wronghost
+    volumes:
+      - ./docker/nginx/wronghost.conf:/etc/nginx/conf.d/wronghost.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.15
+
+  nginx-selfsigned:
+    <<: *nginx-build
+    hostname: nginx-selfsigned
+    volumes:
+      - ./docker/nginx/selfsigned.conf:/etc/nginx/conf.d/selfsigned.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.16
+
+  nginx-tls12:
+    <<: *nginx-build
+    hostname: nginx-tls12
+    volumes:
+      - ./docker/nginx/tls12only.conf:/etc/nginx/conf.d/tls12only.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.17
+
+  nginx-expiring:
+    <<: *nginx-build
+    hostname: nginx-expiring
+    volumes:
+      - ./docker/nginx/expiring.conf:/etc/nginx/conf.d/expiring.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.18
+
+  nginx-429:
+    <<: *nginx-build
+    hostname: nginx-429
+    volumes:
+      - ./docker/nginx/error-429.conf:/etc/nginx/conf.d/error-429.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.19
+
+  nginx-redirect:
+    <<: *nginx-build
+    hostname: nginx-redirect
+    volumes:
+      - ./docker/nginx/redirect.conf:/etc/nginx/conf.d/redirect.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.20
+
+  nginx-chainbroken:
+    <<: *nginx-build
+    hostname: nginx-chainbroken
+    volumes:
+      - ./docker/nginx/chainbroken.conf:/etc/nginx/conf.d/chainbroken.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.21
+
+  nginx-nocert:
+    <<: *nginx-build
+    hostname: nginx-nocert
+    volumes:
+      - ./docker/nginx/nocert.conf:/etc/nginx/conf.d/nocert.conf:ro
+    networks:
+      bench:
+        ipv4_address: 172.28.0.22
+
+  nginx-401:
+    <<: *nginx-build
+    hostname: nginx-401
+    volumes:
+      - ./docker/nginx/error-401.conf:/etc/nginx/conf.d/error-401.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.23
+
+  blackhole:
+    build:
+      context: docker/blackhole
+    hostname: blackhole
+    environment:
+      BLACKHOLE_MODE: all
+    cap_add:
+      - NET_ADMIN
+    networks:
+      bench:
+        ipv4_address: 172.28.0.201
+
+  blackhole-tcp:
+    build:
+      context: docker/blackhole
+    hostname: blackhole-tcp
+    environment:
+      BLACKHOLE_MODE: tcp-only
+    cap_add:
+      - NET_ADMIN
+    networks:
+      bench:
+        ipv4_address: 172.28.0.202
+
+  coredns:
+    image: coredns/coredns:latest
+    hostname: coredns
+    volumes:
+      - ./docker/coredns/Corefile:/etc/coredns/Corefile:ro
+      - ./docker/coredns/bench.local.db:/etc/coredns/bench.local.db:ro
+    command: ["-conf", "/etc/coredns/Corefile"]
+    networks:
+      bench:
+        ipv4_address: 172.28.0.100
+
+  runner:
+    build:
+      context: ..
+      dockerfile: bench/docker/runner/Dockerfile
+    hostname: runner
+    depends_on:
+      - nginx-healthy
+      - nginx-503
+      - nginx-403
+      - nginx-500
+      - nginx-expired
+      - nginx-wronghost
+      - nginx-selfsigned
+      - nginx-tls12
+      - nginx-expiring
+      - nginx-429
+      - nginx-redirect
+      - nginx-chainbroken
+      - nginx-nocert
+      - nginx-401
+      - blackhole
+      - blackhole-tcp
+      - coredns
+    volumes:
+      - ./capture.sh:/bench/capture.sh:ro
+      - ./verify.sh:/bench/verify.sh:ro
+      - ./docker/certs:/etc/bench/certs:ro
+    dns:
+      - 172.28.0.100
+    networks:
+      - bench
+    stdin_open: true
+    tty: true
+
+networks:
+  bench:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

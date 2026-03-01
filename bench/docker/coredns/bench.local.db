@@ -1,0 +1,40 @@
+$ORIGIN bench.local.
+@       IN SOA  ns.bench.local. admin.bench.local. (
+        2024010103 ; serial
+        3600       ; refresh
+        600        ; retry
+        86400      ; expire
+        60         ; minimum TTL
+)
+
+@               IN NS   ns.bench.local.
+ns              IN A    172.28.0.100
+
+; nginx services — Docker internal DNS resolves these via container hostnames,
+; but we include them here so dig queries against coredns also work.
+nginx-healthy    IN A    172.28.0.10
+nginx-503        IN A    172.28.0.11
+nginx-403        IN A    172.28.0.12
+nginx-500        IN A    172.28.0.13
+nginx-expired    IN A    172.28.0.14
+nginx-wronghost  IN A    172.28.0.15
+nginx-selfsigned IN A    172.28.0.16
+nginx-tls12      IN A    172.28.0.17
+nginx-expiring   IN A    172.28.0.18
+nginx-429        IN A    172.28.0.19
+nginx-redirect   IN A    172.28.0.20
+nginx-chainbroken IN A   172.28.0.21
+nginx-nocert     IN A    172.28.0.22
+nginx-401        IN A    172.28.0.23
+
+; blackhole — drops all traffic (for timeout scenarios)
+blackhole        IN A    172.28.0.201
+
+; dns-blackhole resolves to the blackhole IP, used for DNS_TIMEOUT scenario.
+; stdiag will try to resolve the *target* hostname via the system DNS (coredns),
+; which works fine. The timeout is simulated at the reachability/TCP layer by
+; targeting the blackhole IP. For a true DNS_TIMEOUT, the runner overrides
+; the DNS server to the blackhole IP for this specific scenario.
+dns-blackhole    IN A    172.28.0.201
+
+; nonexistent.bench.local is NOT listed → NXDOMAIN

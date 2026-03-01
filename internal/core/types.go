@@ -8,9 +8,12 @@ import (
 	"time"
 )
 
+// SchemaVersion is the current schema version for stackdiag output.
+const SchemaVersion = "v0.1"
+
 // LayerOrder defines the canonical execution order for layers.
 // JSON output must always follow this order.
-var LayerOrder = []string{"dns", "tcp", "tls", "http"}
+var LayerOrder = []string{"dns", "reachability", "tcp", "tls", "http"}
 
 // Status represents the outcome of a layer check.
 type Status string
@@ -26,7 +29,8 @@ const (
 func (s Status) IsOK() bool { return s == StatusOK }
 
 // ShouldContinue returns true if the runner should proceed to the next layer.
-func (s Status) ShouldContinue() bool { return s == StatusOK || s == StatusWarn }
+// ok, warn, and skip all allow continuation; only fail stops the pipeline.
+func (s Status) ShouldContinue() bool { return s != StatusFail }
 
 // ProbeError is a structured error with a machine-readable code.
 type ProbeError struct {
@@ -40,10 +44,10 @@ func (e *ProbeError) Error() string {
 
 // LayerResult holds the outcome of a single layer check.
 type LayerResult struct {
-	Status       Status         `json:"status"`
-	DurationMS   float64        `json:"duration_ms"`
-	Observations map[string]any `json:"observations"`
-	Error        *ProbeError    `json:"error"`
+	Status       Status      `json:"status"`
+	DurationMS   float64     `json:"duration_ms"`
+	Observations any         `json:"observations"`
+	Error        *ProbeError `json:"error"`
 }
 
 // Summary holds aggregate information about the stackdiag run.
@@ -82,59 +86,23 @@ func marshalNoEscape(v any) ([]byte, error) {
 // order (dns→tcp→tls→http) rather than Go's default alphabetical map key order.
 func (r *Result) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
-	buf.WriteString(`{"schema_version":`)
-	b, err := marshalNoEscape(r.SchemaVersion)
-	if err != nil {
+	buf.Grow(1536)
+	buf.WriteByte('{')
+	if err := writeField(&buf, true, "schema_version", r.SchemaVersion); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"started_at":`)
-	b, err = marshalNoEscape(r.StartedAt)
-	if err != nil {
+	if err := writeField(&buf, false, "started_at", r.StartedAt); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"target":`)
-	b, err = marshalNoEscape(r.Target)
-	if err != nil {
+	if err := writeField(&buf, false, "target", r.Target); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"layers":{`)
-	first := true
-	for _, name := range LayerOrder {
-		lr, ok := r.Layers[name]
-		if !ok {
-			continue
-		}
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		b, err = marshalNoEscape(name)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
-		buf.WriteByte(':')
-		b, err = marshalNoEscape(lr)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
-	}
-	buf.WriteByte('}')
-
-	buf.WriteString(`,"summary":`)
-	b, err = marshalNoEscape(r.Summary)
-	if err != nil {
+	if err := writeOrderedMap(&buf, false, "layers", layerGetter(r.Layers)); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
+	if err := writeField(&buf, false, "summary", r.Summary); err != nil {
+		return nil, err
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -151,60 +119,28 @@ type AttemptResult struct {
 // order (dns→tcp→tls→http).
 func (a *AttemptResult) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
-	buf.WriteString(`{"attempt":`)
-	b, err := marshalNoEscape(a.Attempt)
-	if err != nil {
+	buf.Grow(1536)
+	buf.WriteByte('{')
+	if err := writeField(&buf, true, "attempt", a.Attempt); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"started_at":`)
-	b, err = marshalNoEscape(a.StartedAt)
-	if err != nil {
+	if err := writeField(&buf, false, "started_at", a.StartedAt); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"layers":{`)
-	first := true
-	for _, name := range LayerOrder {
-		lr, ok := a.Layers[name]
-		if !ok {
-			continue
-		}
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		b, err = marshalNoEscape(name)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
-		buf.WriteByte(':')
-		b, err = marshalNoEscape(lr)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
-	}
-	buf.WriteByte('}')
-
-	buf.WriteString(`,"summary":`)
-	b, err = marshalNoEscape(a.Summary)
-	if err != nil {
+	if err := writeOrderedMap(&buf, false, "layers", layerGetter(a.Layers)); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
+	if err := writeField(&buf, false, "summary", a.Summary); err != nil {
+		return nil, err
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
 
 // LayerStatistics holds aggregate statistics for a single layer across multiple attempts.
 type LayerStatistics struct {
-	P50MS        *float64 `json:"p50_ms,omitempty"`
-	P95MS        *float64 `json:"p95_ms,omitempty"`
+	P50MS        *float64 `json:"p50_ms"`
+	P95MS        *float64 `json:"p95_ms"`
 	SuccessCount int      `json:"success_count"`
 	FailCount    int      `json:"fail_count"`
 	SkipCount    int      `json:"skip_count"`
@@ -226,66 +162,31 @@ type CountResult struct {
 // execution order (dns→tcp→tls→http).
 func (c *CountResult) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
-	buf.WriteString(`{"schema_version":`)
-	b, err := marshalNoEscape(c.SchemaVersion)
-	if err != nil {
+	buf.Grow(1536)
+	buf.WriteByte('{')
+	if err := writeField(&buf, true, "schema_version", c.SchemaVersion); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"target":`)
-	b, err = marshalNoEscape(c.Target)
-	if err != nil {
+	if err := writeField(&buf, false, "target", c.Target); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"count":`)
-	b, err = marshalNoEscape(c.Count)
-	if err != nil {
+	if err := writeField(&buf, false, "count", c.Count); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"exit_code":`)
-	b, err = marshalNoEscape(c.ExitCode)
-	if err != nil {
+	if err := writeField(&buf, false, "exit_code", c.ExitCode); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"attempts":`)
-	b, err = marshalNoEscape(c.Attempts)
-	if err != nil {
+	if err := writeField(&buf, false, "attempts", c.Attempts); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"statistics":{`)
-	first := true
-	for _, name := range LayerOrder {
-		ls, ok := c.Statistics[name]
-		if !ok {
-			continue
+	if err := writeOrderedMap(&buf, false, "statistics", func(name string) any {
+		if ls, ok := c.Statistics[name]; ok {
+			return ls
 		}
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		b, err = marshalNoEscape(name)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
-		buf.WriteByte(':')
-		b, err = marshalNoEscape(ls)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
+		return nil
+	}); err != nil {
+		return nil, err
 	}
-	buf.WriteByte('}')
-
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -299,7 +200,8 @@ type ProbeContext struct {
 	Redact      bool
 	Method      string
 	Headers     map[string]string
-	TLSScan     bool // --tls-scan: probe TLS version support
+	TLSScan     bool   // --tls-scan: probe TLS version support
+	DNSServer   string // --dns-server: custom DNS resolver address
 }
 
 // Layer is the interface that each network layer must implement.

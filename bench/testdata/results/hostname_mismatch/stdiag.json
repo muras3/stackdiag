@@ -1,0 +1,17 @@
+{
+  "schema_version": "v0.1",
+  "started_at": "2026-02-28T00:00:00Z",
+  "target": "https://nginx-wronghost",
+  "layers": {
+    "dns": {"status": "ok", "duration_ms": 4.0, "observations": {"query_name": "nginx-wronghost", "answers": ["172.20.0.4"]}, "error": null},
+    "tcp": {"status": "ok", "duration_ms": 2.0, "observations": {"remote_ip": "172.20.0.4", "remote_port": 443}, "error": null},
+    "tls": {
+      "status": "fail",
+      "duration_ms": 9.0,
+      "observations": {"version": "TLSv1.3", "cert_hostname_match": false},
+      "error": {"code": "TLS_HOSTNAME_MISMATCH", "message": "Certificate hostname does not match"}
+    },
+    "http": {"status": "skip", "duration_ms": 0, "observations": {}, "error": null}
+  },
+  "summary": {"wall_clock_ms": 15.0, "first_non_ok_layer": "tls", "exit_code": 30}
+}

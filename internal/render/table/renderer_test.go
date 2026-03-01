@@ -9,6 +9,8 @@ import (
 	"github.com/muras3/stackdiag/internal/core"
 )
 
+func ptr[T any](v T) *T { return &v }
+
 // allOKResult returns a Result where every layer succeeds.
 func allOKResult() *core.Result {
 	return &core.Result{
@@ -19,39 +21,45 @@ func allOKResult() *core.Result {
 			"dns": {
 				Status:     core.StatusOK,
 				DurationMS: 9,
-				Observations: map[string]any{
-					"query_name": "api.example.com",
-					"answers":    []any{"203.0.113.10"},
+				Observations: &core.DNSObservations{
+					QueryName: "api.example.com",
+					Answers:   []string{"203.0.113.10"},
 				},
 				Error: nil,
+			},
+			"reachability": {
+				Status:       core.StatusOK,
+				DurationMS:   2,
+				Observations: &core.ReachabilityObservations{ProbeMethod: "icmp"},
+				Error:        nil,
 			},
 			"tcp": {
 				Status:     core.StatusOK,
 				DurationMS: 16,
-				Observations: map[string]any{
-					"remote_ip":   "203.0.113.10",
-					"remote_port": 443,
+				Observations: &core.TCPObservations{
+					RemoteIP:   "203.0.113.10",
+					RemotePort: 443,
 				},
 				Error: nil,
 			},
 			"tls": {
 				Status:     core.StatusOK,
 				DurationMS: 31,
-				Observations: map[string]any{
-					"version":                "TLSv1.3",
-					"cipher_suite":           "TLS_AES_256_GCM_SHA384",
-					"cert_days_until_expiry": 90,
+				Observations: &core.TLSObservations{
+					Version:             "TLSv1.3",
+					CipherSuite:         "TLS_AES_256_GCM_SHA384",
+					CertDaysUntilExpiry: ptr(90),
 				},
 				Error: nil,
 			},
 			"http": {
 				Status:     core.StatusOK,
 				DurationMS: 57,
-				Observations: map[string]any{
-					"method":      "GET",
-					"protocol":    "HTTP/2",
-					"status_code": 200,
-					"status_text": "OK",
+				Observations: &core.HTTPObservations{
+					Method:     "GET",
+					Protocol:   "HTTP/2",
+					StatusCode: 200,
+					StatusText: "OK",
 				},
 				Error: nil,
 			},
@@ -74,39 +82,45 @@ func mixedResult() *core.Result {
 			"dns": {
 				Status:     core.StatusOK,
 				DurationMS: 9,
-				Observations: map[string]any{
-					"query_name": "api.example.com",
-					"answers":    []any{"203.0.113.10"},
+				Observations: &core.DNSObservations{
+					QueryName: "api.example.com",
+					Answers:   []string{"203.0.113.10"},
 				},
 				Error: nil,
+			},
+			"reachability": {
+				Status:       core.StatusOK,
+				DurationMS:   2,
+				Observations: &core.ReachabilityObservations{ProbeMethod: "icmp"},
+				Error:        nil,
 			},
 			"tcp": {
 				Status:     core.StatusOK,
 				DurationMS: 16,
-				Observations: map[string]any{
-					"remote_ip":   "203.0.113.10",
-					"remote_port": 443,
+				Observations: &core.TCPObservations{
+					RemoteIP:   "203.0.113.10",
+					RemotePort: 443,
 				},
 				Error: nil,
 			},
 			"tls": {
 				Status:     core.StatusWarn,
 				DurationMS: 31,
-				Observations: map[string]any{
-					"version":                "TLSv1.3",
-					"cipher_suite":           "TLS_AES_256_GCM_SHA384",
-					"cert_days_until_expiry": 5,
+				Observations: &core.TLSObservations{
+					Version:             "TLSv1.3",
+					CipherSuite:         "TLS_AES_256_GCM_SHA384",
+					CertDaysUntilExpiry: ptr(5),
 				},
 				Error: &core.ProbeError{Code: "TLS_CERT_EXPIRING_SOON", Message: "Certificate expires in 5 days"},
 			},
 			"http": {
 				Status:     core.StatusFail,
 				DurationMS: 57,
-				Observations: map[string]any{
-					"method":      "GET",
-					"protocol":    "HTTP/2",
-					"status_code": 503,
-					"status_text": "Service Unavailable",
+				Observations: &core.HTTPObservations{
+					Method:     "GET",
+					Protocol:   "HTTP/2",
+					StatusCode: 503,
+					StatusText: "Service Unavailable",
 				},
 				Error: &core.ProbeError{Code: "HTTP_503", Message: "503 Service Unavailable"},
 			},
@@ -129,25 +143,31 @@ func dnsFailResult() *core.Result {
 			"dns": {
 				Status:       core.StatusFail,
 				DurationMS:   12,
-				Observations: map[string]any{"query_name": "nonexistent.example.com"},
+				Observations: &core.DNSObservations{QueryName: "nonexistent.example.com"},
 				Error:        &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "NXDOMAIN"},
+			},
+			"reachability": {
+				Status:       core.StatusSkip,
+				DurationMS:   0,
+				Observations: &core.ReachabilityObservations{},
+				Error:        nil,
 			},
 			"tcp": {
 				Status:       core.StatusSkip,
 				DurationMS:   0,
-				Observations: map[string]any{},
+				Observations: &core.TCPObservations{},
 				Error:        nil,
 			},
 			"tls": {
 				Status:       core.StatusSkip,
 				DurationMS:   0,
-				Observations: map[string]any{},
+				Observations: &core.TLSObservations{},
 				Error:        nil,
 			},
 			"http": {
 				Status:       core.StatusSkip,
 				DurationMS:   0,
-				Observations: map[string]any{},
+				Observations: &core.HTTPObservations{},
 				Error:        nil,
 			},
 		},
@@ -168,10 +188,10 @@ func TestRenderAllOK(t *testing.T) {
 
 	out := buf.String()
 
-	// Layer order must be dns, tcp, tls, http.
+	// Layer order must be dns, reachability, tcp, tls, http.
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if len(lines) < 5 { // 4 layer lines + 1 blank + 1 summary (at minimum)
-		t.Fatalf("expected at least 5 lines, got %d:\n%s", len(lines), out)
+	if len(lines) < 6 { // 5 layer lines + 1 blank + 1 summary (at minimum)
+		t.Fatalf("expected at least 6 lines, got %d:\n%s", len(lines), out)
 	}
 
 	// Check each layer line contains the expected status symbol and description.
@@ -181,21 +201,25 @@ func TestRenderAllOK(t *testing.T) {
 	assertContains(t, lines[0], "api.example.com")
 	assertContains(t, lines[0], "203.0.113.10")
 
-	assertContains(t, lines[1], "tcp")
+	assertContains(t, lines[1], "reac")
 	assertContains(t, lines[1], "\u2713")
-	assertContains(t, lines[1], "16ms")
-	assertContains(t, lines[1], ":443")
+	assertContains(t, lines[1], "2ms")
 
-	assertContains(t, lines[2], "tls")
+	assertContains(t, lines[2], "tcp")
 	assertContains(t, lines[2], "\u2713")
-	assertContains(t, lines[2], "31ms")
-	assertContains(t, lines[2], "TLSv1.3")
-	assertContains(t, lines[2], "90d")
+	assertContains(t, lines[2], "16ms")
+	assertContains(t, lines[2], ":443")
 
-	assertContains(t, lines[3], "http")
+	assertContains(t, lines[3], "tls")
 	assertContains(t, lines[3], "\u2713")
-	assertContains(t, lines[3], "57ms")
-	assertContains(t, lines[3], "200")
+	assertContains(t, lines[3], "31ms")
+	assertContains(t, lines[3], "TLSv1.3")
+	assertContains(t, lines[3], "90d")
+
+	assertContains(t, lines[4], "http")
+	assertContains(t, lines[4], "\u2713")
+	assertContains(t, lines[4], "57ms")
+	assertContains(t, lines[4], "200")
 
 	// Summary line: all ok.
 	summaryLine := lines[len(lines)-1]
@@ -213,26 +237,29 @@ func TestRenderMixed(t *testing.T) {
 	out := buf.String()
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 
-	// dns and tcp should be ok.
+	// dns, reachability, tcp should be ok.
 	assertContains(t, lines[0], "dns")
 	assertContains(t, lines[0], "\u2713")
 
-	assertContains(t, lines[1], "tcp")
+	assertContains(t, lines[1], "reac")
 	assertContains(t, lines[1], "\u2713")
 
+	assertContains(t, lines[2], "tcp")
+	assertContains(t, lines[2], "\u2713")
+
 	// tls should be warn.
-	assertContains(t, lines[2], "tls")
-	assertContains(t, lines[2], "\u26a0") // ⚠
-	assertContains(t, lines[2], "31ms")
-	assertContains(t, lines[2], "TLSv1.3")
-	assertContains(t, lines[2], "5d")
+	assertContains(t, lines[3], "tls")
+	assertContains(t, lines[3], "\u26a0") // ⚠
+	assertContains(t, lines[3], "31ms")
+	assertContains(t, lines[3], "TLSv1.3")
+	assertContains(t, lines[3], "5d")
 
 	// http should be fail.
-	assertContains(t, lines[3], "http")
-	assertContains(t, lines[3], "\u2717") // ✗
-	assertContains(t, lines[3], "57ms")
-	assertContains(t, lines[3], "503")
-	assertContains(t, lines[3], "Service Unavailable")
+	assertContains(t, lines[4], "http")
+	assertContains(t, lines[4], "\u2717") // ✗
+	assertContains(t, lines[4], "57ms")
+	assertContains(t, lines[4], "503")
+	assertContains(t, lines[4], "Service Unavailable")
 
 	// Summary line: first issue is tls, exit 1.
 	summaryLine := lines[len(lines)-1]
@@ -257,8 +284,8 @@ func TestRenderDNSFail(t *testing.T) {
 	assertContains(t, lines[0], "12ms")
 	assertContains(t, lines[0], "NXDOMAIN")
 
-	// tcp, tls, http should be skip.
-	for _, i := range []int{1, 2, 3} {
+	// reachability, tcp, tls, http should be skip.
+	for _, i := range []int{1, 2, 3, 4} {
 		assertContains(t, lines[i], "-") // dim dash for skip
 	}
 
@@ -290,15 +317,16 @@ func TestRenderASCIIFallback(t *testing.T) {
 
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 
-	// dns/tcp should use [ok].
+	// dns/reachability/tcp should use [ok].
 	assertContains(t, lines[0], "[ok]")
 	assertContains(t, lines[1], "[ok]")
+	assertContains(t, lines[2], "[ok]")
 
 	// tls should use [!!].
-	assertContains(t, lines[2], "[!!]")
+	assertContains(t, lines[3], "[!!]")
 
 	// http should use [FAIL].
-	assertContains(t, lines[3], "[FAIL]")
+	assertContains(t, lines[4], "[FAIL]")
 }
 
 func TestRenderASCIIFallbackSkip(t *testing.T) {
@@ -314,8 +342,8 @@ func TestRenderASCIIFallbackSkip(t *testing.T) {
 	// dns should use [FAIL].
 	assertContains(t, lines[0], "[FAIL]")
 
-	// tcp, tls, http should use [skip].
-	for _, i := range []int{1, 2, 3} {
+	// reachability, tcp, tls, http should use [skip].
+	for _, i := range []int{1, 2, 3, 4} {
 		assertContains(t, lines[i], "[skip]")
 	}
 }
@@ -344,11 +372,11 @@ func TestRenderLayerOrder(t *testing.T) {
 	out := buf.String()
 	lines := strings.Split(strings.TrimSpace(out), "\n")
 
-	if len(lines) < 4 {
-		t.Fatalf("expected at least 4 layer lines, got %d", len(lines))
+	if len(lines) < 5 {
+		t.Fatalf("expected at least 5 layer lines, got %d", len(lines))
 	}
 
-	expected := []string{"dns", "tcp", "tls", "http"}
+	expected := []string{"dns", "reac", "tcp", "tls", "http"}
 	for i, name := range expected {
 		if !strings.Contains(lines[i], name) {
 			t.Errorf("line %d: expected layer %q, got %q", i, name, lines[i])
@@ -368,7 +396,7 @@ func TestRenderTimingAlignment(t *testing.T) {
 
 	// Verify that all layer lines contain timing values.
 	// And that the character immediately after the "ms" suffix is a space (consistent padding).
-	for i := 0; i < 4 && i < len(lines); i++ {
+	for i := 0; i < 5 && i < len(lines); i++ {
 		idx := strings.Index(lines[i], "ms")
 		if idx < 0 {
 			t.Errorf("line %d: missing 'ms' timing", i)
@@ -386,7 +414,7 @@ func TestRenderTimingAlignment(t *testing.T) {
 // tlsScanResult returns a Result with tls_scan observations.
 func tlsScanResult() *core.Result {
 	r := allOKResult()
-	r.Layers["tls"].Observations["tls_scan"] = map[string]any{
+	r.Layers["tls"].Observations.(*core.TLSObservations).TLSScan = map[string]any{
 		"performed": true,
 		"attempts": []any{
 			map[string]any{"version": "TLSv1.0", "supported": true},
@@ -404,6 +432,8 @@ func tlsScanResult() *core.Result {
 func basicCountResult() *core.CountResult {
 	p50dns := 9.0
 	p95dns := 12.0
+	p50reach := 2.0
+	p95reach := 3.0
 	p50tcp := 16.0
 	p95tcp := 18.0
 	p50tls := 31.0
@@ -421,10 +451,11 @@ func basicCountResult() *core.CountResult {
 				Attempt:   1,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":  {Status: core.StatusOK, DurationMS: 9, Observations: map[string]any{"query_name": "api.example.com", "answers": []any{"1.2.3.4"}}},
-					"tcp":  {Status: core.StatusOK, DurationMS: 16, Observations: map[string]any{"remote_port": 443}},
-					"tls":  {Status: core.StatusOK, DurationMS: 31, Observations: map[string]any{"version": "TLSv1.3"}},
-					"http": {Status: core.StatusOK, DurationMS: 57, Observations: map[string]any{"status_code": 200, "status_text": "OK"}},
+					"dns":          {Status: core.StatusOK, DurationMS: 9, Observations: &core.DNSObservations{QueryName: "api.example.com", Answers: []string{"1.2.3.4"}}},
+					"reachability": {Status: core.StatusOK, DurationMS: 2, Observations: &core.ReachabilityObservations{ProbeMethod: "icmp"}},
+					"tcp":          {Status: core.StatusOK, DurationMS: 16, Observations: &core.TCPObservations{RemotePort: 443}},
+					"tls":          {Status: core.StatusOK, DurationMS: 31, Observations: &core.TLSObservations{Version: "TLSv1.3"}},
+					"http":         {Status: core.StatusOK, DurationMS: 57, Observations: &core.HTTPObservations{StatusCode: 200, StatusText: "OK"}},
 				},
 				Summary: &core.Summary{WallClockMS: 113, ExitCode: 0},
 			},
@@ -432,10 +463,11 @@ func basicCountResult() *core.CountResult {
 				Attempt:   2,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 4, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":  {Status: core.StatusOK, DurationMS: 10, Observations: map[string]any{"query_name": "api.example.com", "answers": []any{"1.2.3.4"}}},
-					"tcp":  {Status: core.StatusOK, DurationMS: 15, Observations: map[string]any{"remote_port": 443}},
-					"tls":  {Status: core.StatusOK, DurationMS: 30, Observations: map[string]any{"version": "TLSv1.3"}},
-					"http": {Status: core.StatusOK, DurationMS: 55, Observations: map[string]any{"status_code": 200, "status_text": "OK"}},
+					"dns":          {Status: core.StatusOK, DurationMS: 10, Observations: &core.DNSObservations{QueryName: "api.example.com", Answers: []string{"1.2.3.4"}}},
+					"reachability": {Status: core.StatusOK, DurationMS: 2, Observations: &core.ReachabilityObservations{ProbeMethod: "icmp"}},
+					"tcp":          {Status: core.StatusOK, DurationMS: 15, Observations: &core.TCPObservations{RemotePort: 443}},
+					"tls":          {Status: core.StatusOK, DurationMS: 30, Observations: &core.TLSObservations{Version: "TLSv1.3"}},
+					"http":         {Status: core.StatusOK, DurationMS: 55, Observations: &core.HTTPObservations{StatusCode: 200, StatusText: "OK"}},
 				},
 				Summary: &core.Summary{WallClockMS: 110, ExitCode: 0},
 			},
@@ -443,19 +475,21 @@ func basicCountResult() *core.CountResult {
 				Attempt:   3,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 5, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":  {Status: core.StatusOK, DurationMS: 8, Observations: map[string]any{"query_name": "api.example.com", "answers": []any{"1.2.3.4"}}},
-					"tcp":  {Status: core.StatusOK, DurationMS: 17, Observations: map[string]any{"remote_port": 443}},
-					"tls":  {Status: core.StatusOK, DurationMS: 32, Observations: map[string]any{"version": "TLSv1.3"}},
-					"http": {Status: core.StatusOK, DurationMS: 60, Observations: map[string]any{"status_code": 200, "status_text": "OK"}},
+					"dns":          {Status: core.StatusOK, DurationMS: 8, Observations: &core.DNSObservations{QueryName: "api.example.com", Answers: []string{"1.2.3.4"}}},
+					"reachability": {Status: core.StatusOK, DurationMS: 3, Observations: &core.ReachabilityObservations{ProbeMethod: "icmp"}},
+					"tcp":          {Status: core.StatusOK, DurationMS: 17, Observations: &core.TCPObservations{RemotePort: 443}},
+					"tls":          {Status: core.StatusOK, DurationMS: 32, Observations: &core.TLSObservations{Version: "TLSv1.3"}},
+					"http":         {Status: core.StatusOK, DurationMS: 60, Observations: &core.HTTPObservations{StatusCode: 200, StatusText: "OK"}},
 				},
 				Summary: &core.Summary{WallClockMS: 117, ExitCode: 0},
 			},
 		},
 		Statistics: map[string]*core.LayerStatistics{
-			"dns":  {P50MS: &p50dns, P95MS: &p95dns, SuccessCount: 3, FailCount: 0, SkipCount: 0, SampleCount: 3, LossRatio: 0.0},
-			"tcp":  {P50MS: &p50tcp, P95MS: &p95tcp, SuccessCount: 3, FailCount: 0, SkipCount: 0, SampleCount: 3, LossRatio: 0.0},
-			"tls":  {P50MS: &p50tls, P95MS: &p95tls, SuccessCount: 3, FailCount: 0, SkipCount: 0, SampleCount: 3, LossRatio: 0.0},
-			"http": {P50MS: &p50http, P95MS: &p95http, SuccessCount: 3, FailCount: 0, SkipCount: 0, SampleCount: 3, LossRatio: 0.0},
+			"dns":          {P50MS: &p50dns, P95MS: &p95dns, SuccessCount: 3, FailCount: 0, SkipCount: 0, SampleCount: 3, LossRatio: 0.0},
+			"reachability": {P50MS: &p50reach, P95MS: &p95reach, SuccessCount: 3, FailCount: 0, SkipCount: 0, SampleCount: 3, LossRatio: 0.0},
+			"tcp":          {P50MS: &p50tcp, P95MS: &p95tcp, SuccessCount: 3, FailCount: 0, SkipCount: 0, SampleCount: 3, LossRatio: 0.0},
+			"tls":          {P50MS: &p50tls, P95MS: &p95tls, SuccessCount: 3, FailCount: 0, SkipCount: 0, SampleCount: 3, LossRatio: 0.0},
+			"http":         {P50MS: &p50http, P95MS: &p95http, SuccessCount: 3, FailCount: 0, SkipCount: 0, SampleCount: 3, LossRatio: 0.0},
 		},
 	}
 }
@@ -472,10 +506,11 @@ func allFailCountResult() *core.CountResult {
 				Attempt:   1,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":  {Status: core.StatusFail, DurationMS: 12, Observations: map[string]any{"query_name": "nonexistent.example.com"}, Error: &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "NXDOMAIN"}},
-					"tcp":  {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
-					"tls":  {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
-					"http": {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
+					"dns":          {Status: core.StatusFail, DurationMS: 12, Observations: &core.DNSObservations{QueryName: "nonexistent.example.com"}, Error: &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "NXDOMAIN"}},
+					"reachability": {Status: core.StatusSkip, DurationMS: 0, Observations: &core.ReachabilityObservations{}},
+					"tcp":          {Status: core.StatusSkip, DurationMS: 0, Observations: &core.TCPObservations{}},
+					"tls":          {Status: core.StatusSkip, DurationMS: 0, Observations: &core.TLSObservations{}},
+					"http":         {Status: core.StatusSkip, DurationMS: 0, Observations: &core.HTTPObservations{}},
 				},
 				Summary: &core.Summary{WallClockMS: 12, FirstNonOKLayer: "dns", ExitCode: 1},
 			},
@@ -483,19 +518,21 @@ func allFailCountResult() *core.CountResult {
 				Attempt:   2,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 4, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":  {Status: core.StatusFail, DurationMS: 15, Observations: map[string]any{"query_name": "nonexistent.example.com"}, Error: &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "NXDOMAIN"}},
-					"tcp":  {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
-					"tls":  {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
-					"http": {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
+					"dns":          {Status: core.StatusFail, DurationMS: 15, Observations: &core.DNSObservations{QueryName: "nonexistent.example.com"}, Error: &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "NXDOMAIN"}},
+					"reachability": {Status: core.StatusSkip, DurationMS: 0, Observations: &core.ReachabilityObservations{}},
+					"tcp":          {Status: core.StatusSkip, DurationMS: 0, Observations: &core.TCPObservations{}},
+					"tls":          {Status: core.StatusSkip, DurationMS: 0, Observations: &core.TLSObservations{}},
+					"http":         {Status: core.StatusSkip, DurationMS: 0, Observations: &core.HTTPObservations{}},
 				},
 				Summary: &core.Summary{WallClockMS: 15, FirstNonOKLayer: "dns", ExitCode: 1},
 			},
 		},
 		Statistics: map[string]*core.LayerStatistics{
-			"dns":  {P50MS: nil, P95MS: nil, SuccessCount: 0, FailCount: 2, SkipCount: 0, SampleCount: 2, LossRatio: 1.0},
-			"tcp":  {P50MS: nil, P95MS: nil, SuccessCount: 0, FailCount: 0, SkipCount: 2, SampleCount: 2, LossRatio: 0.0},
-			"tls":  {P50MS: nil, P95MS: nil, SuccessCount: 0, FailCount: 0, SkipCount: 2, SampleCount: 2, LossRatio: 0.0},
-			"http": {P50MS: nil, P95MS: nil, SuccessCount: 0, FailCount: 0, SkipCount: 2, SampleCount: 2, LossRatio: 0.0},
+			"dns":          {P50MS: nil, P95MS: nil, SuccessCount: 0, FailCount: 2, SkipCount: 0, SampleCount: 2, LossRatio: 1.0},
+			"reachability": {P50MS: nil, P95MS: nil, SuccessCount: 0, FailCount: 0, SkipCount: 2, SampleCount: 2, LossRatio: 0.0},
+			"tcp":          {P50MS: nil, P95MS: nil, SuccessCount: 0, FailCount: 0, SkipCount: 2, SampleCount: 2, LossRatio: 0.0},
+			"tls":          {P50MS: nil, P95MS: nil, SuccessCount: 0, FailCount: 0, SkipCount: 2, SampleCount: 2, LossRatio: 0.0},
+			"http":         {P50MS: nil, P95MS: nil, SuccessCount: 0, FailCount: 0, SkipCount: 2, SampleCount: 2, LossRatio: 0.0},
 		},
 	}
 }
@@ -685,6 +722,184 @@ func TestRenderCountAllFail(t *testing.T) {
 
 	// Exit code.
 	assertContains(t, out, "exit 1")
+}
+
+// reachabilityOKResult returns a Result where reachability succeeds with full observations.
+func reachabilityOKResult() *core.Result {
+	r := allOKResult()
+	r.Layers["reachability"] = &core.LayerResult{
+		Status:     core.StatusOK,
+		DurationMS: 3,
+		Observations: &core.ReachabilityObservations{
+			ProbeMethod: "icmp",
+			Reachable:   ptr(true),
+			RTTMS:       ptr(2.5),
+		},
+	}
+	return r
+}
+
+func TestRenderReachabilityOK(t *testing.T) {
+	var buf bytes.Buffer
+	err := Render(&buf, reachabilityOKResult(), false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+
+	// Reachability is line index 1 (after dns).
+	assertContains(t, lines[1], "reachability")
+	assertContains(t, lines[1], "[ok]")
+	assertContains(t, lines[1], "3ms")
+	assertContains(t, lines[1], "icmp")
+}
+
+func TestRenderReachabilitySkip(t *testing.T) {
+	r := allOKResult()
+	r.Layers["reachability"] = &core.LayerResult{
+		Status:       core.StatusSkip,
+		DurationMS:   0,
+		Observations: &core.ReachabilityObservations{SkipReason: ptr("permission_denied")},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+
+	assertContains(t, lines[1], "reachability")
+	assertContains(t, lines[1], "[skip]")
+	assertContains(t, lines[1], "permission denied")
+}
+
+func TestRenderReachabilityFail(t *testing.T) {
+	r := allOKResult()
+	r.Layers["reachability"] = &core.LayerResult{
+		Status:       core.StatusFail,
+		DurationMS:   5,
+		Observations: &core.ReachabilityObservations{},
+		Error:        &core.ProbeError{Code: "REACHABILITY_TIMEOUT", Message: "host unreachable (timeout)"},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+
+	assertContains(t, lines[1], "reachability")
+	assertContains(t, lines[1], "[FAIL]")
+	assertContains(t, lines[1], "host unreachable")
+}
+
+func TestRenderTLSExpandedObservations(t *testing.T) {
+	r := allOKResult()
+	r.Layers["tls"] = &core.LayerResult{
+		Status:     core.StatusOK,
+		DurationMS: 31,
+		Observations: &core.TLSObservations{
+			Version:             "TLSv1.3",
+			CipherSuite:         "TLS_AES_256_GCM_SHA384",
+			CertDaysUntilExpiry: ptr(90),
+			CertVerified:        ptr(true),
+			CertSubject:         ptr("CN=api.example.com"),
+			CertIssuer:          ptr("CN=Let's Encrypt Authority X3"),
+		},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	assertContains(t, out, "TLSv1.3")
+	assertContains(t, out, "CN=api.example.com")
+	assertContains(t, out, "CN=Let's Encrypt Authority X3")
+}
+
+func TestRenderTLSUnverifiedCert(t *testing.T) {
+	r := allOKResult()
+	r.Layers["tls"] = &core.LayerResult{
+		Status:     core.StatusWarn,
+		DurationMS: 31,
+		Observations: &core.TLSObservations{
+			Version:             "TLSv1.3",
+			CertDaysUntilExpiry: ptr(90),
+			CertVerified:        ptr(false),
+			CertSubject:         ptr("CN=api.example.com"),
+		},
+		Error: &core.ProbeError{Code: "TLS_CERT_UNVERIFIED", Message: "certificate not verified"},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	assertContains(t, out, "unverified")
+}
+
+func TestRenderHTTPResponseHeaders(t *testing.T) {
+	r := allOKResult()
+	r.Layers["http"] = &core.LayerResult{
+		Status:     core.StatusOK,
+		DurationMS: 57,
+		Observations: &core.HTTPObservations{
+			Method:     "GET",
+			StatusCode: 200,
+			StatusText: "OK",
+			ResponseHeaders: map[string]string{
+				"Content-Type": "application/json",
+				"Server":       "nginx",
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	assertContains(t, out, "Content-Type: application/json")
+	assertContains(t, out, "Server: nginx")
+}
+
+func TestRenderDNSErrorHint(t *testing.T) {
+	r := allOKResult()
+	r.Layers["dns"] = &core.LayerResult{
+		Status:     core.StatusWarn,
+		DurationMS: 12,
+		Observations: &core.DNSObservations{
+			QueryName:    "api.example.com",
+			Answers:      []string{"203.0.113.10"},
+			DNSErrorHint: ptr("servfail"),
+		},
+		Error: &core.ProbeError{Code: "DNS_WARN", Message: "partial failure"},
+	}
+
+	var buf bytes.Buffer
+	err := Render(&buf, r, false)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	out := buf.String()
+	assertContains(t, out, "hint: servfail")
 }
 
 // assertContains is a test helper that checks if s contains substr.

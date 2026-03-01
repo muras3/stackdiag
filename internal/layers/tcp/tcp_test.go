@@ -63,20 +63,15 @@ func TestTCPSuccess(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	remoteIP, ok := result.Observations["remote_ip"]
+	obs, ok := result.Observations.(*core.TCPObservations)
 	if !ok {
-		t.Fatal("missing remote_ip observation")
+		t.Fatalf("observations type = %T, want *core.TCPObservations", result.Observations)
 	}
-	if remoteIP != "127.0.0.1" {
-		t.Errorf("remote_ip = %v, want 127.0.0.1", remoteIP)
+	if obs.RemoteIP != "127.0.0.1" {
+		t.Errorf("remote_ip = %v, want 127.0.0.1", obs.RemoteIP)
 	}
-
-	remotePort, ok := result.Observations["remote_port"]
-	if !ok {
-		t.Fatal("missing remote_port observation")
-	}
-	if remotePort != addr.Port {
-		t.Errorf("remote_port = %v, want %d", remotePort, addr.Port)
+	if obs.RemotePort != addr.Port {
+		t.Errorf("remote_port = %v, want %d", obs.RemotePort, addr.Port)
 	}
 }
 
@@ -201,7 +196,7 @@ func TestTCPConnectionRefusedFake(t *testing.T) {
 	}
 }
 
-func TestTCPConnectionReset(t *testing.T) {
+func TestTCPResetBecomesError(t *testing.T) {
 	resetErr := &net.OpError{
 		Op:  "dial",
 		Net: "tcp",
@@ -218,8 +213,8 @@ func TestTCPConnectionReset(t *testing.T) {
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	if result.Error == nil || result.Error.Code != "TCP_RESET" {
-		t.Errorf("error code = %v, want TCP_RESET", result.Error)
+	if result.Error == nil || result.Error.Code != "TCP_ERROR" {
+		t.Errorf("error code = %v, want TCP_ERROR", result.Error)
 	}
 }
 
@@ -298,7 +293,11 @@ func TestTCPEmptyObservationsOnFailure(t *testing.T) {
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	if len(result.Observations) != 0 {
-		t.Errorf("observations = %v, want empty map on failure", result.Observations)
+	obs, ok := result.Observations.(*core.TCPObservations)
+	if !ok {
+		t.Fatalf("observations type = %T, want *core.TCPObservations", result.Observations)
+	}
+	if obs.RemoteIP != "" || obs.RemotePort != 0 {
+		t.Errorf("observations = %+v, want empty TCPObservations on failure", obs)
 	}
 }

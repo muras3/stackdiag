@@ -1,0 +1,17 @@
+{
+  "schema_version": "v0.1",
+  "started_at": "2026-02-28T00:00:00Z",
+  "target": "https://nginx-403",
+  "layers": {
+    "dns": {"status": "ok", "duration_ms": 4.0, "observations": {"query_name": "nginx-403", "answers": ["172.20.0.7"]}, "error": null},
+    "tcp": {"status": "ok", "duration_ms": 2.0, "observations": {"remote_ip": "172.20.0.7", "remote_port": 443}, "error": null},
+    "tls": {"status": "ok", "duration_ms": 10.0, "observations": {"version": "TLSv1.3", "cipher_suite": "TLS_AES_256_GCM_SHA384", "cert_days_until_expiry": 365, "cert_hostname_match": true}, "error": null},
+    "http": {
+      "status": "fail",
+      "duration_ms": 4.0,
+      "observations": {"method": "GET", "status_code": 403, "status_text": "Forbidden"},
+      "error": {"code": "HTTP_403", "message": "403 Forbidden"}
+    }
+  },
+  "summary": {"wall_clock_ms": 20.0, "first_non_ok_layer": "http", "exit_code": 40}
+}

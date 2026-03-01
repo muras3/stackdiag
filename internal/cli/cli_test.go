@@ -44,6 +44,16 @@ func TestParseArgsNoArgs(t *testing.T) {
 	}
 }
 
+func TestParseArgsExtraPositionalArgs(t *testing.T) {
+	_, err := ParseArgs([]string{"https://example.com", "extra-arg"})
+	if err == nil {
+		t.Fatal("expected error for extra positional arguments")
+	}
+	if !strings.Contains(err.Error(), "unexpected") {
+		t.Errorf("error should mention 'unexpected', got: %v", err)
+	}
+}
+
 func TestParseArgsHeaders(t *testing.T) {
 	cfg, err := ParseArgs([]string{
 		"--header", "Authorization: Bearer token",
@@ -276,11 +286,21 @@ func TestHelpTextContainsOptions(t *testing.T) {
 
 func TestHelpTextContainsExitCodes(t *testing.T) {
 	text := HelpText()
-	codes := []string{"0 ", "1 ", "2 ", "10 ", "20 ", "30 ", "40 "}
+	codes := []string{"0 ", "1 ", "2 ", "10 ", "15 ", "20 ", "30 ", "40 "}
 	for _, code := range codes {
 		if !strings.Contains(text, code) {
 			t.Errorf("HelpText() missing exit code %q", code)
 		}
+	}
+}
+
+func TestHelpTextContainsExitCode15Reachability(t *testing.T) {
+	text := HelpText()
+	if !strings.Contains(text, "15") {
+		t.Error("HelpText() does not contain exit code 15")
+	}
+	if !strings.Contains(text, "Reachability failure") {
+		t.Error("HelpText() does not mention 'Reachability failure' for exit code 15")
 	}
 }
 
@@ -510,6 +530,71 @@ func TestHelpTextContainsDiagnosticsSection(t *testing.T) {
 	}
 	if !strings.Contains(text, "--count") {
 		t.Error("HelpText() missing --count option")
+	}
+}
+
+func TestParseArgsJSONPretty(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--json-pretty", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.JSON {
+		t.Error("JSON should be true when --json-pretty is used")
+	}
+	if !cfg.JSONPretty {
+		t.Error("JSONPretty should be true")
+	}
+}
+
+func TestParseArgsJSONPrettyDefault(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--json", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !cfg.JSON {
+		t.Error("JSON should be true")
+	}
+	if cfg.JSONPretty {
+		t.Error("JSONPretty should default to false")
+	}
+}
+
+// --- v0.1 expansion: dns-server flag ---
+
+func TestParseArgsDNSServer(t *testing.T) {
+	cfg, err := ParseArgs([]string{"--dns-server", "8.8.8.8:53", "https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DNSServer != "8.8.8.8:53" {
+		t.Errorf("DNSServer = %q, want 8.8.8.8:53", cfg.DNSServer)
+	}
+}
+
+func TestParseArgsDNSServerDefault(t *testing.T) {
+	cfg, err := ParseArgs([]string{"https://example.com"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DNSServer != "" {
+		t.Errorf("DNSServer = %q, want empty", cfg.DNSServer)
+	}
+}
+
+func TestParseArgsDNSServerAfterTarget(t *testing.T) {
+	cfg, err := ParseArgs([]string{"https://example.com", "--dns-server", "1.1.1.1:53"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.DNSServer != "1.1.1.1:53" {
+		t.Errorf("DNSServer = %q, want 1.1.1.1:53", cfg.DNSServer)
+	}
+}
+
+func TestHelpTextContainsDNSServer(t *testing.T) {
+	text := HelpText()
+	if !strings.Contains(text, "--dns-server") {
+		t.Error("HelpText() missing --dns-server option")
 	}
 }
 

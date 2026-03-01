@@ -1,0 +1,32 @@
+{
+  "schema_version": "v0.1",
+  "started_at": "2026-02-28T00:00:00Z",
+  "target": "tcp://nginx-healthy:9999",
+  "layers": {
+    "dns": {
+      "status": "skip",
+      "duration_ms": 0,
+      "observations": {},
+      "error": null
+    },
+    "tcp": {
+      "status": "fail",
+      "duration_ms": 1.0,
+      "observations": {},
+      "error": {"code": "TCP_REFUSED", "message": "Connection refused"}
+    },
+    "tls": {
+      "status": "skip",
+      "duration_ms": 0,
+      "observations": {},
+      "error": null
+    },
+    "http": {
+      "status": "skip",
+      "duration_ms": 0,
+      "observations": {},
+      "error": null
+    }
+  },
+  "summary": {"wall_clock_ms": 1.0, "first_non_ok_layer": "tcp", "exit_code": 20}
+}

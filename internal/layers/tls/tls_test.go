@@ -174,25 +174,25 @@ func TestTLSSuccess(t *testing.T) {
 	}
 
 	// Check observations.
-	if _, ok := result.Observations["version"]; !ok {
+	obs, ok := result.Observations.(*core.TLSObservations)
+	if !ok {
+		t.Fatalf("observations type = %T, want *core.TLSObservations", result.Observations)
+	}
+	if obs.Version == "" {
 		t.Error("missing 'version' observation")
 	}
-	if _, ok := result.Observations["cipher_suite"]; !ok {
+	if obs.CipherSuite == "" {
 		t.Error("missing 'cipher_suite' observation")
 	}
-	days, ok := result.Observations["cert_days_until_expiry"]
-	if !ok {
+	if obs.CertDaysUntilExpiry == nil {
 		t.Error("missing 'cert_days_until_expiry' observation")
+	} else if *obs.CertDaysUntilExpiry < 300 {
+		t.Errorf("cert_days_until_expiry = %d, expected > 300", *obs.CertDaysUntilExpiry)
 	}
-	if d, ok := days.(int); ok && d < 300 {
-		t.Errorf("cert_days_until_expiry = %d, expected > 300", d)
-	}
-	match, ok := result.Observations["cert_hostname_match"]
-	if !ok {
+	if obs.CertHostnameMatch == nil {
 		t.Error("missing 'cert_hostname_match' observation")
-	}
-	if match != true {
-		t.Errorf("cert_hostname_match = %v, want true", match)
+	} else if !*obs.CertHostnameMatch {
+		t.Errorf("cert_hostname_match = %v, want true", *obs.CertHostnameMatch)
 	}
 }
 
@@ -300,12 +300,15 @@ func TestTLSCertExpiringSoon(t *testing.T) {
 		t.Errorf("error = %v, want TLS_CERT_EXPIRING_SOON", result.Error)
 	}
 
-	days, ok := result.Observations["cert_days_until_expiry"]
+	tlsObs, ok := result.Observations.(*core.TLSObservations)
 	if !ok {
+		t.Fatalf("observations type = %T, want *core.TLSObservations", result.Observations)
+	}
+	if tlsObs.CertDaysUntilExpiry == nil {
 		t.Fatal("missing cert_days_until_expiry observation")
 	}
-	if d, ok := days.(int); !ok || d < 10 || d > 20 {
-		t.Errorf("cert_days_until_expiry = %v, want 14-16", days)
+	if d := *tlsObs.CertDaysUntilExpiry; d < 10 || d > 20 {
+		t.Errorf("cert_days_until_expiry = %d, want 14-16", d)
 	}
 }
 
@@ -370,7 +373,7 @@ func (e *fakeTimeoutError) Unwrap() error { return e.wrapped }
 func TestTLSUntrustedChainViaFakeHandshaker(t *testing.T) {
 	layer := New(&fakeHandshaker{
 		durationMS: 4.5,
-		err:        errors.New("x509: certificate signed by unknown authority"),
+		err:        x509.UnknownAuthorityError{Cert: &x509.Certificate{}},
 	})
 
 	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
@@ -547,6 +550,8 @@ func TestTLSGenericError(t *testing.T) {
 
 // Test: Cert expired less than 24h ago — must be EXPIRED, not EXPIRING_SOON.
 // Regression test for int truncation: int(-0.04) == 0 in Go.
+// Uses insecure=true to exercise the post-validation expiry check path
+// (with 2-phase handshake, insecure=false catches expired via x509.Verify).
 func TestTLSCertExpiredLessThan24h(t *testing.T) {
 	now := time.Now()
 	expiredAt := now.Add(-1 * time.Hour) // expired 1 hour ago
@@ -555,9 +560,6 @@ func TestTLSCertExpiredLessThan24h(t *testing.T) {
 		NotAfter: expiredAt,
 		DNSNames: []string{"localhost"},
 	}
-	certDER := []byte("fake") // not used by fake handshaker
-
-	_ = certDER
 	state := &tls.ConnectionState{
 		Version:          tls.VersionTLS13,
 		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
@@ -569,9 +571,10 @@ func TestTLSCertExpiredLessThan24h(t *testing.T) {
 		durationMS: 3.0,
 	})
 
-	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
-	if result.Status != core.StatusFail {
-		t.Fatalf("status = %q, want fail", result.Status)
+	// insecure=true to skip manual cert verification (fake cert can't pass x509.Verify)
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", true))
+	if result.Status != core.StatusWarn {
+		t.Fatalf("status = %q, want warn (insecure mode with expired cert)", result.Status)
 	}
 	if result.Error == nil || result.Error.Code != "TLS_CERT_EXPIRED" {
 		t.Fatalf("error = %v, want TLS_CERT_EXPIRED", result.Error)
@@ -805,7 +808,9 @@ func newScanHandshaker(normalState *tls.ConnectionState) *scanHandshaker {
 }
 
 func makeScanPctx() *core.ProbeContext {
-	pctx := makePctx("localhost", 443, "127.0.0.1", false)
+	// insecure=true: scan tests use fake certs that can't pass x509.Verify;
+	// these tests focus on TLS version scanning, not cert chain validation.
+	pctx := makePctx("localhost", 443, "127.0.0.1", true)
 	pctx.TLSScan = true
 	return pctx
 }
@@ -838,14 +843,14 @@ func TestTLSScanAllVersions(t *testing.T) {
 
 	result := layer.Probe(pctx)
 
-	scanRaw, ok := result.Observations["tls_scan"]
+	tlsObs, ok := result.Observations.(*core.TLSObservations)
 	if !ok {
+		t.Fatalf("observations type = %T, want *core.TLSObservations", result.Observations)
+	}
+	if tlsObs.TLSScan == nil {
 		t.Fatal("missing tls_scan in observations")
 	}
-	scan, ok := scanRaw.(map[string]any)
-	if !ok {
-		t.Fatalf("tls_scan is not map[string]any: %T", scanRaw)
-	}
+	scan := tlsObs.TLSScan
 
 	if scan["performed"] != true {
 		t.Errorf("performed = %v, want true", scan["performed"])
@@ -928,7 +933,7 @@ func TestTLSScanNotPerformedByDefault(t *testing.T) {
 
 	result := layer.Probe(pctx)
 
-	if _, ok := result.Observations["tls_scan"]; ok {
+	if tlsObs, ok := result.Observations.(*core.TLSObservations); ok && tlsObs.TLSScan != nil {
 		t.Error("tls_scan should not be in observations when --tls-scan is not set")
 	}
 }
@@ -936,7 +941,7 @@ func TestTLSScanNotPerformedByDefault(t *testing.T) {
 func TestTLSScanWithFailedNormalProbe(t *testing.T) {
 	h := &scanHandshaker{
 		normalDur: 5.0,
-		normalErr: errors.New("x509: certificate signed by unknown authority"),
+		normalErr: x509.UnknownAuthorityError{Cert: &x509.Certificate{}},
 		versionResults: map[uint16]struct {
 			state *tls.ConnectionState
 			dur   float64
@@ -962,13 +967,15 @@ func TestTLSScanWithFailedNormalProbe(t *testing.T) {
 	}
 
 	// Scan results should still be in observations
-	scanRaw, ok := result.Observations["tls_scan"]
+	tlsObs, ok := result.Observations.(*core.TLSObservations)
 	if !ok {
+		t.Fatalf("observations type = %T, want *core.TLSObservations", result.Observations)
+	}
+	if tlsObs.TLSScan == nil {
 		t.Fatal("missing tls_scan in observations even with failed normal probe")
 	}
-	scan := scanRaw.(map[string]any)
-	if scan["performed"] != true {
-		t.Errorf("performed = %v, want true", scan["performed"])
+	if tlsObs.TLSScan["performed"] != true {
+		t.Errorf("performed = %v, want true", tlsObs.TLSScan["performed"])
 	}
 }
 
@@ -1000,7 +1007,7 @@ func TestTLSScanNoDeprecated(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	scan := result.Observations["tls_scan"].(map[string]any)
+	scan := result.Observations.(*core.TLSObservations).TLSScan
 	dv := scan["deprecated_versions_enabled"].([]string)
 	if len(dv) != 0 {
 		t.Errorf("deprecated_versions_enabled = %v, want empty", dv)
@@ -1034,4 +1041,403 @@ func TestTLSInsecureNotYetValidCert(t *testing.T) {
 	if result.Error == nil || result.Error.Code != "TLS_CERT_NOT_YET_VALID" {
 		t.Errorf("error = %v, want TLS_CERT_NOT_YET_VALID", result.Error)
 	}
+}
+
+// =============================================================================
+// Test: No certificates presented — status=fail, code=TLS_NO_CERTIFICATES
+// =============================================================================
+
+func TestTLSNoCertificatesViaFakeHandshaker(t *testing.T) {
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: nil, // no certs
+	}
+
+	layer := New(&fakeHandshaker{
+		state:      state,
+		durationMS: 2.5,
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_NO_CERTIFICATES" {
+		t.Fatalf("error = %v, want TLS_NO_CERTIFICATES", result.Error)
+	}
+	if result.DurationMS != 2.5 {
+		t.Fatalf("duration_ms = %v, want 2.5", result.DurationMS)
+	}
+}
+
+// =============================================================================
+// Tests: Cert error scenarios should still return observations (2-phase handshake)
+// =============================================================================
+
+// assertHasObservations checks that result.Observations contains the key TLS fields
+// even when the overall status is fail.
+func assertHasObservations(t *testing.T, result *core.LayerResult) {
+	t.Helper()
+
+	obs, ok := result.Observations.(*core.TLSObservations)
+	if !ok {
+		t.Fatalf("observations type = %T, want *core.TLSObservations", result.Observations)
+	}
+	if obs.Version == "" {
+		t.Error("missing 'version' in observations")
+	}
+	if obs.CipherSuite == "" {
+		t.Error("missing 'cipher_suite' in observations")
+	}
+	if obs.CertDaysUntilExpiry == nil {
+		t.Error("missing 'cert_days_until_expiry' in observations")
+	}
+	if obs.CertHostnameMatch == nil {
+		t.Error("missing 'cert_hostname_match' in observations")
+	}
+}
+
+func TestTLSExpiredCertHasObservations(t *testing.T) {
+	now := time.Now()
+	cert, pool := generateCert(t, certOpts{
+		hosts:     []string{"localhost"},
+		notBefore: now.Add(-48 * time.Hour),
+		notAfter:  now.Add(-1 * time.Hour), // expired
+	})
+
+	addr, cleanup := startTLSServer(t, cert)
+	defer cleanup()
+
+	host, portStr, _ := net.SplitHostPort(addr)
+	port := 0
+	for _, c := range portStr {
+		port = port*10 + int(c-'0')
+	}
+
+	handshaker := &realHandshakerWithRoots{roots: pool}
+	layer := New(handshaker)
+
+	pctx := makePctx("localhost", port, host, false)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_CERT_EXPIRED" {
+		t.Errorf("error = %v, want TLS_CERT_EXPIRED", result.Error)
+	}
+
+	// Key assertion: even on cert error, observations must be populated
+	assertHasObservations(t, result)
+}
+
+func TestTLSHostnameMismatchHasObservations(t *testing.T) {
+	now := time.Now()
+	cert, pool := generateCert(t, certOpts{
+		hosts:     []string{"other.example.com"}, // SAN does not match "localhost"
+		notBefore: now.Add(-1 * time.Hour),
+		notAfter:  now.Add(365 * 24 * time.Hour),
+	})
+
+	addr, cleanup := startTLSServer(t, cert)
+	defer cleanup()
+
+	host, portStr, _ := net.SplitHostPort(addr)
+	port := 0
+	for _, c := range portStr {
+		port = port*10 + int(c-'0')
+	}
+
+	handshaker := &realHandshakerWithRoots{roots: pool}
+	layer := New(handshaker)
+
+	pctx := makePctx("localhost", port, host, false)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_HOSTNAME_MISMATCH" {
+		t.Errorf("error = %v, want TLS_HOSTNAME_MISMATCH", result.Error)
+	}
+
+	// Key assertion: even on cert error, observations must be populated
+	assertHasObservations(t, result)
+}
+
+// =============================================================================
+// V0.2 Tests: TLS observations expansion and error classification
+// =============================================================================
+
+func TestTLSObservationsV02(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		Subject:   pkix.Name{CommonName: "example.com"},
+		Issuer:    pkix.Name{CommonName: "Test CA"},
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  []string{"example.com", "www.example.com"},
+	}
+	intermediate := &x509.Certificate{
+		Subject:  pkix.Name{CommonName: "Intermediate CA"},
+		Issuer:   pkix.Name{CommonName: "Root CA"},
+		NotAfter: now.Add(10 * 365 * 24 * time.Hour),
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf, intermediate},
+	}
+
+	obs := buildObservations(state, "example.com", true)
+
+	// Existing fields
+	if obs.Version != "TLSv1.3" {
+		t.Errorf("version = %v, want TLSv1.3", obs.Version)
+	}
+
+	// New v0.1 fields
+	if obs.CertVerified == nil || !*obs.CertVerified {
+		t.Errorf("cert_verified = %v, want true", obs.CertVerified)
+	}
+	if obs.CertSubject == nil || *obs.CertSubject != "example.com" {
+		t.Errorf("cert_subject = %v, want example.com", obs.CertSubject)
+	}
+	if obs.CertSAN == nil {
+		t.Fatal("cert_san is nil")
+	}
+	san := *obs.CertSAN
+	if len(san) != 2 || san[0] != "example.com" || san[1] != "www.example.com" {
+		t.Errorf("cert_san = %v, want [example.com www.example.com]", san)
+	}
+	if obs.CertIssuer == nil || *obs.CertIssuer != "Test CA" {
+		t.Errorf("cert_issuer = %v, want Test CA", obs.CertIssuer)
+	}
+	if obs.CertNotAfter == nil || *obs.CertNotAfter != leaf.NotAfter.UTC().Format(time.RFC3339) {
+		t.Errorf("cert_not_after = %v, want %v", obs.CertNotAfter, leaf.NotAfter.UTC().Format(time.RFC3339))
+	}
+	if obs.CertNotBefore == nil || *obs.CertNotBefore != leaf.NotBefore.UTC().Format(time.RFC3339) {
+		t.Errorf("cert_not_before = %v, want %v", obs.CertNotBefore, leaf.NotBefore.UTC().Format(time.RFC3339))
+	}
+
+	// cert_chain
+	if len(obs.CertChain) != 2 {
+		t.Fatalf("cert_chain length = %d, want 2", len(obs.CertChain))
+	}
+	if obs.CertChain[0].Subject != "example.com" || obs.CertChain[0].Issuer != "Test CA" {
+		t.Errorf("cert_chain[0] = %+v", obs.CertChain[0])
+	}
+	if obs.CertChain[1].Subject != "Intermediate CA" || obs.CertChain[1].Issuer != "Root CA" {
+		t.Errorf("cert_chain[1] = %+v", obs.CertChain[1])
+	}
+}
+
+func TestTLSCertSanEmpty(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		Subject:   pkix.Name{CommonName: "example.com"},
+		Issuer:    pkix.Name{CommonName: "Test CA"},
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  nil, // no SANs
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	obs := buildObservations(state, "example.com", true)
+
+	if obs.CertSAN == nil {
+		t.Fatal("cert_san is nil, want non-nil pointer to empty slice")
+	}
+	if len(*obs.CertSAN) != 0 {
+		t.Errorf("cert_san = %v, want empty slice", *obs.CertSAN)
+	}
+}
+
+func TestTLSCertVerifiedTrue(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		Subject:   pkix.Name{CommonName: "example.com"},
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  []string{"example.com"},
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	obs := buildObservations(state, "example.com", true) // verified=true
+	if obs.CertVerified == nil || *obs.CertVerified != true {
+		t.Errorf("cert_verified = %v, want true", obs.CertVerified)
+	}
+}
+
+func TestTLSCertVerifiedFalse(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		Subject:   pkix.Name{CommonName: "example.com"},
+		NotBefore: now.Add(-1 * time.Hour),
+		NotAfter:  now.Add(365 * 24 * time.Hour),
+		DNSNames:  []string{"example.com"},
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf},
+	}
+
+	obs := buildObservations(state, "example.com", false) // verified=false (InsecureSkipVerify path)
+	if obs.CertVerified == nil || *obs.CertVerified != false {
+		t.Errorf("cert_verified = %v, want false", obs.CertVerified)
+	}
+}
+
+func TestTLSCertChainSummary(t *testing.T) {
+	now := time.Now()
+	leaf := &x509.Certificate{
+		Subject:  pkix.Name{CommonName: "leaf.example.com"},
+		Issuer:   pkix.Name{CommonName: "Intermediate CA"},
+		NotAfter: now.Add(365 * 24 * time.Hour),
+	}
+	inter := &x509.Certificate{
+		Subject:  pkix.Name{CommonName: "Intermediate CA"},
+		Issuer:   pkix.Name{CommonName: "Root CA"},
+		NotAfter: now.Add(5 * 365 * 24 * time.Hour),
+	}
+	root := &x509.Certificate{
+		Subject:  pkix.Name{CommonName: "Root CA"},
+		Issuer:   pkix.Name{CommonName: "Root CA"},
+		NotAfter: now.Add(10 * 365 * 24 * time.Hour),
+	}
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: []*x509.Certificate{leaf, inter, root},
+	}
+
+	obs := buildObservations(state, "leaf.example.com", true)
+	chain := obs.CertChain
+	if len(chain) != 3 {
+		t.Fatalf("cert_chain length = %d, want 3", len(chain))
+	}
+
+	// Verify each entry has subject, issuer, not_after
+	for i, entry := range chain {
+		if entry.Subject == "" {
+			t.Errorf("cert_chain[%d] missing subject", i)
+		}
+		if entry.Issuer == "" {
+			t.Errorf("cert_chain[%d] missing issuer", i)
+		}
+		if entry.NotAfter == "" {
+			t.Errorf("cert_chain[%d] missing not_after", i)
+		}
+	}
+
+	if chain[0].Subject != "leaf.example.com" {
+		t.Errorf("chain[0].Subject = %q, want leaf.example.com", chain[0].Subject)
+	}
+	if chain[2].Subject != "Root CA" {
+		t.Errorf("chain[2].Subject = %q, want Root CA", chain[2].Subject)
+	}
+}
+
+func TestTLSHostnameMismatchTypeAssertion(t *testing.T) {
+	hostErr := x509.HostnameError{
+		Host: "wrong.example.com",
+		Certificate: &x509.Certificate{
+			DNSNames: []string{"example.com"},
+		},
+	}
+	result := classifyTLSError(hostErr)
+	if result.Code != "TLS_HOSTNAME_MISMATCH" {
+		t.Errorf("code = %q, want TLS_HOSTNAME_MISMATCH", result.Code)
+	}
+}
+
+func TestTLSUntrustedChainTypeAssertion(t *testing.T) {
+	unknownAuth := x509.UnknownAuthorityError{
+		Cert: &x509.Certificate{},
+	}
+	result := classifyTLSError(unknownAuth)
+	if result.Code != "TLS_UNTRUSTED_CHAIN" {
+		t.Errorf("code = %q, want TLS_UNTRUSTED_CHAIN", result.Code)
+	}
+}
+
+func TestTLSNoCertificates(t *testing.T) {
+	state := &tls.ConnectionState{
+		Version:          tls.VersionTLS13,
+		CipherSuite:      tls.TLS_AES_256_GCM_SHA384,
+		PeerCertificates: nil, // empty
+	}
+
+	layer := New(&fakeHandshaker{
+		state:      state,
+		durationMS: 2.0,
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_NO_CERTIFICATES" {
+		t.Fatalf("error = %v, want TLS_NO_CERTIFICATES", result.Error)
+	}
+}
+
+func TestTLSProtocolErrorOnPlainHTTP(t *testing.T) {
+	// When TLS connects to a plain HTTP server, Go returns this error.
+	layer := New(&fakeHandshaker{
+		durationMS: 1.0,
+		err:        errors.New("tls: first record does not look like a TLS handshake"),
+	})
+
+	result := layer.Probe(makePctx("localhost", 443, "127.0.0.1", false))
+	if result.Status != core.StatusFail {
+		t.Fatalf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_PROTOCOL_ERROR" {
+		t.Fatalf("error code = %q, want TLS_PROTOCOL_ERROR", result.Error.Code)
+	}
+}
+
+func TestTLSUntrustedChainHasObservations(t *testing.T) {
+	now := time.Now()
+	cert, _ := generateCert(t, certOpts{
+		hosts:     []string{"localhost"},
+		notBefore: now.Add(-1 * time.Hour),
+		notAfter:  now.Add(365 * 24 * time.Hour),
+	})
+
+	addr, cleanup := startTLSServer(t, cert)
+	defer cleanup()
+
+	host, portStr, _ := net.SplitHostPort(addr)
+	port := 0
+	for _, c := range portStr {
+		port = port*10 + int(c-'0')
+	}
+
+	// Use DefaultHandshaker (no custom root pool) → untrusted chain
+	layer := NewDefault()
+
+	pctx := makePctx("localhost", port, host, false)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "TLS_UNTRUSTED_CHAIN" {
+		t.Errorf("error = %v, want TLS_UNTRUSTED_CHAIN", result.Error)
+	}
+
+	// Key assertion: even on cert error, observations must be populated
+	assertHasObservations(t, result)
 }

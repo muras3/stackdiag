@@ -1,4 +1,6 @@
 bin/
+stackdiag
+stdiag
 *.exe
 *.exe~
 *.dll
@@ -7,3 +9,6 @@ bin/
 .DS_Store
 .agent-logs/
 docs/internal/
+bench/results/
+__pycache__/
+*.pyc

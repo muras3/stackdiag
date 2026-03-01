@@ -3,16 +3,22 @@ package testkit
 import (
 	"context"
 	"net"
+	"time"
 )
 
 // FakeResolver returns preconfigured results.
 type FakeResolver struct {
-	IPs []string
-	Err error
+	IPs          []string
+	Err          error
+	ResolverAddr string
 }
 
 func (f *FakeResolver) LookupHost(_ context.Context, _ string) ([]string, error) {
 	return f.IPs, f.Err
+}
+
+func (f *FakeResolver) ResolverAddress() string {
+	return f.ResolverAddr
 }
 
 // FakeDialer returns preconfigured results.
@@ -23,4 +29,14 @@ type FakeDialer struct {
 
 func (f *FakeDialer) DialContext(_ context.Context, _, _ string) (net.Conn, error) {
 	return f.Conn, f.Err
+}
+
+// FakePinger returns preconfigured results.
+type FakePinger struct {
+	RTT time.Duration
+	Err error
+}
+
+func (f *FakePinger) Ping(_ context.Context, _ string) (time.Duration, error) {
+	return f.RTT, f.Err
 }

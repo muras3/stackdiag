@@ -50,6 +50,19 @@ func TestFromResult(t *testing.T) {
 			want: 10,
 		},
 		{
+			name: "reachability fail returns 15",
+			result: &core.Result{
+				Layers: map[string]*core.LayerResult{
+					"dns":          {Status: core.StatusOK},
+					"reachability": {Status: core.StatusFail},
+					"tcp":          {Status: core.StatusSkip},
+					"tls":          {Status: core.StatusSkip},
+					"http":         {Status: core.StatusSkip},
+				},
+			},
+			want: 15,
+		},
+		{
 			name: "tcp fail returns 20",
 			result: &core.Result{
 				Layers: map[string]*core.LayerResult{

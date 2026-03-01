@@ -53,9 +53,10 @@ func TestRender(t *testing.T) {
 		t.Fatalf("invalid JSON output: %v\n%s", err, buf.String())
 	}
 
-	// Must be indented (contains newlines).
-	if !bytes.Contains(buf.Bytes(), []byte("\n")) {
-		t.Error("expected indented JSON output")
+	// Must be compact (single line + trailing newline).
+	lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+	if len(lines) != 1 {
+		t.Errorf("expected compact single-line JSON, got %d lines", len(lines))
 	}
 }
 
@@ -163,9 +164,10 @@ func TestRenderCount(t *testing.T) {
 		t.Fatalf("invalid JSON output: %v\n%s", err, buf.String())
 	}
 
-	// Must be indented (contains newlines).
-	if !bytes.Contains(buf.Bytes(), []byte("\n")) {
-		t.Error("expected indented JSON output")
+	// Must be compact (single line + trailing newline).
+	lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+	if len(lines) != 1 {
+		t.Errorf("expected compact single-line JSON, got %d lines", len(lines))
 	}
 
 	// Must have expected top-level structure.
@@ -177,6 +179,62 @@ func TestRenderCount(t *testing.T) {
 		if _, ok := m[key]; !ok {
 			t.Errorf("missing top-level field: %q", key)
 		}
+	}
+}
+
+func TestRenderPretty(t *testing.T) {
+	var buf bytes.Buffer
+	err := RenderPretty(&buf, testResult())
+	if err != nil {
+		t.Fatalf("RenderPretty error: %v", err)
+	}
+
+	// Must be valid JSON.
+	var raw json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON output: %v\n%s", err, buf.String())
+	}
+
+	// Must be multi-line (indented).
+	lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+	if len(lines) <= 1 {
+		t.Error("expected multi-line pretty-printed JSON")
+	}
+}
+
+func TestRenderCountPretty(t *testing.T) {
+	var buf bytes.Buffer
+	err := RenderCountPretty(&buf, testCountResult())
+	if err != nil {
+		t.Fatalf("RenderCountPretty error: %v", err)
+	}
+
+	var raw json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON output: %v\n%s", err, buf.String())
+	}
+
+	lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+	if len(lines) <= 1 {
+		t.Error("expected multi-line pretty-printed JSON")
+	}
+}
+
+func TestRenderToolErrorPretty(t *testing.T) {
+	var buf bytes.Buffer
+	err := RenderToolErrorPretty(&buf, "INVALID_ARGS", "missing target", 1)
+	if err != nil {
+		t.Fatalf("RenderToolErrorPretty error: %v", err)
+	}
+
+	var raw json.RawMessage
+	if err := json.Unmarshal(buf.Bytes(), &raw); err != nil {
+		t.Fatalf("invalid JSON: %v\n%s", err, buf.String())
+	}
+
+	lines := bytes.Split(bytes.TrimRight(buf.Bytes(), "\n"), []byte("\n"))
+	if len(lines) <= 1 {
+		t.Error("expected multi-line pretty-printed tool error JSON")
 	}
 }
 

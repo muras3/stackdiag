@@ -6,6 +6,7 @@
 //	1  = tool error (INVALID_TARGET, INVALID_ARGS)
 //	2  = warn (any layer has warn status, none failed)
 //	10 = DNS failure
+//	15 = Reachability failure
 //	20 = TCP failure
 //	30 = TLS failure
 //	40 = HTTP failure
@@ -13,16 +14,17 @@ package exitcode
 
 import "github.com/muras3/stackdiag/internal/core"
 
-// layerOrder defines the evaluation order for layers.
+// layerOrder is the canonical evaluation order for layers.
 // The first failing layer in this order determines the exit code.
-var layerOrder = []string{"dns", "tcp", "tls", "http"}
+var layerOrder = core.LayerOrder
 
 // layerCodes maps layer names to their exit codes.
 var layerCodes = map[string]int{
-	"dns":  10,
-	"tcp":  20,
-	"tls":  30,
-	"http": 40,
+	"dns":          10,
+	"reachability": 15,
+	"tcp":          20,
+	"tls":          30,
+	"http":         40,
 }
 
 // toolErrorCodes are error codes that indicate a tool-level error (exit 1).
