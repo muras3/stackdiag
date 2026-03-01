@@ -86,7 +86,7 @@ func marshalNoEscape(v any) ([]byte, error) {
 // order (dns→tcp→tls→http) rather than Go's default alphabetical map key order.
 func (r *Result) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
-	buf.Grow(512)
+	buf.Grow(1536)
 	buf.WriteByte('{')
 	if err := writeField(&buf, true, "schema_version", r.SchemaVersion); err != nil {
 		return nil, err
@@ -119,7 +119,7 @@ type AttemptResult struct {
 // order (dns→tcp→tls→http).
 func (a *AttemptResult) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
-	buf.Grow(512)
+	buf.Grow(1536)
 	buf.WriteByte('{')
 	if err := writeField(&buf, true, "attempt", a.Attempt); err != nil {
 		return nil, err
@@ -162,7 +162,7 @@ type CountResult struct {
 // execution order (dns→tcp→tls→http).
 func (c *CountResult) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
-	buf.Grow(512)
+	buf.Grow(1536)
 	buf.WriteByte('{')
 	if err := writeField(&buf, true, "schema_version", c.SchemaVersion); err != nil {
 		return nil, err

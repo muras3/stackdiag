@@ -145,24 +145,26 @@ func buildURL(pctx *core.ProbeContext) string {
 }
 
 // importantResponseHeaders is the allowlist of response headers to capture.
+// Keys use http.CanonicalHeaderKey casing to match net/http's canonical form,
+// avoiding a strings.ToLower call on every header during lookup.
 var importantResponseHeaders = map[string]bool{
-	"content-type":             true,
-	"server":                   true,
-	"x-request-id":             true,
-	"x-correlation-id":         true,
-	"retry-after":              true,
-	"www-authenticate":         true,
-	"location":                 true,
-	"x-ratelimit-limit":        true,
-	"x-ratelimit-remaining":    true,
-	"x-ratelimit-reset":        true,
-	"strict-transport-security": true,
-	"x-content-type-options":   true,
-	"x-frame-options":          true,
-	"cache-control":            true,
-	"age":                      true,
-	"cf-ray":                   true,
-	"x-served-by":              true,
+	"Content-Type":              true,
+	"Server":                    true,
+	"X-Request-Id":              true,
+	"X-Correlation-Id":          true,
+	"Retry-After":               true,
+	"Www-Authenticate":          true,
+	"Location":                  true,
+	"X-Ratelimit-Limit":         true,
+	"X-Ratelimit-Remaining":     true,
+	"X-Ratelimit-Reset":         true,
+	"Strict-Transport-Security": true,
+	"X-Content-Type-Options":    true,
+	"X-Frame-Options":           true,
+	"Cache-Control":             true,
+	"Age":                       true,
+	"Cf-Ray":                    true,
+	"X-Served-By":               true,
 }
 
 // buildResponseHeaders returns allowlisted response headers, with sensitive
@@ -170,8 +172,7 @@ var importantResponseHeaders = map[string]bool{
 func buildResponseHeaders(header http.Header, redact bool) map[string]string {
 	result := make(map[string]string)
 	for name, values := range header {
-		lower := strings.ToLower(name)
-		if !importantResponseHeaders[lower] {
+		if !importantResponseHeaders[name] {
 			continue
 		}
 		val := strings.Join(values, ", ")

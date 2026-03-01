@@ -14,9 +14,9 @@ package exitcode
 
 import "github.com/muras3/stackdiag/internal/core"
 
-// layerOrder defines the evaluation order for layers.
+// layerOrder is the canonical evaluation order for layers.
 // The first failing layer in this order determines the exit code.
-var layerOrder = []string{"dns", "reachability", "tcp", "tls", "http"}
+var layerOrder = core.LayerOrder
 
 // layerCodes maps layer names to their exit codes.
 var layerCodes = map[string]int{

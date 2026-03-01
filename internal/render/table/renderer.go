@@ -19,8 +19,8 @@ const (
 	colorReset  = "\033[0m"
 )
 
-// layerOrder defines the fixed display order for layers.
-var layerOrder = []string{"dns", "reachability", "tcp", "tls", "http"}
+// layerOrder is the canonical display order for layers.
+var layerOrder = core.LayerOrder
 
 // Render writes the Result as a human-readable table to w.
 // When useColor is true, output uses ANSI escape codes and Unicode symbols.
