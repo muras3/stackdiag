@@ -3,7 +3,7 @@
 ## What is this?
 
 `stackdiag` — structured network diagnostics for AI agents and humans.
-1コマンドでDNS→TCP→TLS→HTTPを切り分ける軽量Go CLI。
+1コマンドでDNS→Reachability→TCP→TLS→HTTPを切り分ける軽量Go CLI。
 
 ## Key Documents
 

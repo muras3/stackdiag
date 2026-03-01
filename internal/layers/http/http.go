@@ -259,6 +259,9 @@ func classifyStatusCode(code int) *core.ProbeError {
 	}
 
 	// Generic categories.
+	if code >= 400 && code < 500 {
+		return &core.ProbeError{Code: "HTTP_4XX", Message: msg}
+	}
 	if code >= 500 {
 		return &core.ProbeError{Code: "HTTP_5XX", Message: msg}
 	}

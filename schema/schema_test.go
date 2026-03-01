@@ -59,7 +59,6 @@ func TestSchemaDefinitionsExist(t *testing.T) {
 		"CertChainEntry",
 		"TLSScan",
 		"TLSScanAttempt",
-		"LayerResult",
 		"DNSLayerResult",
 		"ReachabilityLayerResult",
 		"TCPLayerResult",
@@ -94,7 +93,6 @@ func TestSchemaFieldsMatchGoStructs(t *testing.T) {
 	}{
 		{"Result", reflect.TypeOf(core.Result{}), nil},
 		{"Summary", reflect.TypeOf(core.Summary{}), nil},
-		{"LayerResult", reflect.TypeOf(core.LayerResult{}), nil},
 		{"DNSObservations", reflect.TypeOf(core.DNSObservations{}), nil},
 		{"ReachabilityObservations", reflect.TypeOf(core.ReachabilityObservations{}), nil},
 		{"TCPObservations", reflect.TypeOf(core.TCPObservations{}), nil},
@@ -428,7 +426,7 @@ func TestSchemaErrorCodesComplete(t *testing.T) {
 		"TLS_HANDSHAKE_TIMEOUT", "TLS_PROTOCOL_ERROR", "TLS_DEPRECATED_VERSION_ENABLED", "TLS_ERROR",
 		// HTTP
 		"HTTP_401", "HTTP_403", "HTTP_404", "HTTP_429",
-		"HTTP_500", "HTTP_502", "HTTP_503", "HTTP_504", "HTTP_5XX",
+		"HTTP_500", "HTTP_502", "HTTP_503", "HTTP_504", "HTTP_4XX", "HTTP_5XX",
 		"HTTP_TIMEOUT", "HTTP_ERROR",
 		// Tool
 		"INVALID_TARGET", "INVALID_ARGS",

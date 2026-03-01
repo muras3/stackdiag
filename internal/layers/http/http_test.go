@@ -410,6 +410,25 @@ func TestHTTPGeneric5xx(t *testing.T) {
 	}
 }
 
+func TestHTTPGeneric4xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(418)
+	}))
+	defer srv.Close()
+
+	layer := New(srv.Client())
+	pctx := makePctx(srv.URL)
+	pctx.Target = targetFromURL(t, srv.URL)
+	result := layer.Probe(pctx)
+
+	if result.Status != core.StatusFail {
+		t.Errorf("status = %q, want fail", result.Status)
+	}
+	if result.Error == nil || result.Error.Code != "HTTP_4XX" {
+		t.Errorf("error = %v, want HTTP_4XX (418 is not a named status code)", result.Error)
+	}
+}
+
 func TestHTTPProtocolObservation(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(200)

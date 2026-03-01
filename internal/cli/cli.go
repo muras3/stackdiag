@@ -41,9 +41,9 @@ USAGE:
   stdiag <url> [options]
 
 TARGETS:
-  https://host/path     Full HTTPS check (DNS → TCP → TLS → HTTP)
-  http://host/path      HTTP check (DNS → TCP → HTTP, no TLS)
-  tcp://host:port       TCP connectivity only (DNS → TCP)
+  https://host/path     Full HTTPS check (DNS → Reachability → TCP → TLS → HTTP)
+  http://host/path      HTTP check (DNS → Reachability → TCP → HTTP, no TLS)
+  tcp://host:port       TCP connectivity only (DNS → Reachability → TCP)
   host                  Bare hostname defaults to https://
 
 OPTIONS:

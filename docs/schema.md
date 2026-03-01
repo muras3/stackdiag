@@ -211,6 +211,7 @@ Note: `DNS_SERVFAIL`, `DNS_REFUSED`, and `DNS_NO_ANSWER` are not contract error 
 | `HTTP_502` | 502 Bad Gateway |
 | `HTTP_503` | 503 Service Unavailable |
 | `HTTP_504` | 504 Gateway Timeout |
+| `HTTP_4XX` | Other 4xx status (fallback for unknown 4xx) |
 | `HTTP_5XX` | Other 5xx status (fallback for unknown 5xx) |
 | `HTTP_TIMEOUT` | HTTP request timed out |
 | `HTTP_ERROR` | Other HTTP error (fallback) |
@@ -228,7 +229,7 @@ Note: `DNS_SERVFAIL`, `DNS_REFUSED`, and `DNS_NO_ANSWER` are not contract error 
 2. **Fallback to `*_ERROR`** — unclassifiable errors use the layer's generic code (`DNS_ERROR`, `TCP_ERROR`, etc.)
 3. **HTTP fixed set** — status codes 401, 403, 404, 429, 500, 502, 503, 504 get individual `HTTP_{N}` codes
 4. **Unknown 5xx** — 5xx codes outside the fixed set become `HTTP_5XX`
-5. **Unknown 4xx** — 4xx codes outside the fixed set become `HTTP_{N}` with the actual status code
+5. **Unknown 4xx** — 4xx codes outside the fixed set become `HTTP_4XX`
 
 ## Exit Codes
 
@@ -388,7 +389,7 @@ When `--count N` is used, the output structure changes to a `CountResult`:
 | `success_count` | int | Number of attempts where this layer succeeded |
 | `fail_count` | int | Number of attempts where this layer failed |
 | `skip_count` | int | Number of attempts where this layer was skipped |
-| `sample_count` | int | Total number of attempts |
+| `sample_count` | int | Number of non-skipped attempts (`success_count + fail_count`) |
 | `loss_ratio` | float64 | Fraction of failed attempts (0.0 to 1.0) |
 
 ## Tool Error JSON
@@ -517,26 +518,26 @@ Breaking changes (field removals, type changes) are permitted only across major 
 
 ```bash
 # Get the status of a specific layer
-stackdiag --json https://example.com 2>/dev/null | jq -r '.layers.tls.status'
+stdiag --json https://example.com 2>/dev/null | jq -r '.layers.tls.status'
 
 # Check reachability
-stackdiag --json https://example.com 2>/dev/null | jq -r '.layers.reachability.observations.reachable'
+stdiag --json https://example.com 2>/dev/null | jq -r '.layers.reachability.observations.reachable'
 
 # Extract the first failing layer
-stackdiag --json https://example.com 2>/dev/null | jq -r '.summary.first_non_ok_layer'
+stdiag --json https://example.com 2>/dev/null | jq -r '.summary.first_non_ok_layer'
 
 # Get all error codes
-stackdiag --json https://example.com 2>/dev/null | jq '[.layers[] | select(.error != null) | .error.code]'
+stdiag --json https://example.com 2>/dev/null | jq '[.layers[] | select(.error != null) | .error.code]'
 
 # Check if all layers passed
-stackdiag --json https://example.com 2>/dev/null | jq '.summary.exit_code == 0'
+stdiag --json https://example.com 2>/dev/null | jq '.summary.exit_code == 0'
 ```
 
 ### Use in scripts
 
 ```bash
 #!/bin/bash
-RESULT=$(stackdiag --json "$TARGET" 2>/dev/null)
+RESULT=$(stdiag --json "$TARGET" 2>/dev/null)
 EXIT=$?
 
 case $EXIT in
@@ -569,4 +570,4 @@ stackdiag is stateless and writes structured JSON to stdout — it can be wrappe
 }
 ```
 
-Execute: `stackdiag --json <target> 2>/dev/null`
+Execute: `stdiag --json <target> 2>/dev/null`

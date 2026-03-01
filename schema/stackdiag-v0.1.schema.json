@@ -47,6 +47,7 @@
             "HTTP_502",
             "HTTP_503",
             "HTTP_504",
+            "HTTP_4XX",
             "HTTP_5XX",
             "HTTP_TIMEOUT",
             "HTTP_ERROR",
@@ -215,24 +216,6 @@
         }
       },
       "required": ["method", "protocol", "status_code", "status_text", "request_headers", "response_headers"],
-      "additionalProperties": false
-    },
-    "LayerResult": {
-      "type": "object",
-      "properties": {
-        "status": { "$ref": "#/$defs/Status" },
-        "duration_ms": { "type": "number" },
-        "observations": {
-          "type": "object"
-        },
-        "error": {
-          "oneOf": [
-            { "$ref": "#/$defs/ProbeError" },
-            { "type": "null" }
-          ]
-        }
-      },
-      "required": ["status", "duration_ms", "observations", "error"],
       "additionalProperties": false
     },
     "DNSLayerResult": {
