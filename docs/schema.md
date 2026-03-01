@@ -290,7 +290,7 @@ HTTP redirects are **not** followed. The response from the first request is repo
 
 ### DNS Resolution
 
-Uses the system resolver via Go's `net.LookupHost`. No custom DNS server configuration in v0.1.
+Uses the system resolver via Go's `net.LookupHost` by default. Custom resolver can be specified with `--dns-server <host>[:<port>]` (port defaults to 53).
 
 ### TLS / `--insecure`
 
