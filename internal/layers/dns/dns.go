@@ -148,6 +148,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 			Status:     core.StatusFail,
 			DurationMS: durationMS,
 			Observations: &core.DNSObservations{
+				Answers:         []string{},
 				QueryName:       pctx.Target.Host,
 				DNSErrorHint:    hint,
 				ResolverAddress: resolverAddr,

@@ -45,12 +45,14 @@ func TestDNSObservationsJSON_Success(t *testing.T) {
 
 func TestDNSObservationsJSON_Error(t *testing.T) {
 	old := map[string]any{
+		"answers":          []any{},
 		"query_name":       "bad.example.com",
 		"dns_error_hint":   "servfail",
 		"ttl":              nil,
 		"resolver_address": nil,
 	}
 	new := DNSObservations{
+		Answers:         []string{},
 		QueryName:       "bad.example.com",
 		DNSErrorHint:    ptr("servfail"),
 		TTL:             nil,
@@ -61,12 +63,14 @@ func TestDNSObservationsJSON_Error(t *testing.T) {
 
 func TestDNSObservationsJSON_ErrorNilHint(t *testing.T) {
 	old := map[string]any{
+		"answers":          []any{},
 		"query_name":       "fail.example.com",
 		"dns_error_hint":   nil,
 		"ttl":              nil,
 		"resolver_address": nil,
 	}
 	new := DNSObservations{
+		Answers:         []string{},
 		QueryName:       "fail.example.com",
 		DNSErrorHint:    nil,
 		TTL:             nil,
@@ -137,7 +141,7 @@ func TestTCPObservationsJSON_OK(t *testing.T) {
 }
 
 func TestTCPObservationsJSON_Error(t *testing.T) {
-	old := map[string]any{}
+	old := map[string]any{"remote_ip": "", "remote_port": 0}
 	new := TCPObservations{}
 	assertJSONEqual(t, "tcp-error", old, new)
 }

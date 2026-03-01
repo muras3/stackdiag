@@ -139,8 +139,8 @@ func (a *AttemptResult) MarshalJSON() ([]byte, error) {
 
 // LayerStatistics holds aggregate statistics for a single layer across multiple attempts.
 type LayerStatistics struct {
-	P50MS        *float64 `json:"p50_ms,omitempty"`
-	P95MS        *float64 `json:"p95_ms,omitempty"`
+	P50MS        *float64 `json:"p50_ms"`
+	P95MS        *float64 `json:"p95_ms"`
 	SuccessCount int      `json:"success_count"`
 	FailCount    int      `json:"fail_count"`
 	SkipCount    int      `json:"skip_count"`

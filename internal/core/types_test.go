@@ -2,6 +2,7 @@ package core
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -209,7 +210,7 @@ func TestCountResultStatisticsOrder(t *testing.T) {
 	}
 }
 
-func TestLayerStatisticsOmitsNilPercentiles(t *testing.T) {
+func TestLayerStatisticsNilPercentilesEmitNull(t *testing.T) {
 	ls := &LayerStatistics{
 		SuccessCount: 0,
 		FailCount:    3,
@@ -223,11 +224,11 @@ func TestLayerStatisticsOmitsNilPercentiles(t *testing.T) {
 	}
 
 	s := string(b)
-	if indexOf(s, "p50_ms") != -1 {
-		t.Errorf("nil p50_ms should be omitted, got: %s", s)
+	if !strings.Contains(s, `"p50_ms":null`) {
+		t.Errorf("nil p50_ms should emit null, got: %s", s)
 	}
-	if indexOf(s, "p95_ms") != -1 {
-		t.Errorf("nil p95_ms should be omitted, got: %s", s)
+	if !strings.Contains(s, `"p95_ms":null`) {
+		t.Errorf("nil p95_ms should emit null, got: %s", s)
 	}
 }
 

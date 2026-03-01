@@ -4,7 +4,7 @@ package core
 // Fields are ordered alphabetically by JSON tag for byte-identical
 // marshaling with the previous map[string]any approach.
 type DNSObservations struct {
-	Answers         []string `json:"answers,omitempty"`
+	Answers         []string `json:"answers"`
 	DNSErrorHint    *string  `json:"dns_error_hint"`
 	QueryName       string   `json:"query_name"`
 	ResolverAddress *string  `json:"resolver_address"`
@@ -21,8 +21,8 @@ type ReachabilityObservations struct {
 
 // TCPObservations holds typed observations for the TCP layer.
 type TCPObservations struct {
-	RemoteIP   string `json:"remote_ip,omitempty"`
-	RemotePort int    `json:"remote_port,omitempty"`
+	RemoteIP   string `json:"remote_ip"`
+	RemotePort int    `json:"remote_port"`
 }
 
 // CertChainEntry holds a single certificate in the TLS chain.
