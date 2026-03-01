@@ -50,19 +50,12 @@ func TestHTTPSuccess(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	sc, ok := result.Observations.(map[string]any)["status_code"]
-	if !ok {
-		t.Fatal("missing status_code observation")
+	obs := httpObs(t, result)
+	if obs.StatusCode != 200 {
+		t.Errorf("status_code = %v, want 200", obs.StatusCode)
 	}
-	if sc.(int) != 200 {
-		t.Errorf("status_code = %v, want 200", sc)
-	}
-	method, ok := result.Observations.(map[string]any)["method"]
-	if !ok {
-		t.Fatal("missing method observation")
-	}
-	if method.(string) != "GET" {
-		t.Errorf("method = %v, want GET", method)
+	if obs.Method != "GET" {
+		t.Errorf("method = %v, want GET", obs.Method)
 	}
 }
 
@@ -296,8 +289,9 @@ func TestHTTPCustomMethodAndHeaders(t *testing.T) {
 	if receivedHeader != "test-value" {
 		t.Errorf("server received X-Custom = %q, want test-value", receivedHeader)
 	}
-	if m, ok := result.Observations.(map[string]any)["method"]; !ok || m.(string) != "POST" {
-		t.Errorf("method observation = %v, want POST", result.Observations.(map[string]any)["method"])
+	obs := httpObs(t, result)
+	if obs.Method != "POST" {
+		t.Errorf("method observation = %v, want POST", obs.Method)
 	}
 }
 
@@ -391,12 +385,9 @@ func TestHTTP3xxStatusOk(t *testing.T) {
 	if result.Status != core.StatusOK {
 		t.Errorf("status = %q, want ok for 3xx; error = %v", result.Status, result.Error)
 	}
-	sc, ok := result.Observations.(map[string]any)["status_code"]
-	if !ok {
-		t.Fatal("missing status_code")
-	}
-	if sc.(int) != 301 {
-		t.Errorf("status_code = %v, want 301", sc)
+	obs := httpObs(t, result)
+	if obs.StatusCode != 301 {
+		t.Errorf("status_code = %v, want 301", obs.StatusCode)
 	}
 }
 
@@ -433,40 +424,26 @@ func TestHTTPProtocolObservation(t *testing.T) {
 	if result.Status != core.StatusOK {
 		t.Fatalf("status = %q, want ok; error = %v", result.Status, result.Error)
 	}
-	proto, ok := result.Observations.(map[string]any)["protocol"]
+	obs := httpObs(t, result)
+	if !strings.HasPrefix(obs.Protocol, "HTTP/") {
+		t.Errorf("protocol = %q, want HTTP/... prefix", obs.Protocol)
+	}
+}
+
+// httpObs extracts typed HTTPObservations from the result.
+func httpObs(t *testing.T, result *core.LayerResult) *core.HTTPObservations {
+	t.Helper()
+	obs, ok := result.Observations.(*core.HTTPObservations)
 	if !ok {
-		t.Fatal("missing protocol observation")
+		t.Fatalf("observations type = %T, want *core.HTTPObservations", result.Observations)
 	}
-	p := proto.(string)
-	if !strings.HasPrefix(p, "HTTP/") {
-		t.Errorf("protocol = %q, want HTTP/... prefix", p)
-	}
+	return obs
 }
 
 // requestHeadersObs extracts request_headers from observations as map[string]string.
 func requestHeadersObs(t *testing.T, result *core.LayerResult) map[string]string {
 	t.Helper()
-	raw, ok := result.Observations.(map[string]any)["request_headers"]
-	if !ok {
-		t.Fatal("missing request_headers observation")
-	}
-	switch h := raw.(type) {
-	case map[string]string:
-		return h
-	case map[string]any:
-		out := make(map[string]string, len(h))
-		for k, v := range h {
-			s, ok := v.(string)
-			if !ok {
-				t.Fatalf("request_headers[%q] has non-string type %T", k, v)
-			}
-			out[k] = s
-		}
-		return out
-	default:
-		t.Fatalf("request_headers has unexpected type %T", raw)
-		return nil
-	}
+	return httpObs(t, result).RequestHeaders
 }
 
 func TestHTTPRequestHeadersPresent(t *testing.T) {
@@ -670,27 +647,7 @@ func TestHTTPRequestHeadersEmptyMap(t *testing.T) {
 // responseHeadersObs extracts response_headers from observations as map[string]string.
 func responseHeadersObs(t *testing.T, result *core.LayerResult) map[string]string {
 	t.Helper()
-	raw, ok := result.Observations.(map[string]any)["response_headers"]
-	if !ok {
-		t.Fatal("missing response_headers observation")
-	}
-	switch h := raw.(type) {
-	case map[string]string:
-		return h
-	case map[string]any:
-		out := make(map[string]string, len(h))
-		for k, v := range h {
-			s, ok := v.(string)
-			if !ok {
-				t.Fatalf("response_headers[%q] has non-string type %T", k, v)
-			}
-			out[k] = s
-		}
-		return out
-	default:
-		t.Fatalf("response_headers has unexpected type %T", raw)
-		return nil
-	}
+	return httpObs(t, result).ResponseHeaders
 }
 
 func TestHTTPResponseHeaders(t *testing.T) {

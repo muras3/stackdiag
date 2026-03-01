@@ -49,11 +49,9 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 			return &core.LayerResult{
 				Status:     core.StatusSkip,
 				DurationMS: durationMS,
-				Observations: map[string]any{
-					"probe_method": "none",
-					"reachable":    nil,
-					"rtt_ms":       nil,
-					"skip_reason":  reason,
+				Observations: &core.ReachabilityObservations{
+					ProbeMethod: "none",
+					SkipReason:  &reason,
 				},
 			}
 		}
@@ -63,28 +61,27 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 			code = "REACHABILITY_TIMEOUT"
 		}
 
+		f := false
 		return &core.LayerResult{
 			Status:     core.StatusFail,
 			DurationMS: durationMS,
-			Observations: map[string]any{
-				"probe_method": "icmp",
-				"reachable":    false,
-				"rtt_ms":       nil,
-				"skip_reason":  nil,
+			Observations: &core.ReachabilityObservations{
+				ProbeMethod: "icmp",
+				Reachable:   &f,
 			},
 			Error: &core.ProbeError{Code: code, Message: err.Error()},
 		}
 	}
 
 	rttMS := float64(rtt.Microseconds()) / 1000.0
+	tr := true
 	return &core.LayerResult{
 		Status:     core.StatusOK,
 		DurationMS: durationMS,
-		Observations: map[string]any{
-			"probe_method": "icmp",
-			"reachable":    true,
-			"rtt_ms":       rttMS,
-			"skip_reason":  nil,
+		Observations: &core.ReachabilityObservations{
+			ProbeMethod: "icmp",
+			Reachable:   &tr,
+			RTTMS:       &rttMS,
 		},
 	}
 }

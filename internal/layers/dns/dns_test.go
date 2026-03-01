@@ -22,6 +22,15 @@ func makeCtx(t *testing.T, timeout time.Duration) *core.ProbeContext {
 	}
 }
 
+func dnsObs(t *testing.T, result *core.LayerResult) *core.DNSObservations {
+	t.Helper()
+	obs, ok := result.Observations.(*core.DNSObservations)
+	if !ok {
+		t.Fatalf("observations type = %T, want *core.DNSObservations", result.Observations)
+	}
+	return obs
+}
+
 func TestDNSSuccess(t *testing.T) {
 	layer := New(&testkit.FakeResolver{IPs: []string{"203.0.113.10"}})
 	pctx := makeCtx(t, 5*time.Second)
@@ -36,13 +45,9 @@ func TestDNSSuccess(t *testing.T) {
 	if result.Error != nil {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
-	answers, ok := result.Observations.(map[string]any)["answers"]
-	if !ok {
-		t.Fatal("missing answers observation")
-	}
-	ips := answers.([]string)
-	if len(ips) != 1 || ips[0] != "203.0.113.10" {
-		t.Errorf("answers = %v", ips)
+	obs := dnsObs(t, result)
+	if len(obs.Answers) != 1 || obs.Answers[0] != "203.0.113.10" {
+		t.Errorf("answers = %v", obs.Answers)
 	}
 	// ResolvedIPs should be propagated to context.
 	if len(pctx.ResolvedIPs) != 1 || pctx.ResolvedIPs[0] != "203.0.113.10" {
@@ -129,13 +134,9 @@ func TestDNSMultipleIPs(t *testing.T) {
 	if result.Status != core.StatusOK {
 		t.Errorf("status = %q, want ok", result.Status)
 	}
-	answers, ok := result.Observations.(map[string]any)["answers"]
-	if !ok {
-		t.Fatal("missing answers observation")
-	}
-	ips := answers.([]string)
-	if len(ips) != 3 {
-		t.Errorf("answers len = %d, want 3", len(ips))
+	obs := dnsObs(t, result)
+	if len(obs.Answers) != 3 {
+		t.Errorf("answers len = %d, want 3", len(obs.Answers))
 	}
 	if len(pctx.ResolvedIPs) != 3 {
 		t.Errorf("ResolvedIPs len = %d, want 3", len(pctx.ResolvedIPs))
@@ -153,12 +154,9 @@ func TestDNSServfailBecomesErrorWithHint(t *testing.T) {
 	if result.Error == nil || result.Error.Code != "DNS_ERROR" {
 		t.Errorf("error code = %v, want DNS_ERROR", result.Error)
 	}
-	hint, ok := result.Observations.(map[string]any)["dns_error_hint"]
-	if !ok {
-		t.Fatal("missing dns_error_hint observation")
-	}
-	if hint != "servfail" {
-		t.Errorf("dns_error_hint = %v, want servfail", hint)
+	obs := dnsObs(t, result)
+	if obs.DNSErrorHint == nil || *obs.DNSErrorHint != "servfail" {
+		t.Errorf("dns_error_hint = %v, want servfail", obs.DNSErrorHint)
 	}
 }
 
@@ -173,12 +171,9 @@ func TestDNSRefusedBecomesErrorWithHint(t *testing.T) {
 	if result.Error == nil || result.Error.Code != "DNS_ERROR" {
 		t.Errorf("error code = %v, want DNS_ERROR", result.Error)
 	}
-	hint, ok := result.Observations.(map[string]any)["dns_error_hint"]
-	if !ok {
-		t.Fatal("missing dns_error_hint observation")
-	}
-	if hint != "refused" {
-		t.Errorf("dns_error_hint = %v, want refused", hint)
+	obs := dnsObs(t, result)
+	if obs.DNSErrorHint == nil || *obs.DNSErrorHint != "refused" {
+		t.Errorf("dns_error_hint = %v, want refused", obs.DNSErrorHint)
 	}
 }
 
@@ -193,12 +188,9 @@ func TestDNSNoAnswerBecomesErrorWithHint(t *testing.T) {
 	if result.Error == nil || result.Error.Code != "DNS_ERROR" {
 		t.Errorf("error code = %v, want DNS_ERROR", result.Error)
 	}
-	hint, ok := result.Observations.(map[string]any)["dns_error_hint"]
-	if !ok {
-		t.Fatal("missing dns_error_hint observation")
-	}
-	if hint != "no_answer" {
-		t.Errorf("dns_error_hint = %v, want no_answer", hint)
+	obs := dnsObs(t, result)
+	if obs.DNSErrorHint == nil || *obs.DNSErrorHint != "no_answer" {
+		t.Errorf("dns_error_hint = %v, want no_answer", obs.DNSErrorHint)
 	}
 }
 
@@ -213,12 +205,9 @@ func TestDNSNxdomainUnchanged(t *testing.T) {
 	if result.Error == nil || result.Error.Code != "DNS_NXDOMAIN" {
 		t.Errorf("error code = %v, want DNS_NXDOMAIN", result.Error)
 	}
-	hint, ok := result.Observations.(map[string]any)["dns_error_hint"]
-	if !ok {
-		t.Fatal("missing dns_error_hint observation")
-	}
-	if hint != nil {
-		t.Errorf("dns_error_hint = %v, want nil", hint)
+	obs := dnsObs(t, result)
+	if obs.DNSErrorHint != nil {
+		t.Errorf("dns_error_hint = %v, want nil", obs.DNSErrorHint)
 	}
 }
 
@@ -233,53 +222,40 @@ func TestDNSTimeoutUnchanged(t *testing.T) {
 	if result.Error == nil || result.Error.Code != "DNS_TIMEOUT" {
 		t.Errorf("error code = %v, want DNS_TIMEOUT", result.Error)
 	}
-	hint, ok := result.Observations.(map[string]any)["dns_error_hint"]
-	if !ok {
-		t.Fatal("missing dns_error_hint observation")
-	}
-	if hint != nil {
-		t.Errorf("dns_error_hint = %v, want nil", hint)
+	obs := dnsObs(t, result)
+	if obs.DNSErrorHint != nil {
+		t.Errorf("dns_error_hint = %v, want nil", obs.DNSErrorHint)
 	}
 }
 
 func TestDNSObservationsHaveHintField(t *testing.T) {
-	// On success, dns_error_hint should still be present as nil.
+	// On success, dns_error_hint should be nil.
 	layer := New(&testkit.FakeResolver{IPs: []string{"203.0.113.10"}})
 	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusOK {
 		t.Errorf("status = %q, want ok", result.Status)
 	}
-	hint, ok := result.Observations.(map[string]any)["dns_error_hint"]
-	if !ok {
-		t.Fatal("missing dns_error_hint observation on success")
-	}
-	if hint != nil {
-		t.Errorf("dns_error_hint = %v, want nil on success", hint)
+	obs := dnsObs(t, result)
+	if obs.DNSErrorHint != nil {
+		t.Errorf("dns_error_hint = %v, want nil on success", obs.DNSErrorHint)
 	}
 }
 
 func TestDNSObservationsHaveTTLAndResolver(t *testing.T) {
-	// On success, ttl and resolver_address should be present as nil placeholders.
+	// On success, ttl and resolver_address should be nil placeholders.
 	layer := New(&testkit.FakeResolver{IPs: []string{"203.0.113.10"}})
 	result := layer.Probe(makeCtx(t, 5*time.Second))
 
 	if result.Status != core.StatusOK {
 		t.Errorf("status = %q, want ok", result.Status)
 	}
-	ttl, ok := result.Observations.(map[string]any)["ttl"]
-	if !ok {
-		t.Fatal("missing ttl observation")
+	obs := dnsObs(t, result)
+	if obs.TTL != nil {
+		t.Errorf("ttl = %v, want nil", obs.TTL)
 	}
-	if ttl != nil {
-		t.Errorf("ttl = %v, want nil", ttl)
-	}
-	resolver, ok := result.Observations.(map[string]any)["resolver_address"]
-	if !ok {
-		t.Fatal("missing resolver_address observation")
-	}
-	if resolver != nil {
-		t.Errorf("resolver_address = %v, want nil", resolver)
+	if obs.ResolverAddress != nil {
+		t.Errorf("resolver_address = %v, want nil", obs.ResolverAddress)
 	}
 }
 
@@ -294,9 +270,9 @@ func TestDNSResolverAddressReturned(t *testing.T) {
 	if result.Status != core.StatusOK {
 		t.Fatalf("status = %q, want ok", result.Status)
 	}
-	addr := result.Observations.(map[string]any)["resolver_address"]
-	if addr != "192.168.1.1:53" {
-		t.Errorf("resolver_address = %v, want 192.168.1.1:53", addr)
+	obs := dnsObs(t, result)
+	if obs.ResolverAddress == nil || *obs.ResolverAddress != "192.168.1.1:53" {
+		t.Errorf("resolver_address = %v, want 192.168.1.1:53", obs.ResolverAddress)
 	}
 }
 
@@ -310,9 +286,9 @@ func TestDNSResolverAddressNilWhenEmpty(t *testing.T) {
 	if result.Status != core.StatusOK {
 		t.Fatalf("status = %q, want ok", result.Status)
 	}
-	addr := result.Observations.(map[string]any)["resolver_address"]
-	if addr != nil {
-		t.Errorf("resolver_address = %v, want nil", addr)
+	obs := dnsObs(t, result)
+	if obs.ResolverAddress != nil {
+		t.Errorf("resolver_address = %v, want nil", obs.ResolverAddress)
 	}
 }
 
@@ -333,9 +309,9 @@ func TestDNSResolverAddressNilWhenInterfaceNotImplemented(t *testing.T) {
 	if result.Status != core.StatusOK {
 		t.Fatalf("status = %q, want ok", result.Status)
 	}
-	addr := result.Observations.(map[string]any)["resolver_address"]
-	if addr != nil {
-		t.Errorf("resolver_address = %v, want nil (interface not implemented)", addr)
+	obs := dnsObs(t, result)
+	if obs.ResolverAddress != nil {
+		t.Errorf("resolver_address = %v, want nil (interface not implemented)", obs.ResolverAddress)
 	}
 }
 
@@ -414,9 +390,9 @@ func TestDNSAllLinkLocalServersProduceDNSError(t *testing.T) {
 	if result.Error == nil || result.Error.Code != "DNS_ERROR" {
 		t.Errorf("error = %v, want DNS_ERROR", result.Error)
 	}
-	addr := result.Observations.(map[string]any)["resolver_address"]
-	if addr != nil {
-		t.Errorf("resolver_address = %v, want nil when all servers are link-local", addr)
+	obs := dnsObs(t, result)
+	if obs.ResolverAddress != nil {
+		t.Errorf("resolver_address = %v, want nil when all servers are link-local", obs.ResolverAddress)
 	}
 }
 
@@ -455,11 +431,8 @@ func TestDNSQueryNameOnFailure(t *testing.T) {
 	if result.Status != core.StatusFail {
 		t.Errorf("status = %q, want fail", result.Status)
 	}
-	qn, ok := result.Observations.(map[string]any)["query_name"]
-	if !ok {
-		t.Fatal("missing query_name observation on failure")
-	}
-	if qn != "example.com" {
-		t.Errorf("query_name = %q, want example.com", qn)
+	obs := dnsObs(t, result)
+	if obs.QueryName != "example.com" {
+		t.Errorf("query_name = %q, want example.com", obs.QueryName)
 	}
 }

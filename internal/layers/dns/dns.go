@@ -139,26 +139,24 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	durationMS := float64(time.Since(start).Microseconds()) / 1000.0
 
 	// Check if resolver reports its address.
-	var resolverAddr any
+	var resolverAddr *string
 	if ra, ok := l.resolver.(ResolverWithAddress); ok {
 		if addr := ra.ResolverAddress(); addr != "" {
-			resolverAddr = addr
+			resolverAddr = &addr
 		}
 	}
 
 	if err != nil {
 		probeErr, hint := classifyDNSError(err)
-		obs := map[string]any{
-			"query_name":       pctx.Target.Host,
-			"dns_error_hint":   hint,
-			"ttl":              nil,
-			"resolver_address": resolverAddr,
-		}
 		return &core.LayerResult{
-			Status:       core.StatusFail,
-			DurationMS:   durationMS,
-			Observations: obs,
-			Error:        probeErr,
+			Status:     core.StatusFail,
+			DurationMS: durationMS,
+			Observations: &core.DNSObservations{
+				QueryName:       pctx.Target.Host,
+				DNSErrorHint:    hint,
+				ResolverAddress: resolverAddr,
+			},
+			Error: probeErr,
 		}
 	}
 
@@ -168,18 +166,16 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	return &core.LayerResult{
 		Status:     core.StatusOK,
 		DurationMS: durationMS,
-		Observations: map[string]any{
-			"query_name":       pctx.Target.Host,
-			"answers":          ips,
-			"dns_error_hint":   nil,
-			"ttl":              nil,
-			"resolver_address": resolverAddr,
+		Observations: &core.DNSObservations{
+			QueryName:       pctx.Target.Host,
+			Answers:         ips,
+			ResolverAddress: resolverAddr,
 		},
 		Error: nil,
 	}
 }
 
-func classifyDNSError(err error) (*core.ProbeError, any) {
+func classifyDNSError(err error) (*core.ProbeError, *string) {
 	if errors.Is(err, context.DeadlineExceeded) || errors.Is(err, context.Canceled) {
 		return &core.ProbeError{Code: "DNS_TIMEOUT", Message: "DNS resolution timed out"}, nil
 	}
@@ -201,15 +197,18 @@ func classifyDNSError(err error) (*core.ProbeError, any) {
 	return &core.ProbeError{Code: "DNS_ERROR", Message: "DNS resolution failed"}, hint
 }
 
-func inferDNSHint(dnsErr *net.DNSError) any {
+func inferDNSHint(dnsErr *net.DNSError) *string {
 	msg := dnsErr.Err
 	switch {
 	case strings.Contains(msg, "server misbehaving"):
-		return "servfail"
+		s := "servfail"
+		return &s
 	case strings.Contains(msg, "refused"):
-		return "refused"
+		s := "refused"
+		return &s
 	case strings.Contains(msg, "no answer"):
-		return "no_answer"
+		s := "no_answer"
+		return &s
 	default:
 		return nil
 	}

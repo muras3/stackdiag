@@ -82,7 +82,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		result := &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   durationMS,
-			Observations: map[string]any{},
+			Observations: &core.TLSObservations{},
 			Error:        classifyTLSError(err),
 		}
 		if pctx.TLSScan {
@@ -132,7 +132,8 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 
 		// Verification passed — update cert_verified in observations
 		verified = true
-		obs["cert_verified"] = true
+		v := true
+		obs.CertVerified = &v
 	}
 
 	// Check certificate expiry, not-yet-valid, and hostname even on successful handshake.
@@ -215,43 +216,48 @@ func buildAddr(pctx *core.ProbeContext) string {
 	return net.JoinHostPort(host, strconv.Itoa(pctx.Target.Port))
 }
 
-// buildObservations creates the observations map from the TLS connection state.
+// buildObservations creates the typed TLS observations from the connection state.
 // The verified parameter indicates whether the certificate was validated through
 // normal verification (true) or retrieved via InsecureSkipVerify (false).
-func buildObservations(state *tls.ConnectionState, serverName string, verified bool) map[string]any {
-	obs := map[string]any{
-		"version":      tlsVersionString(state.Version),
-		"cipher_suite": tls.CipherSuiteName(state.CipherSuite),
+func buildObservations(state *tls.ConnectionState, serverName string, verified bool) *core.TLSObservations {
+	obs := &core.TLSObservations{
+		Version:     tlsVersionString(state.Version),
+		CipherSuite: tls.CipherSuiteName(state.CipherSuite),
 	}
 
 	if len(state.PeerCertificates) > 0 {
 		leaf := state.PeerCertificates[0]
 		daysUntilExpiry := int(time.Until(leaf.NotAfter).Hours() / 24)
-		obs["cert_days_until_expiry"] = daysUntilExpiry
-		obs["cert_hostname_match"] = certMatchesHost(leaf, serverName)
+		hostnameMatch := certMatchesHost(leaf, serverName)
+		subject := leaf.Subject.CommonName
+		issuer := leaf.Issuer.CommonName
+		notAfter := leaf.NotAfter.UTC().Format(time.RFC3339)
+		notBefore := leaf.NotBefore.UTC().Format(time.RFC3339)
 
-		// v0.2 expanded observations
-		obs["cert_verified"] = verified
-		obs["cert_subject"] = leaf.Subject.CommonName
+		obs.CertDaysUntilExpiry = &daysUntilExpiry
+		obs.CertHostnameMatch = &hostnameMatch
+		obs.CertVerified = &verified
+		obs.CertSubject = &subject
+		obs.CertIssuer = &issuer
+		obs.CertNotAfter = &notAfter
+		obs.CertNotBefore = &notBefore
+
 		san := leaf.DNSNames
 		if san == nil {
 			san = []string{}
 		}
-		obs["cert_san"] = san
-		obs["cert_issuer"] = leaf.Issuer.CommonName
-		obs["cert_not_after"] = leaf.NotAfter.UTC().Format(time.RFC3339)
-		obs["cert_not_before"] = leaf.NotBefore.UTC().Format(time.RFC3339)
+		obs.CertSAN = &san
 
 		// cert_chain: summary of each certificate in the chain
-		chain := make([]map[string]string, len(state.PeerCertificates))
+		chain := make([]core.CertChainEntry, len(state.PeerCertificates))
 		for i, cert := range state.PeerCertificates {
-			chain[i] = map[string]string{
-				"subject":   cert.Subject.CommonName,
-				"issuer":    cert.Issuer.CommonName,
-				"not_after": cert.NotAfter.UTC().Format(time.RFC3339),
+			chain[i] = core.CertChainEntry{
+				Subject:  cert.Subject.CommonName,
+				Issuer:   cert.Issuer.CommonName,
+				NotAfter: cert.NotAfter.UTC().Format(time.RFC3339),
 			}
 		}
-		obs["cert_chain"] = chain
+		obs.CertChain = chain
 	}
 
 	return obs
@@ -392,8 +398,8 @@ func (l *Layer) performTLSScan(pctx *core.ProbeContext, addr string, result *cor
 		"supported_versions":          supportedVersions,
 		"deprecated_versions_enabled": deprecatedEnabled,
 	}
-	if m, ok := result.Observations.(map[string]any); ok {
-		m["tls_scan"] = tlsScanData
+	if obs, ok := result.Observations.(*core.TLSObservations); ok {
+		obs.TLSScan = tlsScanData
 	}
 
 	// If deprecated versions found and normal probe was ok → warn

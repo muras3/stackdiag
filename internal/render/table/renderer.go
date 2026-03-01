@@ -116,67 +116,45 @@ func formatDuration(ms float64) string {
 	return fmt.Sprintf("%dms", int(math.Round(ms)))
 }
 
-// obsMap extracts a map[string]any from the Observations field.
-// Returns nil if Observations is not a map.
-func obsMap(lr *core.LayerResult) map[string]any {
-	if m, ok := lr.Observations.(map[string]any); ok {
-		return m
-	}
-	return nil
-}
-
 // layerDescription builds the description string for a layer line.
 func layerDescription(name string, lr *core.LayerResult, useColor bool) string {
-	// If the layer failed or warned and has an error, use error message for fail.
-	// For warn, we still show observations but fall through to error if no observations.
+	// If the layer failed and has an error, use error message.
 	if lr.Status == core.StatusFail && lr.Error != nil {
 		return lr.Error.Message
 	}
 
 	if lr.Status == core.StatusSkip {
-		// Reachability skip shows skip_reason.
 		if name == "reachability" {
-			if obs := obsMap(lr); obs != nil {
-				if reason, ok := obs["skip_reason"].(string); ok {
-					return strings.ReplaceAll(reason, "_", " ")
-				}
+			if obs, ok := lr.Observations.(*core.ReachabilityObservations); ok && obs.SkipReason != nil {
+				return strings.ReplaceAll(*obs.SkipReason, "_", " ")
 			}
 		}
 		return ""
 	}
 
-	obs := obsMap(lr)
-	if obs == nil {
+	switch obs := lr.Observations.(type) {
+	case *core.DNSObservations:
+		return dnsDescription(obs, lr, useColor)
+	case *core.ReachabilityObservations:
+		return reachabilityDescription(obs, lr)
+	case *core.TCPObservations:
+		return tcpDescription(obs, lr)
+	case *core.TLSObservations:
+		return tlsDescription(obs, lr)
+	case *core.HTTPObservations:
+		return httpDescription(obs, lr)
+	default:
 		if lr.Error != nil {
 			return lr.Error.Message
 		}
 		return ""
 	}
-
-	switch name {
-	case "dns":
-		return dnsDescription(obs, lr, useColor)
-	case "reachability":
-		return reachabilityDescription(obs, lr)
-	case "tcp":
-		return tcpDescription(obs, lr)
-	case "tls":
-		return tlsDescription(obs, lr)
-	case "http":
-		return httpDescription(obs, lr)
-	default:
-		return ""
-	}
 }
 
 // reachabilityDescription builds the description for the reachability layer.
-func reachabilityDescription(obs map[string]any, lr *core.LayerResult) string {
-	method, _ := obs["probe_method"].(string)
-	if method == "" {
-		method, _ = obs["method"].(string)
-	}
-	if method != "" {
-		return method
+func reachabilityDescription(obs *core.ReachabilityObservations, lr *core.LayerResult) string {
+	if obs.ProbeMethod != "" {
+		return obs.ProbeMethod
 	}
 	if lr.Error != nil {
 		return lr.Error.Message
@@ -185,21 +163,11 @@ func reachabilityDescription(obs map[string]any, lr *core.LayerResult) string {
 }
 
 // dnsDescription builds: "{query_name} → {first_answer}" or error message.
-func dnsDescription(obs map[string]any, lr *core.LayerResult, useColor bool) string {
-	queryName, _ := obs["query_name"].(string)
+func dnsDescription(obs *core.DNSObservations, lr *core.LayerResult, useColor bool) string {
+	queryName := obs.QueryName
 	var firstAnswer string
-
-	if answers, ok := obs["answers"]; ok {
-		switch a := answers.(type) {
-		case []any:
-			if len(a) > 0 {
-				firstAnswer = fmt.Sprintf("%v", a[0])
-			}
-		case []string:
-			if len(a) > 0 {
-				firstAnswer = a[0]
-			}
-		}
+	if len(obs.Answers) > 0 {
+		firstAnswer = obs.Answers[0]
 	}
 
 	arrow := " \u2192 "
@@ -216,11 +184,11 @@ func dnsDescription(obs map[string]any, lr *core.LayerResult, useColor bool) str
 		desc = lr.Error.Message
 	}
 
-	if hint, ok := obs["dns_error_hint"].(string); ok && hint != "" {
+	if obs.DNSErrorHint != nil && *obs.DNSErrorHint != "" {
 		if desc != "" {
-			desc += ", hint: " + hint
+			desc += ", hint: " + *obs.DNSErrorHint
 		} else {
-			desc = "hint: " + hint
+			desc = "hint: " + *obs.DNSErrorHint
 		}
 	}
 
@@ -228,9 +196,9 @@ func dnsDescription(obs map[string]any, lr *core.LayerResult, useColor bool) str
 }
 
 // tcpDescription builds: ":{port}" or error message.
-func tcpDescription(obs map[string]any, lr *core.LayerResult) string {
-	if port, ok := obs["remote_port"]; ok {
-		return fmt.Sprintf(":%v", toInt(port))
+func tcpDescription(obs *core.TCPObservations, lr *core.LayerResult) string {
+	if obs.RemotePort != 0 {
+		return fmt.Sprintf(":%d", obs.RemotePort)
 	}
 	if lr.Error != nil {
 		return lr.Error.Message
@@ -239,24 +207,21 @@ func tcpDescription(obs map[string]any, lr *core.LayerResult) string {
 }
 
 // tlsDescription builds: "{version}, cert expires in {days}d" or error message.
-func tlsDescription(obs map[string]any, lr *core.LayerResult) string {
-	version, _ := obs["version"].(string)
-	days := getCertDays(obs)
-
+func tlsDescription(obs *core.TLSObservations, lr *core.LayerResult) string {
 	var parts []string
-	if version != "" {
-		parts = append(parts, version)
+	if obs.Version != "" {
+		parts = append(parts, obs.Version)
 	}
-	if days >= 0 {
-		parts = append(parts, fmt.Sprintf("cert expires in %dd", days))
+	if obs.CertDaysUntilExpiry != nil {
+		parts = append(parts, fmt.Sprintf("cert expires in %dd", *obs.CertDaysUntilExpiry))
 	}
-	if subject, ok := obs["cert_subject"].(string); ok && subject != "" {
-		parts = append(parts, subject)
+	if obs.CertSubject != nil && *obs.CertSubject != "" {
+		parts = append(parts, *obs.CertSubject)
 	}
-	if issuer, ok := obs["cert_issuer"].(string); ok && issuer != "" {
-		parts = append(parts, "issuer: "+issuer)
+	if obs.CertIssuer != nil && *obs.CertIssuer != "" {
+		parts = append(parts, "issuer: "+*obs.CertIssuer)
 	}
-	if verified, ok := obs["cert_verified"].(bool); ok && !verified {
+	if obs.CertVerified != nil && !*obs.CertVerified {
 		parts = append(parts, "(unverified)")
 	}
 
@@ -270,47 +235,17 @@ func tlsDescription(obs map[string]any, lr *core.LayerResult) string {
 }
 
 // httpDescription builds: "{status_code} {status_text}" or error message.
-func httpDescription(obs map[string]any, lr *core.LayerResult) string {
-	code, hasCode := obs["status_code"]
-	text, _ := obs["status_text"].(string)
-
-	if hasCode {
-		codeInt := toInt(code)
-		if text != "" {
-			return fmt.Sprintf("%d %s", codeInt, text)
+func httpDescription(obs *core.HTTPObservations, lr *core.LayerResult) string {
+	if obs.StatusCode != 0 {
+		if obs.StatusText != "" {
+			return fmt.Sprintf("%d %s", obs.StatusCode, obs.StatusText)
 		}
-		return fmt.Sprintf("%d", codeInt)
+		return fmt.Sprintf("%d", obs.StatusCode)
 	}
 	if lr.Error != nil {
 		return lr.Error.Message
 	}
 	return ""
-}
-
-// getCertDays extracts cert_days_until_expiry from observations.
-// Returns -1 if not found.
-func getCertDays(obs map[string]any) int {
-	v, ok := obs["cert_days_until_expiry"]
-	if !ok {
-		return -1
-	}
-	return toInt(v)
-}
-
-// toInt converts a numeric value to int, handling int, float64, and other numeric types.
-func toInt(v any) int {
-	switch n := v.(type) {
-	case int:
-		return n
-	case int64:
-		return int(n)
-	case float64:
-		return int(math.Round(n))
-	case float32:
-		return int(math.Round(float64(n)))
-	default:
-		return 0
-	}
 }
 
 // renderLayerLine writes a single layer line to w.
@@ -335,19 +270,11 @@ var deprecatedVersions = map[string]bool{
 
 // renderTLSScanLine writes the TLS scan sub-line if tls_scan data is present.
 func renderTLSScanLine(w io.Writer, lr *core.LayerResult, useColor bool) error {
-	obs := obsMap(lr)
-	if obs == nil {
+	tlsObs, ok := lr.Observations.(*core.TLSObservations)
+	if !ok || tlsObs == nil || tlsObs.TLSScan == nil {
 		return nil
 	}
-	scanData, ok := obs["tls_scan"]
-	if !ok {
-		return nil
-	}
-	scanMap, ok := scanData.(map[string]any)
-	if !ok {
-		return nil
-	}
-	attemptsRaw := scanMap["attempts"]
+	attemptsRaw := tlsObs.TLSScan["attempts"]
 	if attemptsRaw == nil {
 		return nil
 	}
@@ -438,41 +365,20 @@ func scanStatusSymbol(s core.Status, useColor bool) string {
 
 // renderResponseHeadersLines writes HTTP response_headers as sub-lines.
 func renderResponseHeadersLines(w io.Writer, lr *core.LayerResult) error {
-	obs := obsMap(lr)
-	if obs == nil {
-		return nil
-	}
-	headersRaw, ok := obs["response_headers"]
-	if !ok {
-		return nil
-	}
-
-	var headers map[string]string
-	switch h := headersRaw.(type) {
-	case map[string]any:
-		headers = make(map[string]string, len(h))
-		for k, v := range h {
-			headers[k] = fmt.Sprintf("%v", v)
-		}
-	case map[string]string:
-		headers = h
-	default:
-		return nil
-	}
-
-	if len(headers) == 0 {
+	httpObs, ok := lr.Observations.(*core.HTTPObservations)
+	if !ok || httpObs == nil || len(httpObs.ResponseHeaders) == 0 {
 		return nil
 	}
 
 	// Sort keys for deterministic output.
-	keys := make([]string, 0, len(headers))
-	for k := range headers {
+	keys := make([]string, 0, len(httpObs.ResponseHeaders))
+	for k := range httpObs.ResponseHeaders {
 		keys = append(keys, k)
 	}
 	sortStrings(keys)
 
 	for _, k := range keys {
-		if _, err := fmt.Fprintf(w, "    %s: %s\n", k, headers[k]); err != nil {
+		if _, err := fmt.Fprintf(w, "    %s: %s\n", k, httpObs.ResponseHeaders[k]); err != nil {
 			return err
 		}
 	}

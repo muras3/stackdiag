@@ -23,6 +23,15 @@ func makeCtx(t *testing.T, timeout time.Duration) *core.ProbeContext {
 	}
 }
 
+func reachObs(t *testing.T, result *core.LayerResult) *core.ReachabilityObservations {
+	t.Helper()
+	obs, ok := result.Observations.(*core.ReachabilityObservations)
+	if !ok {
+		t.Fatalf("observations type = %T, want *core.ReachabilityObservations", result.Observations)
+	}
+	return obs
+}
+
 func TestReachabilityName(t *testing.T) {
 	layer := New(&testkit.FakePinger{})
 	if layer.Name() != "reachability" {
@@ -42,29 +51,15 @@ func TestReachabilityOK(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	reachable, ok := result.Observations.(map[string]any)["reachable"]
-	if !ok {
-		t.Fatal("missing reachable observation")
+	obs := reachObs(t, result)
+	if obs.Reachable == nil || *obs.Reachable != true {
+		t.Errorf("reachable = %v, want true", obs.Reachable)
 	}
-	if reachable != true {
-		t.Errorf("reachable = %v, want true", reachable)
+	if obs.ProbeMethod != "icmp" {
+		t.Errorf("probe_method = %v, want icmp", obs.ProbeMethod)
 	}
-
-	method, ok := result.Observations.(map[string]any)["probe_method"]
-	if !ok {
-		t.Fatal("missing probe_method observation")
-	}
-	if method != "icmp" {
-		t.Errorf("probe_method = %v, want icmp", method)
-	}
-
-	rtt, ok := result.Observations.(map[string]any)["rtt_ms"]
-	if !ok {
-		t.Fatal("missing rtt_ms observation")
-	}
-	rttVal, ok := rtt.(float64)
-	if !ok || rttVal <= 0 {
-		t.Errorf("rtt_ms = %v, want > 0", rtt)
+	if obs.RTTMS == nil || *obs.RTTMS <= 0 {
+		t.Errorf("rtt_ms = %v, want > 0", obs.RTTMS)
 	}
 }
 
@@ -79,12 +74,9 @@ func TestReachabilityTimeout(t *testing.T) {
 		t.Errorf("error code = %v, want REACHABILITY_TIMEOUT", result.Error)
 	}
 
-	reachable, ok := result.Observations.(map[string]any)["reachable"]
-	if !ok {
-		t.Fatal("missing reachable observation")
-	}
-	if reachable != false {
-		t.Errorf("reachable = %v, want false", reachable)
+	obs := reachObs(t, result)
+	if obs.Reachable == nil || *obs.Reachable != false {
+		t.Errorf("reachable = %v, want false", obs.Reachable)
 	}
 }
 
@@ -99,25 +91,15 @@ func TestReachabilityPermissionDenied(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	reachable := result.Observations.(map[string]any)["reachable"]
-	if reachable != nil {
-		t.Errorf("reachable = %v, want nil", reachable)
+	obs := reachObs(t, result)
+	if obs.Reachable != nil {
+		t.Errorf("reachable = %v, want nil", obs.Reachable)
 	}
-
-	method, ok := result.Observations.(map[string]any)["probe_method"]
-	if !ok {
-		t.Fatal("missing probe_method observation")
+	if obs.ProbeMethod != "none" {
+		t.Errorf("probe_method = %v, want none", obs.ProbeMethod)
 	}
-	if method != "none" {
-		t.Errorf("probe_method = %v, want none", method)
-	}
-
-	skipReason, ok := result.Observations.(map[string]any)["skip_reason"]
-	if !ok {
-		t.Fatal("missing skip_reason observation")
-	}
-	if skipReason != "permission_denied" {
-		t.Errorf("skip_reason = %v, want permission_denied", skipReason)
+	if obs.SkipReason == nil || *obs.SkipReason != "permission_denied" {
+		t.Errorf("skip_reason = %v, want permission_denied", obs.SkipReason)
 	}
 }
 
@@ -132,12 +114,9 @@ func TestReachabilityError(t *testing.T) {
 		t.Errorf("error code = %v, want REACHABILITY_ERROR", result.Error)
 	}
 
-	reachable, ok := result.Observations.(map[string]any)["reachable"]
-	if !ok {
-		t.Fatal("missing reachable observation")
-	}
-	if reachable != false {
-		t.Errorf("reachable = %v, want false", reachable)
+	obs := reachObs(t, result)
+	if obs.Reachable == nil || *obs.Reachable != false {
+		t.Errorf("reachable = %v, want false", obs.Reachable)
 	}
 }
 
@@ -180,9 +159,9 @@ func TestReachabilityPermissionDeniedEACCES(t *testing.T) {
 	if result.Status != core.StatusSkip {
 		t.Errorf("status = %q, want skip", result.Status)
 	}
-	skipReason := result.Observations.(map[string]any)["skip_reason"]
-	if skipReason != "permission_denied" {
-		t.Errorf("skip_reason = %v, want permission_denied", skipReason)
+	obs := reachObs(t, result)
+	if obs.SkipReason == nil || *obs.SkipReason != "permission_denied" {
+		t.Errorf("skip_reason = %v, want permission_denied", obs.SkipReason)
 	}
 }
 
@@ -198,9 +177,6 @@ func (r *recordingPinger) Ping(ctx context.Context, addr string) (time.Duration,
 }
 
 func TestSkipReasonNoLongerSkipsIPv6(t *testing.T) {
-	// Verify that errors which previously triggered "unsupported_address" skip
-	// (net.DNSError and "no suitable address found") now return "" (no skip),
-	// meaning they are treated as genuine REACHABILITY_ERROR.
 	tests := []struct {
 		name string
 		err  error

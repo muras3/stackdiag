@@ -66,7 +66,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		return &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   0,
-			Observations: map[string]any{"method": method},
+			Observations: &core.HTTPObservations{Method: method},
 			Error:        &core.ProbeError{Code: "HTTP_ERROR", Message: err.Error()},
 		}
 	}
@@ -89,19 +89,19 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		return &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   durationMS,
-			Observations: map[string]any{"method": method},
+			Observations: &core.HTTPObservations{Method: method},
 			Error:        classifyHTTPError(err),
 		}
 	}
 	defer resp.Body.Close()
 
-	obs := map[string]any{
-		"method":           method,
-		"protocol":         resp.Proto,
-		"status_code":      resp.StatusCode,
-		"status_text":      http.StatusText(resp.StatusCode),
-		"request_headers":  buildRequestHeaders(pctx.Headers, pctx.Redact),
-		"response_headers": buildResponseHeaders(resp.Header, pctx.Redact),
+	obs := &core.HTTPObservations{
+		Method:          method,
+		Protocol:        resp.Proto,
+		StatusCode:      resp.StatusCode,
+		StatusText:      http.StatusText(resp.StatusCode),
+		RequestHeaders:  buildRequestHeaders(pctx.Headers, pctx.Redact),
+		ResponseHeaders: buildResponseHeaders(resp.Header, pctx.Redact),
 	}
 
 	if resp.StatusCode >= 400 {

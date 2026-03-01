@@ -47,7 +47,7 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 		return &core.LayerResult{
 			Status:       core.StatusFail,
 			DurationMS:   durationMS,
-			Observations: map[string]any{},
+			Observations: &core.TCPObservations{},
 			Error:        classifyTCPError(err),
 		}
 	}
@@ -73,9 +73,9 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 	return &core.LayerResult{
 		Status:     core.StatusOK,
 		DurationMS: durationMS,
-		Observations: map[string]any{
-			"remote_ip":   remoteIP,
-			"remote_port": remotePort,
+		Observations: &core.TCPObservations{
+			RemoteIP:   remoteIP,
+			RemotePort: remotePort,
 		},
 		Error: nil,
 	}

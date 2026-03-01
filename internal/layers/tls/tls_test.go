@@ -174,25 +174,25 @@ func TestTLSSuccess(t *testing.T) {
 	}
 
 	// Check observations.
-	if _, ok := result.Observations.(map[string]any)["version"]; !ok {
+	obs, ok := result.Observations.(*core.TLSObservations)
+	if !ok {
+		t.Fatalf("observations type = %T, want *core.TLSObservations", result.Observations)
+	}
+	if obs.Version == "" {
 		t.Error("missing 'version' observation")
 	}
-	if _, ok := result.Observations.(map[string]any)["cipher_suite"]; !ok {
+	if obs.CipherSuite == "" {
 		t.Error("missing 'cipher_suite' observation")
 	}
-	days, ok := result.Observations.(map[string]any)["cert_days_until_expiry"]
-	if !ok {
+	if obs.CertDaysUntilExpiry == nil {
 		t.Error("missing 'cert_days_until_expiry' observation")
+	} else if *obs.CertDaysUntilExpiry < 300 {
+		t.Errorf("cert_days_until_expiry = %d, expected > 300", *obs.CertDaysUntilExpiry)
 	}
-	if d, ok := days.(int); ok && d < 300 {
-		t.Errorf("cert_days_until_expiry = %d, expected > 300", d)
-	}
-	match, ok := result.Observations.(map[string]any)["cert_hostname_match"]
-	if !ok {
+	if obs.CertHostnameMatch == nil {
 		t.Error("missing 'cert_hostname_match' observation")
-	}
-	if match != true {
-		t.Errorf("cert_hostname_match = %v, want true", match)
+	} else if !*obs.CertHostnameMatch {
+		t.Errorf("cert_hostname_match = %v, want true", *obs.CertHostnameMatch)
 	}
 }
 
@@ -300,12 +300,15 @@ func TestTLSCertExpiringSoon(t *testing.T) {
 		t.Errorf("error = %v, want TLS_CERT_EXPIRING_SOON", result.Error)
 	}
 
-	days, ok := result.Observations.(map[string]any)["cert_days_until_expiry"]
+	tlsObs, ok := result.Observations.(*core.TLSObservations)
 	if !ok {
+		t.Fatalf("observations type = %T, want *core.TLSObservations", result.Observations)
+	}
+	if tlsObs.CertDaysUntilExpiry == nil {
 		t.Fatal("missing cert_days_until_expiry observation")
 	}
-	if d, ok := days.(int); !ok || d < 10 || d > 20 {
-		t.Errorf("cert_days_until_expiry = %v, want 14-16", days)
+	if d := *tlsObs.CertDaysUntilExpiry; d < 10 || d > 20 {
+		t.Errorf("cert_days_until_expiry = %d, want 14-16", d)
 	}
 }
 
@@ -840,14 +843,14 @@ func TestTLSScanAllVersions(t *testing.T) {
 
 	result := layer.Probe(pctx)
 
-	scanRaw, ok := result.Observations.(map[string]any)["tls_scan"]
+	tlsObs, ok := result.Observations.(*core.TLSObservations)
 	if !ok {
+		t.Fatalf("observations type = %T, want *core.TLSObservations", result.Observations)
+	}
+	if tlsObs.TLSScan == nil {
 		t.Fatal("missing tls_scan in observations")
 	}
-	scan, ok := scanRaw.(map[string]any)
-	if !ok {
-		t.Fatalf("tls_scan is not map[string]any: %T", scanRaw)
-	}
+	scan := tlsObs.TLSScan
 
 	if scan["performed"] != true {
 		t.Errorf("performed = %v, want true", scan["performed"])
@@ -930,7 +933,7 @@ func TestTLSScanNotPerformedByDefault(t *testing.T) {
 
 	result := layer.Probe(pctx)
 
-	if _, ok := result.Observations.(map[string]any)["tls_scan"]; ok {
+	if tlsObs, ok := result.Observations.(*core.TLSObservations); ok && tlsObs.TLSScan != nil {
 		t.Error("tls_scan should not be in observations when --tls-scan is not set")
 	}
 }
@@ -964,13 +967,15 @@ func TestTLSScanWithFailedNormalProbe(t *testing.T) {
 	}
 
 	// Scan results should still be in observations
-	scanRaw, ok := result.Observations.(map[string]any)["tls_scan"]
+	tlsObs, ok := result.Observations.(*core.TLSObservations)
 	if !ok {
+		t.Fatalf("observations type = %T, want *core.TLSObservations", result.Observations)
+	}
+	if tlsObs.TLSScan == nil {
 		t.Fatal("missing tls_scan in observations even with failed normal probe")
 	}
-	scan := scanRaw.(map[string]any)
-	if scan["performed"] != true {
-		t.Errorf("performed = %v, want true", scan["performed"])
+	if tlsObs.TLSScan["performed"] != true {
+		t.Errorf("performed = %v, want true", tlsObs.TLSScan["performed"])
 	}
 }
 
@@ -1002,7 +1007,7 @@ func TestTLSScanNoDeprecated(t *testing.T) {
 		t.Errorf("unexpected error: %v", result.Error)
 	}
 
-	scan := result.Observations.(map[string]any)["tls_scan"].(map[string]any)
+	scan := result.Observations.(*core.TLSObservations).TLSScan
 	dv := scan["deprecated_versions_enabled"].([]string)
 	if len(dv) != 0 {
 		t.Errorf("deprecated_versions_enabled = %v, want empty", dv)
@@ -1075,16 +1080,20 @@ func TestTLSNoCertificatesViaFakeHandshaker(t *testing.T) {
 func assertHasObservations(t *testing.T, result *core.LayerResult) {
 	t.Helper()
 
-	if _, ok := result.Observations.(map[string]any)["version"]; !ok {
+	obs, ok := result.Observations.(*core.TLSObservations)
+	if !ok {
+		t.Fatalf("observations type = %T, want *core.TLSObservations", result.Observations)
+	}
+	if obs.Version == "" {
 		t.Error("missing 'version' in observations")
 	}
-	if _, ok := result.Observations.(map[string]any)["cipher_suite"]; !ok {
+	if obs.CipherSuite == "" {
 		t.Error("missing 'cipher_suite' in observations")
 	}
-	if _, ok := result.Observations.(map[string]any)["cert_days_until_expiry"]; !ok {
+	if obs.CertDaysUntilExpiry == nil {
 		t.Error("missing 'cert_days_until_expiry' in observations")
 	}
-	if _, ok := result.Observations.(map[string]any)["cert_hostname_match"]; !ok {
+	if obs.CertHostnameMatch == nil {
 		t.Error("missing 'cert_hostname_match' in observations")
 	}
 }
@@ -1184,47 +1193,43 @@ func TestTLSObservationsV02(t *testing.T) {
 	obs := buildObservations(state, "example.com", true)
 
 	// Existing fields
-	if obs["version"] != "TLSv1.3" {
-		t.Errorf("version = %v, want TLSv1.3", obs["version"])
+	if obs.Version != "TLSv1.3" {
+		t.Errorf("version = %v, want TLSv1.3", obs.Version)
 	}
 
 	// New v0.2 fields
-	if obs["cert_verified"] != true {
-		t.Errorf("cert_verified = %v, want true", obs["cert_verified"])
+	if obs.CertVerified == nil || !*obs.CertVerified {
+		t.Errorf("cert_verified = %v, want true", obs.CertVerified)
 	}
-	if obs["cert_subject"] != "example.com" {
-		t.Errorf("cert_subject = %v, want example.com", obs["cert_subject"])
+	if obs.CertSubject == nil || *obs.CertSubject != "example.com" {
+		t.Errorf("cert_subject = %v, want example.com", obs.CertSubject)
 	}
-	san, ok := obs["cert_san"].([]string)
-	if !ok {
-		t.Fatalf("cert_san is not []string: %T", obs["cert_san"])
+	if obs.CertSAN == nil {
+		t.Fatal("cert_san is nil")
 	}
+	san := *obs.CertSAN
 	if len(san) != 2 || san[0] != "example.com" || san[1] != "www.example.com" {
 		t.Errorf("cert_san = %v, want [example.com www.example.com]", san)
 	}
-	if obs["cert_issuer"] != "Test CA" {
-		t.Errorf("cert_issuer = %v, want Test CA", obs["cert_issuer"])
+	if obs.CertIssuer == nil || *obs.CertIssuer != "Test CA" {
+		t.Errorf("cert_issuer = %v, want Test CA", obs.CertIssuer)
 	}
-	if obs["cert_not_after"] != leaf.NotAfter.UTC().Format(time.RFC3339) {
-		t.Errorf("cert_not_after = %v, want %v", obs["cert_not_after"], leaf.NotAfter.UTC().Format(time.RFC3339))
+	if obs.CertNotAfter == nil || *obs.CertNotAfter != leaf.NotAfter.UTC().Format(time.RFC3339) {
+		t.Errorf("cert_not_after = %v, want %v", obs.CertNotAfter, leaf.NotAfter.UTC().Format(time.RFC3339))
 	}
-	if obs["cert_not_before"] != leaf.NotBefore.UTC().Format(time.RFC3339) {
-		t.Errorf("cert_not_before = %v, want %v", obs["cert_not_before"], leaf.NotBefore.UTC().Format(time.RFC3339))
+	if obs.CertNotBefore == nil || *obs.CertNotBefore != leaf.NotBefore.UTC().Format(time.RFC3339) {
+		t.Errorf("cert_not_before = %v, want %v", obs.CertNotBefore, leaf.NotBefore.UTC().Format(time.RFC3339))
 	}
 
 	// cert_chain
-	chain, ok := obs["cert_chain"].([]map[string]string)
-	if !ok {
-		t.Fatalf("cert_chain is not []map[string]string: %T", obs["cert_chain"])
+	if len(obs.CertChain) != 2 {
+		t.Fatalf("cert_chain length = %d, want 2", len(obs.CertChain))
 	}
-	if len(chain) != 2 {
-		t.Fatalf("cert_chain length = %d, want 2", len(chain))
+	if obs.CertChain[0].Subject != "example.com" || obs.CertChain[0].Issuer != "Test CA" {
+		t.Errorf("cert_chain[0] = %+v", obs.CertChain[0])
 	}
-	if chain[0]["subject"] != "example.com" || chain[0]["issuer"] != "Test CA" {
-		t.Errorf("cert_chain[0] = %v", chain[0])
-	}
-	if chain[1]["subject"] != "Intermediate CA" || chain[1]["issuer"] != "Root CA" {
-		t.Errorf("cert_chain[1] = %v", chain[1])
+	if obs.CertChain[1].Subject != "Intermediate CA" || obs.CertChain[1].Issuer != "Root CA" {
+		t.Errorf("cert_chain[1] = %+v", obs.CertChain[1])
 	}
 }
 
@@ -1245,16 +1250,11 @@ func TestTLSCertSanEmpty(t *testing.T) {
 
 	obs := buildObservations(state, "example.com", true)
 
-	san, ok := obs["cert_san"].([]string)
-	if !ok {
-		t.Fatalf("cert_san is not []string: %T", obs["cert_san"])
+	if obs.CertSAN == nil {
+		t.Fatal("cert_san is nil, want non-nil pointer to empty slice")
 	}
-	if len(san) != 0 {
-		t.Errorf("cert_san = %v, want empty slice", san)
-	}
-	// Ensure it's not nil (must be [] in JSON, not null)
-	if san == nil {
-		t.Error("cert_san is nil, want empty slice []string{}")
+	if len(*obs.CertSAN) != 0 {
+		t.Errorf("cert_san = %v, want empty slice", *obs.CertSAN)
 	}
 }
 
@@ -1273,8 +1273,8 @@ func TestTLSCertVerifiedTrue(t *testing.T) {
 	}
 
 	obs := buildObservations(state, "example.com", true) // verified=true
-	if obs["cert_verified"] != true {
-		t.Errorf("cert_verified = %v, want true", obs["cert_verified"])
+	if obs.CertVerified == nil || *obs.CertVerified != true {
+		t.Errorf("cert_verified = %v, want true", obs.CertVerified)
 	}
 }
 
@@ -1293,8 +1293,8 @@ func TestTLSCertVerifiedFalse(t *testing.T) {
 	}
 
 	obs := buildObservations(state, "example.com", false) // verified=false (InsecureSkipVerify path)
-	if obs["cert_verified"] != false {
-		t.Errorf("cert_verified = %v, want false", obs["cert_verified"])
+	if obs.CertVerified == nil || *obs.CertVerified != false {
+		t.Errorf("cert_verified = %v, want false", obs.CertVerified)
 	}
 }
 
@@ -1322,32 +1322,29 @@ func TestTLSCertChainSummary(t *testing.T) {
 	}
 
 	obs := buildObservations(state, "leaf.example.com", true)
-	chain, ok := obs["cert_chain"].([]map[string]string)
-	if !ok {
-		t.Fatalf("cert_chain is not []map[string]string: %T", obs["cert_chain"])
-	}
+	chain := obs.CertChain
 	if len(chain) != 3 {
 		t.Fatalf("cert_chain length = %d, want 3", len(chain))
 	}
 
 	// Verify each entry has subject, issuer, not_after
 	for i, entry := range chain {
-		if _, ok := entry["subject"]; !ok {
+		if entry.Subject == "" {
 			t.Errorf("cert_chain[%d] missing subject", i)
 		}
-		if _, ok := entry["issuer"]; !ok {
+		if entry.Issuer == "" {
 			t.Errorf("cert_chain[%d] missing issuer", i)
 		}
-		if _, ok := entry["not_after"]; !ok {
+		if entry.NotAfter == "" {
 			t.Errorf("cert_chain[%d] missing not_after", i)
 		}
 	}
 
-	if chain[0]["subject"] != "leaf.example.com" {
-		t.Errorf("chain[0].subject = %q, want leaf.example.com", chain[0]["subject"])
+	if chain[0].Subject != "leaf.example.com" {
+		t.Errorf("chain[0].Subject = %q, want leaf.example.com", chain[0].Subject)
 	}
-	if chain[2]["subject"] != "Root CA" {
-		t.Errorf("chain[2].subject = %q, want Root CA", chain[2]["subject"])
+	if chain[2].Subject != "Root CA" {
+		t.Errorf("chain[2].Subject = %q, want Root CA", chain[2].Subject)
 	}
 }
 
