@@ -86,59 +86,27 @@ func marshalNoEscape(v any) ([]byte, error) {
 // order (dns→tcp→tls→http) rather than Go's default alphabetical map key order.
 func (r *Result) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
-	buf.WriteString(`{"schema_version":`)
-	b, err := marshalNoEscape(r.SchemaVersion)
-	if err != nil {
+	buf.WriteByte('{')
+	if err := writeField(&buf, true, "schema_version", r.SchemaVersion); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"started_at":`)
-	b, err = marshalNoEscape(r.StartedAt)
-	if err != nil {
+	if err := writeField(&buf, false, "started_at", r.StartedAt); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"target":`)
-	b, err = marshalNoEscape(r.Target)
-	if err != nil {
+	if err := writeField(&buf, false, "target", r.Target); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"layers":{`)
-	first := true
-	for _, name := range LayerOrder {
-		lr, ok := r.Layers[name]
-		if !ok {
-			continue
+	if err := writeOrderedMap(&buf, "layers", func(name string) any {
+		if lr, ok := r.Layers[name]; ok {
+			return lr
 		}
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		b, err = marshalNoEscape(name)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
-		buf.WriteByte(':')
-		b, err = marshalNoEscape(lr)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
-	}
-	buf.WriteByte('}')
-
-	buf.WriteString(`,"summary":`)
-	b, err = marshalNoEscape(r.Summary)
-	if err != nil {
+		return nil
+	}); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
+	if err := writeField(&buf, false, "summary", r.Summary); err != nil {
+		return nil, err
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -155,52 +123,24 @@ type AttemptResult struct {
 // order (dns→tcp→tls→http).
 func (a *AttemptResult) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
-	buf.WriteString(`{"attempt":`)
-	b, err := marshalNoEscape(a.Attempt)
-	if err != nil {
+	buf.WriteByte('{')
+	if err := writeField(&buf, true, "attempt", a.Attempt); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"started_at":`)
-	b, err = marshalNoEscape(a.StartedAt)
-	if err != nil {
+	if err := writeField(&buf, false, "started_at", a.StartedAt); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"layers":{`)
-	first := true
-	for _, name := range LayerOrder {
-		lr, ok := a.Layers[name]
-		if !ok {
-			continue
+	if err := writeOrderedMap(&buf, "layers", func(name string) any {
+		if lr, ok := a.Layers[name]; ok {
+			return lr
 		}
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		b, err = marshalNoEscape(name)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
-		buf.WriteByte(':')
-		b, err = marshalNoEscape(lr)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
-	}
-	buf.WriteByte('}')
-
-	buf.WriteString(`,"summary":`)
-	b, err = marshalNoEscape(a.Summary)
-	if err != nil {
+		return nil
+	}); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
+	if err := writeField(&buf, false, "summary", a.Summary); err != nil {
+		return nil, err
+	}
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
@@ -230,66 +170,30 @@ type CountResult struct {
 // execution order (dns→tcp→tls→http).
 func (c *CountResult) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
-	buf.WriteString(`{"schema_version":`)
-	b, err := marshalNoEscape(c.SchemaVersion)
-	if err != nil {
+	buf.WriteByte('{')
+	if err := writeField(&buf, true, "schema_version", c.SchemaVersion); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"target":`)
-	b, err = marshalNoEscape(c.Target)
-	if err != nil {
+	if err := writeField(&buf, false, "target", c.Target); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"count":`)
-	b, err = marshalNoEscape(c.Count)
-	if err != nil {
+	if err := writeField(&buf, false, "count", c.Count); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"exit_code":`)
-	b, err = marshalNoEscape(c.ExitCode)
-	if err != nil {
+	if err := writeField(&buf, false, "exit_code", c.ExitCode); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"attempts":`)
-	b, err = marshalNoEscape(c.Attempts)
-	if err != nil {
+	if err := writeField(&buf, false, "attempts", c.Attempts); err != nil {
 		return nil, err
 	}
-	buf.Write(b)
-
-	buf.WriteString(`,"statistics":{`)
-	first := true
-	for _, name := range LayerOrder {
-		ls, ok := c.Statistics[name]
-		if !ok {
-			continue
+	if err := writeOrderedMap(&buf, "statistics", func(name string) any {
+		if ls, ok := c.Statistics[name]; ok {
+			return ls
 		}
-		if !first {
-			buf.WriteByte(',')
-		}
-		first = false
-		b, err = marshalNoEscape(name)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
-		buf.WriteByte(':')
-		b, err = marshalNoEscape(ls)
-		if err != nil {
-			return nil, err
-		}
-		buf.Write(b)
+		return nil
+	}); err != nil {
+		return nil, err
 	}
-	buf.WriteByte('}')
-
 	buf.WriteByte('}')
 	return buf.Bytes(), nil
 }
