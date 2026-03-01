@@ -371,10 +371,18 @@ func TestMethodFlag(t *testing.T) {
 		t.Fatalf("invalid JSON: %v", err)
 	}
 
-	// Check that the target or HTTP layer reflects the method.
+	// Check that the HTTP layer reflects the method.
 	if layers, ok := result["layers"].(map[string]any); ok {
 		if httpLayer, ok := layers["http"].(map[string]any); ok {
-			if method, ok := httpLayer["method"].(string); ok && method != "HEAD" {
+			obs, ok := httpLayer["observations"].(map[string]any)
+			if !ok {
+				t.Fatal("http layer missing observations")
+			}
+			method, ok := obs["method"].(string)
+			if !ok {
+				t.Fatal("observations missing method field")
+			}
+			if method != "HEAD" {
 				t.Errorf("method = %q, want HEAD", method)
 			}
 		}
