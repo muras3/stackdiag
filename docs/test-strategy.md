@@ -23,20 +23,20 @@ Three pillars of quality assurance:
 
 ## Test Types
 
-| Type | Purpose | Introduction |
-|------|---------|-------------|
-| Unit (Small) | Pure logic verification. Fake injection | Phase 0+ |
-| Integration (Medium) | localhost I/O. httptest, net.Listen | Phase 1+ |
-| E2E (Large) | Pre-built binary stdout/stderr/exit code | Phase 3 |
-| Contract | JSON schema backward compatibility verification | Phase 0+ |
-| Failure-matrix | Layer × failure pattern coverage | Phase 1+ |
-| Fuzz | Panic/hang detection for URL/argument parsers | Phase 0+ |
-| Golden file | Snapshot comparison of renderer output | Phase 0+ |
-| Race | Concurrency bug detection via `go test -race` | Phase 2+ |
-| Benchmark | Allocation/latency tracking on hot paths | Phase 2+ |
+| Type | Purpose | Status |
+|------|---------|--------|
+| Unit (Small) | Pure logic verification. Fake injection | Implemented |
+| Integration (Medium) | localhost I/O. httptest, net.Listen | Implemented |
+| E2E (Large) | Pre-built binary stdout/stderr/exit code (92 patterns) | Implemented |
+| Contract | JSON schema backward compatibility verification | Implemented |
+| Failure-matrix | Layer × failure pattern coverage | Implemented |
+| Race | Concurrency bug detection via `go test -race` | Implemented |
+| Fuzz | Panic/hang detection for URL/argument parsers | Planned |
+| Golden file | Snapshot comparison of renderer output | Planned |
+| Benchmark | Allocation/latency tracking on hot paths | Planned |
 | Regression | Reproducer test for each bug fix | Ongoing |
-| Smoke | Minimal operational check on release binary | Phase 3 |
-| Acceptance | Cross-validation against real tools (dig/openssl/curl) | Phase 3 |
+| Smoke | Minimal operational check on release binary | Planned |
+| Acceptance | Cross-validation against real tools (dig/openssl/curl) | Planned |
 
 ## Faking Strategy
 
@@ -120,9 +120,9 @@ Verification items:
 
 Golden files alone are insufficient. **Write separate semantic contract assertions.**
 
-## Fuzz Tests (Cloudflare-style)
+## Fuzz Tests (Planned)
 
-Uses Go native fuzzing.
+Will use Go native fuzzing.
 
 Targets:
 - URL/target parser (scheme, host, port, path, IPv6, IDNA)
@@ -135,138 +135,60 @@ Assertions:
 - Bounded memory usage
 - Correct error code classification when errors are returned
 
-Seed corpus is checked in at `testdata/fuzz/`.
+## Real Environment Testing (Planned)
 
-## Real Environment Testing (Acceptance Testing)
+### Benchmark Infrastructure (Implemented)
 
-### Two-tier Structure
+Token efficiency benchmarks use Docker Compose with 18 services (CoreDNS, nginx variants, runner). See `bench/` for details. This infrastructure validates diagnostic correctness across 24 scenarios.
+
+### Acceptance Testing (Planned)
+
+Two-tier structure for future implementation:
 
 #### Tier 1: Docker Compose Canary (deterministic, reproducible)
 
-```
-docker-compose.yml
-├── dns-server (CoreDNS)        # Controlled DNS
-├── ok-server                    # 200 OK, fast response
-├── slow-server                  # Header delay (TTFB verification)
-├── selfsigned-server            # Self-signed certificate
-├── expired-server               # Expired certificate
-├── wrong-san-server             # SAN mismatch
-└── error-server                 # 503 etc.
-```
-
-Runs identically locally and in CI via `make acceptance`.
+Controlled test servers for each failure mode. Run via `make acceptance`.
 
 #### Tier 2: Cross-validation with Reference Tools
 
-| Item | Comparison Target | Comparison Method |
-|------|------------------|-------------------|
-| DNS resolution | `dig` | Exact match (IP addresses) |
-| TLS certificate | `openssl s_client` | Exact match (fingerprint, SAN, issuer, expiry) |
-| HTTP status | `curl -w` | Exact match |
-| DNS timing | `dig` | Tolerance (±200ms or ratio ≤2.5x) |
-| TCP timing | `curl` connect time | Tolerance |
-| TTFB | `curl` time_starttransfer | Tolerance (align measurement definitions first) |
+Compare stackdiag output against `dig`, `openssl s_client`, and `curl` for:
+- Facts (IP, cert, status) → strict match
+- Timing → tolerance (±200ms or ratio ≤2.5x)
 
-**Important:** Timing definitions differ between tools. Align definitions before comparison.
+Retry 3 times, pass on 2/3 consensus. Classify failures as `tool_bug` / `timing_drift` / `infra_flake`.
 
-### Acceptance Test Manifest
-
-```yaml
-- name: canary-ok
-  url: https://ok.stackdiag-test.local
-  dns:
-    compare_with: dig
-    exact_answer: true
-  tls:
-    compare_with: openssl
-    compare_fields: [leaf_sha256, subject, not_after]
-  http:
-    compare_with: curl
-    status_exact: true
-    ttfb_tolerance_ms: 200
-  retries: 3
-  require_consensus: 2
-
-- name: canary-expired-cert
-  url: https://expired.stackdiag-test.local
-  tls:
-    expected_status: fail
-    expected_error_code: TLS_CERT_EXPIRED
-  retries: 1
-```
-
-### Acceptance Test Flow
-
-1. `stackdiag --json <url>` → capture JSON
-2. Run `dig` / `openssl` / `curl` against the same target
-3. Normalize and compare
-   - Facts (IP, cert, status) → strict match
-   - Timing → tolerance (`abs(delta) <= N ms` OR `ratio <= 2.5`)
-4. Retry 3 times, pass on 2/3 consensus
-5. On failure, classify: `tool_bug` / `timing_drift` / `infra_flake`
-
-### Flakiness Mitigation
-
-- Separate correctness (IP, cert, status) from performance (timing)
-- Retry + consensus (2/3 pass)
-- Use own canary infrastructure for blocking decisions
-- Public endpoints for smoke only (never used for CI pass/fail)
-- Record environment context (resolved IP, protocol, ALPN, timestamp)
-
-## Golden File Tests
+## Golden File Tests (Planned)
 
 - Manage renderer output via `testdata/*.golden`
 - Scenarios: `success`, `dns_fail`, `tls_warn`, `http_500`, `timeout`, `partial_failure`
 - Regenerate with `-update` flag
 - Normalize timing values during test (`XXms` substitution) for deterministic comparison
 
-## Phased Test Plan
-
-### Phase 0: Core types + CLI skeleton + JSON renderer
-
-- Small tests: parser, validation, defaults, error types, JSON shape
-- Contract tests: JSON schema field presence and type verification (start here)
-- Golden tests: JSON output
-- Fuzz tests: URL/CLI argument parser (start here)
-
-### Phase 1: DNS → TCP → TLS → HTTP layers
-
-- Medium tests: localhost fixtures (httptest, net.Listen, local TLS)
-- **Failure matrix**: write failure tests first and more than success tests
-- Timeout/deadline propagation tests
-- Partial failure scenarios (DNS ok → TCP fail, etc.)
-- Benchmark: per-layer overhead and allocation measurement
-
-### Phase 2: Runner + Table renderer + Exit codes
-
-- Race tests: `go test -race` for runner/timeout concurrency
-- Exit code contract tests
-- Golden tests: table output (timing value normalization)
-- Local E2E: pre-built binary + fixtures
-
-### Phase 3: E2E + CI/CD + Acceptance
-
-- CI full pyramid: PR=Small+Medium, Nightly=full stack+fuzz+acceptance
-- Docker Compose canary environment setup
-- Acceptance harness: YAML-driven + cross-validation
-- Smoke tests: minimal operational check on release binary
-- Cross-platform: linux/darwin × amd64/arm64
-
 ## CI Integration
 
-| Trigger | Test Scope |
-|---------|-----------|
-| PR | `make test-race` (Small + Medium) + `make build` |
-| push main | Above + `make e2e` + Docker canary acceptance |
-| Nightly | Full stack + fuzz (long-running) + public endpoint smoke + benchmark trend |
-| tag `v*` | Full stack + acceptance + smoke + goreleaser |
+### Current (v0.1.0)
 
-## Quality Evidence for Publication
+Single workflow runs on both PR and push-to-main:
 
-1. Test pyramid ratio (Small:Medium:Large)
-2. Failure matrix coverage table
-3. Schema contract test existence
-4. Fuzz seed corpus and CI execution logs
-5. `go test -race` always passes in CI
-6. Every bug fix has a regression test
-7. Cross-validation results against reference tools
+| Step | Command |
+|------|---------|
+| Lint | `make lint` (go vet + gofumpt) |
+| Build | `make build` |
+| Unit + Integration (race) | `make test-race` |
+| E2E (92 patterns) | `go test ./test/e2e/... -v -timeout 300s` |
+| Binary size check | ≤ 7MB |
+
+### Planned
+
+| Trigger | Additional Scope |
+|---------|-----------------|
+| Nightly | Fuzz (long-running) + benchmark trend |
+| tag `v*` | Acceptance + smoke + goreleaser |
+
+## Quality Evidence
+
+1. Test pyramid: Small (majority) + Medium (per-layer) + Large (92 E2E patterns)
+2. Failure matrix coverage across all 5 layers
+3. Schema contract tests (field presence, types, backward compatibility)
+4. `go test -race` always passes in CI
+5. Token efficiency benchmarks (24 scenarios, Docker-based)

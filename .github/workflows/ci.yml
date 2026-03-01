@@ -29,6 +29,9 @@ jobs:
       - name: Build
         run: make build
 
+      - name: Test (race detector)
+        run: make test-race
+
       - name: E2E tests (92 patterns)
         run: |
           set -o pipefail
@@ -44,9 +47,6 @@ jobs:
           echo "- Passed: $passed" >> $GITHUB_STEP_SUMMARY
           echo "- Failed: $failed" >> $GITHUB_STEP_SUMMARY
           echo "- Skipped: $skipped" >> $GITHUB_STEP_SUMMARY
-
-      - name: Test (race detector)
-        run: make test-race
 
       - name: Check binary size
         run: |
