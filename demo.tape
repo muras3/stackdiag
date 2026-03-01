@@ -3,7 +3,7 @@ Output demo.gif
 Set Shell zsh
 Set FontSize 15
 Set Width 900
-Set Height 520
+Set Height 700
 Set Padding 20
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 40ms
@@ -36,7 +36,7 @@ Enter
 Type "# Structured JSON for AI agents"
 Enter
 Sleep 300ms
-Type "stdiag --json-pretty https://self-signed.badssl.com 2>/dev/null | head -20"
+Type "stdiag --json-pretty https://self-signed.badssl.com 2>/dev/null | head -30"
 Sleep 200ms
 Enter
 Sleep 5s
