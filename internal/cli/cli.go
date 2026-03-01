@@ -226,6 +226,9 @@ func ParseArgs(args []string) (*Config, error) {
 	if len(positional) == 0 {
 		return nil, fmt.Errorf("target URL required")
 	}
+	if len(positional) > 1 {
+		return nil, fmt.Errorf("unexpected arguments: %s", strings.Join(positional[1:], ", "))
+	}
 	cfg.Target = positional[0]
 	if strings.TrimSpace(cfg.Target) == "" {
 		return nil, fmt.Errorf("target URL required")

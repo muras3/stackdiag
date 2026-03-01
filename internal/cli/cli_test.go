@@ -44,6 +44,16 @@ func TestParseArgsNoArgs(t *testing.T) {
 	}
 }
 
+func TestParseArgsExtraPositionalArgs(t *testing.T) {
+	_, err := ParseArgs([]string{"https://example.com", "extra-arg"})
+	if err == nil {
+		t.Fatal("expected error for extra positional arguments")
+	}
+	if !strings.Contains(err.Error(), "unexpected") {
+		t.Errorf("error should mention 'unexpected', got: %v", err)
+	}
+}
+
 func TestParseArgsHeaders(t *testing.T) {
 	cfg, err := ParseArgs([]string{
 		"--header", "Authorization: Bearer token",
