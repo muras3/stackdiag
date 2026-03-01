@@ -40,7 +40,7 @@ jobs:
       - name: Test (race detector)
         run: make test-race
 
-      - name: E2E tests (92 patterns)
+      - name: E2E tests
         run: |
           set -o pipefail
           go test ./test/e2e/... -v -timeout 300s 2>&1 | tee /tmp/e2e.log

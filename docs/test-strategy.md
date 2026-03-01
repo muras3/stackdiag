@@ -27,7 +27,7 @@ Three pillars of quality assurance:
 |------|---------|--------|
 | Unit (Small) | Pure logic verification. Fake injection | Implemented |
 | Integration (Medium) | localhost I/O. httptest, net.Listen | Implemented |
-| E2E (Large) | Pre-built binary stdout/stderr/exit code (92 patterns) | Implemented |
+| E2E (Large) | Pre-built binary stdout/stderr/exit code validation | Implemented |
 | Contract | JSON schema backward compatibility verification | Implemented |
 | Failure-matrix | Layer × failure pattern coverage | Implemented |
 | Race | Concurrency bug detection via `go test -race` | Implemented |
@@ -62,7 +62,7 @@ Inspired by Netflix chaos engineering. Implemented in stackdiag as "deterministi
 |---------|------------|----------------|
 | NXDOMAIN | fake resolver: return error code | `dns.status=fail`, `error.code=DNS_NXDOMAIN` |
 | Timeout | fake resolver: wait for context deadline | `dns.status=fail`, `error.code=DNS_TIMEOUT` |
-| SERVFAIL | fake resolver: return SERVFAIL error | `dns.status=fail`, `error.code=DNS_SERVFAIL` |
+| SERVFAIL | fake resolver: return SERVFAIL-like error | `dns.status=fail`, `error.code=DNS_ERROR`, `observations.dns_error_hint="servfail"` |
 
 #### TCP
 
@@ -70,7 +70,7 @@ Inspired by Netflix chaos engineering. Implemented in stackdiag as "deterministi
 |---------|------------|----------------|
 | Connection refused | connect to closed localhost port | `tcp.status=fail`, `error.code=TCP_REFUSED` |
 | Timeout | fake dialer: wait for deadline | `tcp.status=fail`, `error.code=TCP_TIMEOUT` |
-| Reset | listener accept → immediate RST | `tcp.status=fail`, `error.code=TCP_RESET` |
+| Reset | listener accept → immediate RST | `tcp.status=fail`, `error.code=TCP_ERROR` |
 
 #### TLS
 
@@ -85,7 +85,7 @@ Inspired by Netflix chaos engineering. Implemented in stackdiag as "deterministi
 
 | Pattern | Test Method | Expected Result |
 |---------|------------|----------------|
-| 4xx (401, 403, 404) | httptest handler | `http.status=fail`, `error.code=HTTP_4XX` |
+| 4xx (401, 403, 404, 429, others) | httptest handler | 401/403/404/429 use specific codes; other 4xx use `HTTP_4XX` |
 | 5xx (500, 502, 503) | httptest handler | `http.status=fail`, `error.code=HTTP_5XX` |
 | Timeout | handler sleep exceeds deadline | `http.status=fail`, `error.code=HTTP_TIMEOUT` |
 | Reset mid-response | hijack → partial write → close | `http.status=fail` |
@@ -147,7 +147,7 @@ Two-tier structure for future implementation:
 
 #### Tier 1: Docker Compose Canary (deterministic, reproducible)
 
-Controlled test servers for each failure mode. Run via `make acceptance`.
+Controlled test servers for each failure mode. Planned for future implementation.
 
 #### Tier 2: Cross-validation with Reference Tools
 
@@ -175,7 +175,7 @@ Single workflow runs on both PR and push-to-main:
 | Lint | `make lint` (go vet + gofumpt) |
 | Build | `make build` |
 | Unit + Integration (race) | `make test-race` |
-| E2E (92 patterns) | `go test ./test/e2e/... -v -timeout 300s` |
+| E2E | `go test ./test/e2e/... -v -timeout 300s` |
 | Binary size check | ≤ 7MB |
 
 ### Planned

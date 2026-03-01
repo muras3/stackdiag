@@ -227,6 +227,7 @@ func isSensitiveHeader(name string) bool {
 		"cookie",
 		"proxy-authorization",
 		"set-cookie",
+		"x-access-token",
 		"x-api-key",
 		"x-auth-token":
 		return true
