@@ -193,9 +193,9 @@ func TestBasicEnvHeaderAuthConflict(t *testing.T) {
 
 func TestAuthEnvWhitespaceOnly(t *testing.T) {
 	cases := []struct {
-		name    string
-		flag    string
-		envVar  string
+		name   string
+		flag   string
+		envVar string
 	}{
 		{"bearer", "--bearer-env", "TEST_BEARER_WS"},
 		{"basic", "--basic-env", "TEST_BASIC_WS"},

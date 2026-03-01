@@ -44,10 +44,10 @@ func (e *ProbeError) Error() string {
 
 // LayerResult holds the outcome of a single layer check.
 type LayerResult struct {
-	Status       Status         `json:"status"`
-	DurationMS   float64        `json:"duration_ms"`
-	Observations any `json:"observations"`
-	Error        *ProbeError    `json:"error"`
+	Status       Status      `json:"status"`
+	DurationMS   float64     `json:"duration_ms"`
+	Observations any         `json:"observations"`
+	Error        *ProbeError `json:"error"`
 }
 
 // Summary holds aggregate information about the stackdiag run.
@@ -200,8 +200,8 @@ type ProbeContext struct {
 	Redact      bool
 	Method      string
 	Headers     map[string]string
-	TLSScan   bool   // --tls-scan: probe TLS version support
-	DNSServer string // --dns-server: custom DNS resolver address
+	TLSScan     bool   // --tls-scan: probe TLS version support
+	DNSServer   string // --dns-server: custom DNS resolver address
 }
 
 // Layer is the interface that each network layer must implement.

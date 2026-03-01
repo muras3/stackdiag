@@ -181,4 +181,3 @@ func exitToolError(jsonMode bool, code, message string, pretty bool) {
 	}
 	os.Exit(1)
 }
-

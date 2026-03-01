@@ -15,21 +15,21 @@ const (
 
 // Config holds parsed CLI options.
 type Config struct {
-	Target    string
+	Target     string
 	JSON       bool
 	JSONPretty bool
 	Method     string
-	Headers   map[string]string
-	Timeout   int
-	Insecure  bool
-	Redact    bool
-	Version   bool
-	Help      bool
-	BearerEnv string // --bearer-env ENV_VAR
-	BasicEnv  string // --basic-env ENV_VAR
-	TLSScan   bool   // --tls-scan
-	Count     int    // --count N
-	DNSServer string // --dns-server host:port
+	Headers    map[string]string
+	Timeout    int
+	Insecure   bool
+	Redact     bool
+	Version    bool
+	Help       bool
+	BearerEnv  string // --bearer-env ENV_VAR
+	BasicEnv   string // --basic-env ENV_VAR
+	TLSScan    bool   // --tls-scan
+	Count      int    // --count N
+	DNSServer  string // --dns-server host:port
 }
 
 // HelpText returns the full help message for stdiag.

@@ -14,10 +14,10 @@ import (
 
 // ICMP message type constants.
 const (
-	icmpEchoReply      = 0
-	icmpEchoRequest    = 8
-	icmpv6EchoRequest  = 128
-	icmpv6EchoReply    = 129
+	icmpEchoReply     = 0
+	icmpEchoRequest   = 8
+	icmpv6EchoRequest = 128
+	icmpv6EchoReply   = 129
 )
 
 // Pinger abstracts ICMP echo request/reply.
@@ -113,7 +113,7 @@ func skipReason(err error) string {
 func buildICMPv6EchoRequest(id, seq uint16) []byte {
 	msg := make([]byte, 8)
 	msg[0] = icmpv6EchoRequest
-	msg[1] = 0   // Code
+	msg[1] = 0 // Code
 	// Checksum at [2:4] = 0 (kernel-computed for ICMPv6)
 	binary.BigEndian.PutUint16(msg[4:6], id)
 	binary.BigEndian.PutUint16(msg[6:8], seq)
