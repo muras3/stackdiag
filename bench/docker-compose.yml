@@ -138,6 +138,16 @@ services:
       bench:
         ipv4_address: 172.28.0.22
 
+  nginx-401:
+    <<: *nginx-build
+    hostname: nginx-401
+    volumes:
+      - ./docker/nginx/error-401.conf:/etc/nginx/conf.d/error-401.conf:ro
+      - *certs-volume
+    networks:
+      bench:
+        ipv4_address: 172.28.0.23
+
   blackhole:
     build:
       context: docker/blackhole
@@ -192,6 +202,7 @@ services:
       - nginx-redirect
       - nginx-chainbroken
       - nginx-nocert
+      - nginx-401
       - blackhole
       - blackhole-tcp
       - coredns

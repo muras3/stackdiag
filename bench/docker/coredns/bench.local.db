@@ -25,6 +25,7 @@ nginx-429        IN A    172.28.0.19
 nginx-redirect   IN A    172.28.0.20
 nginx-chainbroken IN A   172.28.0.21
 nginx-nocert     IN A    172.28.0.22
+nginx-401        IN A    172.28.0.23
 
 ; blackhole — drops all traffic (for timeout scenarios)
 blackhole        IN A    172.28.0.201

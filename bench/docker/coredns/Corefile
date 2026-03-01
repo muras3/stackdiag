@@ -11,3 +11,12 @@ dns-timeout.local:53 {
     log
     errors
 }
+
+# Catch-all zone: forward all other queries to Docker's internal DNS.
+# This allows --dns-server 172.28.0.100 to resolve bare hostnames
+# like "nginx-healthy" that Docker's embedded DNS handles.
+.:53 {
+    forward . 127.0.0.11
+    log
+    errors
+}

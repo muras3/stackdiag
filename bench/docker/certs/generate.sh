@@ -21,7 +21,7 @@ sign_cert() {
 
 echo "==> Generating valid cert (nginx-healthy + shared services)..."
 sign_cert valid nginx-healthy \
-  "DNS:nginx-healthy,DNS:nginx-tls12,DNS:nginx-503,DNS:nginx-403,DNS:nginx-500,DNS:nginx-429,DNS:nginx-redirect"
+  "DNS:nginx-healthy,DNS:nginx-tls12,DNS:nginx-503,DNS:nginx-403,DNS:nginx-500,DNS:nginx-429,DNS:nginx-redirect,DNS:nginx-401"
 
 echo "==> Generating expired cert (nginx-expired)..."
 # Create with -days 1; then re-sign backdated via explicit start/end dates

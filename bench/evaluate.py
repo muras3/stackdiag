@@ -22,6 +22,7 @@ MANUAL_KEYWORDS = {
     "HTTP_503": ["503"],
     "HTTP_403": ["403"],
     "HTTP_500": ["500"],
+    "HTTP_401": ["401", "Unauthorized"],
     "HTTP_429": ["429"],
 }
 
@@ -31,9 +32,45 @@ for kws in MANUAL_KEYWORDS.values():
     ALL_ERROR_KEYWORDS.extend(kws)
 
 
+def is_count_result(stdiag: dict) -> bool:
+    """Check if stdiag output is a CountResult (--count mode)."""
+    return "attempts" in stdiag and "statistics" in stdiag
+
+
+def get_layers(stdiag: dict) -> dict:
+    """Get layers from either Result or the first attempt of CountResult."""
+    if is_count_result(stdiag):
+        attempts = stdiag.get("attempts", [])
+        if attempts:
+            return attempts[0].get("layers", {})
+        return {}
+    return stdiag.get("layers", {})
+
+
 def evaluate_stdiag_diagnosis(stdiag: dict, scenario: dict) -> bool:
     """Check if stdiag correctly diagnosed the scenario."""
     ground_truth = scenario["ground_truth"]
+
+    # CountResult: check all attempts
+    if is_count_result(stdiag):
+        attempts = stdiag.get("attempts", [])
+        if not attempts:
+            return False
+        if ground_truth is None:
+            # Healthy count: all attempts, all layers should be ok/skip/warn
+            return all(
+                layer.get("status") in ("ok", "skip", "warn")
+                for attempt in attempts
+                for layer in attempt.get("layers", {}).values()
+            )
+        # Error count: at least one attempt should have the error
+        for attempt in attempts:
+            for layer in attempt.get("layers", {}).values():
+                error = layer.get("error")
+                if error and error.get("code") == ground_truth:
+                    return True
+        return False
+
     layers = stdiag.get("layers", {})
 
     if ground_truth is None:
@@ -72,6 +109,8 @@ def evaluate_manual_diagnosis(manual_text: str, scenario: dict) -> bool:
 
     if ground_truth is None:
         # Healthy scenario: no error keywords should be present
+        # Filter out "401" from error keywords check for healthy scenarios
+        # since the number might appear in unrelated contexts
         text_lower = manual_text.lower()
         return not any(kw.lower() in text_lower for kw in ALL_ERROR_KEYWORDS)
 
@@ -82,20 +121,42 @@ def evaluate_manual_diagnosis(manual_text: str, scenario: dict) -> bool:
     return any(kw.lower() in manual_text.lower() for kw in keywords)
 
 
+def resolve_dotted_key(obs: dict, dotted_key: str) -> bool:
+    """Check if a dot-separated key exists in a nested dict.
+
+    e.g. "tls_scan.performed" checks obs["tls_scan"]["performed"].
+    """
+    parts = dotted_key.split(".")
+    current = obs
+    for part in parts:
+        if not isinstance(current, dict) or part not in current:
+            return False
+        current = current[part]
+    return True
+
+
 def evaluate_evidence_recall(stdiag: dict, scenario: dict) -> float:
     """Calculate recall of required evidence fields in stdiag output."""
     required = scenario.get("required_evidence", [])
     if not required:
         return 1.0
 
-    layers = stdiag.get("layers", {})
-    # Collect all observation keys across all layers
-    all_obs_keys = set()
+    layers = get_layers(stdiag)
+    # Collect all observations across all layers
+    all_observations = {}
     for layer in layers.values():
         obs = layer.get("observations", {})
-        all_obs_keys.update(obs.keys())
+        all_observations.update(obs)
 
-    present = sum(1 for field in required if field in all_obs_keys)
+    present = 0
+    for field in required:
+        if "." in field:
+            # Dot-notation: check nested key
+            if resolve_dotted_key(all_observations, field):
+                present += 1
+        elif field in all_observations:
+            present += 1
+
     return present / len(required)
 
 

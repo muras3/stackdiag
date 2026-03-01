@@ -232,5 +232,120 @@
       "cert_not_after"
     ],
     "docker_service": "nginx-tls12"
+  },
+  {
+    "name": "http_plain",
+    "target": "http://nginx-healthy:80",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "required_evidence": [
+      "query_name",
+      "answers",
+      "probe_method",
+      "reachable",
+      "remote_ip",
+      "remote_port",
+      "method",
+      "protocol",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-healthy",
+    "note": "HTTP plain (no TLS) — demonstrates TLS layer skip and token savings"
+  },
+  {
+    "name": "tcp_direct",
+    "target": "tcp://nginx-healthy:443",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "required_evidence": [
+      "query_name",
+      "answers",
+      "probe_method",
+      "reachable",
+      "remote_ip",
+      "remote_port"
+    ],
+    "docker_service": "nginx-healthy",
+    "note": "TCP direct — minimal path (DNS+Reachability+TCP), TLS/HTTP skipped"
+  },
+  {
+    "name": "http_401",
+    "target": "https://nginx-401",
+    "ground_truth": "HTTP_401",
+    "required_evidence": [
+      "method",
+      "status_code",
+      "status_text",
+      "response_headers"
+    ],
+    "docker_service": "nginx-401",
+    "note": "HTTP 401 — authentication error classification"
+  },
+  {
+    "name": "count_healthy",
+    "target": "https://nginx-healthy",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok_count",
+    "extra_flags": ["--count", "3"],
+    "required_evidence": [
+      "query_name",
+      "answers",
+      "probe_method",
+      "reachable",
+      "remote_ip",
+      "remote_port",
+      "version",
+      "cipher_suite",
+      "cert_verified",
+      "method",
+      "status_code"
+    ],
+    "docker_service": "nginx-healthy",
+    "note": "--count mode — stdiag aggregation vs N manual runs"
+  },
+  {
+    "name": "tls_scan",
+    "target": "https://nginx-tls12",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "extra_flags": ["--tls-scan"],
+    "required_evidence": [
+      "version",
+      "cipher_suite",
+      "cert_verified",
+      "cert_subject",
+      "cert_san",
+      "cert_issuer",
+      "cert_not_after",
+      "tls_scan.performed",
+      "tls_scan.supported_versions"
+    ],
+    "docker_service": "nginx-tls12",
+    "note": "--tls-scan — 1 command vs 4x openssl s_client per TLS version"
+  },
+  {
+    "name": "dns_custom",
+    "target": "https://nginx-healthy",
+    "ground_truth": null,
+    "ground_truth_label": "all_ok",
+    "extra_flags": ["--dns-server", "172.28.0.100"],
+    "required_evidence": [
+      "query_name",
+      "answers",
+      "resolver_address",
+      "probe_method",
+      "reachable",
+      "remote_ip",
+      "remote_port",
+      "version",
+      "cipher_suite",
+      "cert_verified",
+      "method",
+      "status_code"
+    ],
+    "docker_service": "nginx-healthy",
+    "note": "--dns-server — custom DNS resolver diagnostics"
   }
 ]

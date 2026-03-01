@@ -23,15 +23,17 @@ if [ -f "${SCRIPT_DIR}/.venv/bin/activate" ]; then
   source "${SCRIPT_DIR}/.venv/bin/activate"
 fi
 
-# Read scenario names and targets from scenarios.json.
+# Read scenario names, targets, and extra_flags from scenarios.json.
 # Uses python3 for JSON parsing (portable, no jq dependency).
+# Output format: name\ttarget\textra_flags (space-separated)
 read_scenarios() {
   SCENARIOS_FILE="${SCENARIOS_FILE}" python3 -c "
 import os, json
 with open(os.environ['SCENARIOS_FILE']) as f:
     scenarios = json.load(f)
 for s in scenarios:
-    print(s['name'] + '\t' + s['target'])
+    flags = ' '.join(s.get('extra_flags', []))
+    print(s['name'] + '\t' + s['target'] + '\t' + flags)
 "
 }
 
@@ -66,9 +68,14 @@ if [ "${DRY_RUN}" = false ]; then
 fi
 
 log "Running capture for each scenario..."
-while IFS=$'\t' read -r NAME TARGET; do
-  log "  -> ${NAME}: ${TARGET}"
-  run_cmd docker compose exec -T runner ./capture.sh "${NAME}" "${TARGET}" /bench/results </dev/null
+while IFS=$'\t' read -r NAME TARGET EXTRA_FLAGS; do
+  log "  -> ${NAME}: ${TARGET} ${EXTRA_FLAGS}"
+  if [ -n "${EXTRA_FLAGS}" ]; then
+    # shellcheck disable=SC2086
+    run_cmd docker compose exec -T runner ./capture.sh "${NAME}" "${TARGET}" /bench/results ${EXTRA_FLAGS} </dev/null
+  else
+    run_cmd docker compose exec -T runner ./capture.sh "${NAME}" "${TARGET}" /bench/results </dev/null
+  fi
 done <<< "${SCENARIO_LIST}"
 
 log "Copying results to ${RESULTS_DIR}..."
