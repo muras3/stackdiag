@@ -9,10 +9,11 @@ build:
 
 lint:
 	go vet ./...
-	gofumpt -l -d . | grep . && exit 1 || true
+	@which gofumpt > /dev/null 2>&1 || (echo "gofumpt not installed: go install mvdan.cc/gofumpt@latest" && exit 1)
+	@diff=$$(gofumpt -l -d .); if [ -n "$$diff" ]; then echo "$$diff"; exit 1; fi
 
 test:
-	go test ./...
+	go test $(shell go list ./... | grep -v /test/e2e)
 
 test-race:
 	go test -race $(shell go list ./... | grep -v /test/e2e)
