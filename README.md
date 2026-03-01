@@ -14,15 +14,17 @@ One command to diagnose DNS → Reachability → TCP → TLS → HTTP — layer 
 
 ```bash
 # Binary (Linux amd64)
-curl -sL https://github.com/muras3/stackdiag/releases/latest/download/stdiag_linux_amd64.tar.gz | tar xz
+curl -sL https://github.com/muras3/stackdiag/releases/latest/download/stackdiag_linux_amd64.tar.gz | tar xz
 sudo mv stdiag /usr/local/bin/
 
 # Binary (macOS Apple Silicon)
-curl -sL https://github.com/muras3/stackdiag/releases/latest/download/stdiag_darwin_arm64.tar.gz | tar xz
+curl -sL https://github.com/muras3/stackdiag/releases/latest/download/stackdiag_darwin_arm64.tar.gz | tar xz
 sudo mv stdiag /usr/local/bin/
 
 # Go
 go install github.com/muras3/stackdiag/cmd/stackdiag@latest
+# Note: 'go install' produces binary named 'stackdiag'. Rename if desired:
+# mv $(go env GOPATH)/bin/stackdiag $(go env GOPATH)/bin/stdiag
 ```
 
 ## Usage
