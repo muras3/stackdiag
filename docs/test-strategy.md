@@ -1,175 +1,175 @@
 # stackdiag — Test Strategy
 
-## 設計思想
+## Design Philosophy
 
-stackdiagは障害を診断するツール。**障害テストが成功テストより重要。**
+stackdiag is a failure-diagnosis tool. **Failure tests are more important than success tests.**
 
-品質担保の3本柱：
-1. **テストピラミッド** — Smallが大多数、Largeは少数
-2. **障害マトリクス** — レイヤー×障害パターンの網羅的カバレッジ
-3. **リファレンスツールとのクロス検証** — dig/openssl/curlとの突き合わせ
+Three pillars of quality assurance:
+1. **Test Pyramid** — Small tests are the majority, Large tests are minimal
+2. **Failure Matrix** — Comprehensive coverage of layer × failure pattern combinations
+3. **Cross-validation with reference tools** — Comparison against dig/openssl/curl
 
-## Test Pyramid（Google方式）
+## Test Pyramid (Google-style)
 
 ```
         ╱╲
-       ╱ L ╲      Large: ビルド済バイナリ + Docker canary
-      ╱──────╲     5-10件
+       ╱ L ╲      Large: pre-built binary + Docker canary
+      ╱──────╲     5-10 tests
      ╱   M    ╲   Medium: httptest, localhost listener, TLS fixture
-    ╱──────────╲   レイヤーあたり5-10件
-   ╱     S      ╲ Small: パーサー、分類、レンダラー、exit code
-  ╱──────────────╲ テストの大多数
+    ╱──────────╲   5-10 tests per layer
+   ╱     S      ╲ Small: parser, classifier, renderer, exit code
+  ╱──────────────╲ Majority of tests
 ```
 
-## テスト種別一覧
+## Test Types
 
-| 種別 | 目的 | 導入時期 |
-|------|------|---------|
-| Unit (Small) | 純粋ロジック検証。fake注入 | Phase 0〜 |
-| Integration (Medium) | localhost I/O。httptest, net.Listen | Phase 1〜 |
-| E2E (Large) | ビルド済バイナリのstdout/stderr/exit code | Phase 3 |
-| Contract | JSONスキーマの後方互換性検証 | Phase 0〜 |
-| Failure-matrix | レイヤー×障害パターン網羅 | Phase 1〜 |
-| Fuzz | URL/引数パーサーのpanic/hang検出 | Phase 0〜 |
-| Golden file | レンダラー出力のスナップショット比較 | Phase 0〜 |
-| Race | `go test -race` で並行性バグ検出 | Phase 2〜 |
-| Benchmark | ホットパスのalloc/latency追跡 | Phase 2〜 |
-| Regression | バグ修正ごとのreproducerテスト | 継続 |
-| Smoke | リリースバイナリの最低限動作確認 | Phase 3 |
-| Acceptance | 実環境クロス検証（dig/openssl/curl） | Phase 3 |
+| Type | Purpose | Introduction |
+|------|---------|-------------|
+| Unit (Small) | Pure logic verification. Fake injection | Phase 0+ |
+| Integration (Medium) | localhost I/O. httptest, net.Listen | Phase 1+ |
+| E2E (Large) | Pre-built binary stdout/stderr/exit code | Phase 3 |
+| Contract | JSON schema backward compatibility verification | Phase 0+ |
+| Failure-matrix | Layer × failure pattern coverage | Phase 1+ |
+| Fuzz | Panic/hang detection for URL/argument parsers | Phase 0+ |
+| Golden file | Snapshot comparison of renderer output | Phase 0+ |
+| Race | Concurrency bug detection via `go test -race` | Phase 2+ |
+| Benchmark | Allocation/latency tracking on hot paths | Phase 2+ |
+| Regression | Reproducer test for each bug fix | Ongoing |
+| Smoke | Minimal operational check on release binary | Phase 3 |
+| Acceptance | Cross-validation against real tools (dig/openssl/curl) | Phase 3 |
 
 ## Faking Strategy
 
-各レイヤーはインターフェース経由で依存注入し、テスト時はfakeに差し替える。
+Each layer injects dependencies via interfaces, swapping in fakes during tests.
 
-| レイヤー | Interface | Fake方式 |
-|---------|-----------|---------|
-| DNS | `Resolver` | fake: 固定IP返却 / エラー返却 / context deadline待ち |
-| TCP | `Dialer` | fake: 即成功 / localhost `net.Listen` / 即エラー |
-| TLS | `TLSHandshaker` | fake: 固定結果 / local TLS server with fixture certs |
-| HTTP | `HTTPDoer` | fake: 固定レスポンス / `httptest.Server` |
-| Time | `Clock` | fake: 固定時刻（タイミングテストのflake防止） |
+| Layer | Interface | Fake Approach |
+|-------|-----------|--------------|
+| DNS | `Resolver` | fake: return fixed IPs / return error / wait for context deadline |
+| TCP | `Dialer` | fake: immediate success / localhost `net.Listen` / immediate error |
+| TLS | `TLSHandshaker` | fake: fixed result / local TLS server with fixture certs |
+| HTTP | `HTTPDoer` | fake: fixed response / `httptest.Server` |
+| Time | `Clock` | fake: fixed time (prevents flaky timing tests) |
 
-## 障害マトリクス（Failure-Matrix Testing）
+## Failure Matrix Testing
 
-Netflix chaos engineeringの応用。stackdiagでは「決定的障害注入」として実装。
+Inspired by Netflix chaos engineering. Implemented in stackdiag as "deterministic fault injection."
 
-### レイヤー別障害パターン
+### Failure Patterns by Layer
 
 #### DNS
 
-| パターン | テスト方法 | 期待結果 |
-|---------|-----------|---------|
-| NXDOMAIN | fake resolver: エラーコード返却 | `dns.status=fail`, `error.code=DNS_NXDOMAIN` |
-| Timeout | fake resolver: context deadline待ち | `dns.status=fail`, `error.code=DNS_TIMEOUT` |
-| SERVFAIL | fake resolver: SERVFAILエラー | `dns.status=fail`, `error.code=DNS_SERVFAIL` |
+| Pattern | Test Method | Expected Result |
+|---------|------------|----------------|
+| NXDOMAIN | fake resolver: return error code | `dns.status=fail`, `error.code=DNS_NXDOMAIN` |
+| Timeout | fake resolver: wait for context deadline | `dns.status=fail`, `error.code=DNS_TIMEOUT` |
+| SERVFAIL | fake resolver: return SERVFAIL error | `dns.status=fail`, `error.code=DNS_SERVFAIL` |
 
 #### TCP
 
-| パターン | テスト方法 | 期待結果 |
-|---------|-----------|---------|
-| Connection refused | localhost閉じポートへconnect | `tcp.status=fail`, `error.code=TCP_REFUSED` |
-| Timeout | fake dialer: deadline待ち | `tcp.status=fail`, `error.code=TCP_TIMEOUT` |
-| Reset | listener accept→即RST送信 | `tcp.status=fail`, `error.code=TCP_RESET` |
+| Pattern | Test Method | Expected Result |
+|---------|------------|----------------|
+| Connection refused | connect to closed localhost port | `tcp.status=fail`, `error.code=TCP_REFUSED` |
+| Timeout | fake dialer: wait for deadline | `tcp.status=fail`, `error.code=TCP_TIMEOUT` |
+| Reset | listener accept → immediate RST | `tcp.status=fail`, `error.code=TCP_RESET` |
 
 #### TLS
 
-| パターン | テスト方法 | 期待結果 |
-|---------|-----------|---------|
-| Expired cert | fixture証明書（期限切れ） | `tls.status=fail`, `error.code=TLS_CERT_EXPIRED` |
-| Hostname mismatch | SAN不一致のfixture | `tls.status=fail`, `error.code=TLS_HOSTNAME_MISMATCH` |
-| Untrusted CA | unknown CAの自己署名 | `tls.status=fail`, `error.code=TLS_UNTRUSTED_CHAIN` |
-| Cert expiring soon | 残り30日未満のfixture | `tls.status=warn`, `error.code=TLS_CERT_EXPIRING_SOON` |
+| Pattern | Test Method | Expected Result |
+|---------|------------|----------------|
+| Expired cert | fixture certificate (expired) | `tls.status=fail`, `error.code=TLS_CERT_EXPIRED` |
+| Hostname mismatch | fixture with SAN mismatch | `tls.status=fail`, `error.code=TLS_HOSTNAME_MISMATCH` |
+| Untrusted CA | self-signed with unknown CA | `tls.status=fail`, `error.code=TLS_UNTRUSTED_CHAIN` |
+| Cert expiring soon | fixture with <30 days remaining | `tls.status=warn`, `error.code=TLS_CERT_EXPIRING_SOON` |
 
 #### HTTP
 
-| パターン | テスト方法 | 期待結果 |
-|---------|-----------|---------|
+| Pattern | Test Method | Expected Result |
+|---------|------------|----------------|
 | 4xx (401, 403, 404) | httptest handler | `http.status=fail`, `error.code=HTTP_4XX` |
 | 5xx (500, 502, 503) | httptest handler | `http.status=fail`, `error.code=HTTP_5XX` |
-| Timeout | handler内sleep超過 | `http.status=fail`, `error.code=HTTP_TIMEOUT` |
-| Reset mid-response | hijack→partial write→close | `http.status=fail` |
+| Timeout | handler sleep exceeds deadline | `http.status=fail`, `error.code=HTTP_TIMEOUT` |
+| Reset mid-response | hijack → partial write → close | `http.status=fail` |
 
-### 部分障害シナリオ（stackdiagのコアテスト）
+### Partial Failure Scenarios (stackdiag core tests)
 
-| シナリオ | dns | tcp | tls | http | exit |
-|---------|-----|-----|-----|------|------|
-| DNS失敗 | fail | skip | skip | skip | 10 |
-| DNS ok → TCP失敗 | ok | fail | skip | skip | 20 |
-| TCP ok → TLS失敗 | ok | ok | fail | skip | 30 |
-| TLS ok → HTTP失敗 | ok | ok | ok | fail | 40 |
-| TLS warn + HTTP失敗 | ok | ok | warn | fail | 40 |
-| 全成功 | ok | ok | ok | ok | 0 |
+| Scenario | dns | tcp | tls | http | exit |
+|----------|-----|-----|-----|------|------|
+| DNS failure | fail | skip | skip | skip | 10 |
+| DNS ok → TCP failure | ok | fail | skip | skip | 20 |
+| TCP ok → TLS failure | ok | ok | fail | skip | 30 |
+| TLS ok → HTTP failure | ok | ok | ok | fail | 40 |
+| TLS warn + HTTP failure | ok | ok | warn | fail | 40 |
+| All success | ok | ok | ok | ok | 0 |
 
-### タイムアウト伝播テスト
+### Timeout Propagation Tests
 
-- 全体バジェット2秒 → DNSで1.5秒消費 → TCP以降は残り0.5秒
-- バジェット切れ → 後続レイヤーは `skip`
-- 報告されるタイムアウト段階 = 根本原因（最後に観測した症状ではなく）
+- Total budget 2s → DNS consumes 1.5s → TCP onward gets remaining 0.5s
+- Budget exhausted → subsequent layers are `skip`
+- Reported timeout stage = root cause (not the last observed symptom)
 
-## Contract Tests（Stripe方式）
+## Contract Tests (Stripe-style)
 
-JSONスキーマを公開APIとして扱い、後方互換性を自動検証する。
+Treat JSON schema as a public API and automatically verify backward compatibility.
 
-検証項目：
-- 全フィールドの存在と型
-- `status` の取りうる値: `ok`, `warn`, `fail`, `skip`
-- `error` が null or `{code, message}`
-- `schema_version` の存在
-- フィールド削除がないこと（前バージョンのgoldenと比較）
+Verification items:
+- All field presence and types
+- Possible values of `status`: `ok`, `warn`, `fail`, `skip`
+- `error` is null or `{code, message}`
+- `schema_version` exists
+- No field deletions (compare against previous version golden file)
 
-Golden fileだけでは不十分。**セマンティックなcontract assertion**を別途書く。
+Golden files alone are insufficient. **Write separate semantic contract assertions.**
 
-## Fuzz Tests（Cloudflare方式）
+## Fuzz Tests (Cloudflare-style)
 
-Go native fuzzingを使用。
+Uses Go native fuzzing.
 
-対象：
-- URL/ターゲットパーサー（スキーム、ホスト、ポート、パス、IPv6、IDNA）
-- CLI引数パーサー
-- エラーコード分類ロジック
+Targets:
+- URL/target parser (scheme, host, port, path, IPv6, IDNA)
+- CLI argument parser
+- Error code classification logic
 
-アサーション：
-- panic しない
-- hang しない（タイムアウト付き）
-- メモリ使用量が有界
-- エラーが返る場合は正しいエラーコード分類
+Assertions:
+- No panics
+- No hangs (with timeout)
+- Bounded memory usage
+- Correct error code classification when errors are returned
 
-Seed corpusは `testdata/fuzz/` にチェックイン。
+Seed corpus is checked in at `testdata/fuzz/`.
 
-## 実環境テスト（Acceptance Testing）
+## Real Environment Testing (Acceptance Testing)
 
-### 2層構造
+### Two-tier Structure
 
-#### 層1: Docker Compose canary（決定的・再現可能）
+#### Tier 1: Docker Compose Canary (deterministic, reproducible)
 
 ```
 docker-compose.yml
-├── dns-server (CoreDNS)        # 制御可能なDNS
-├── ok-server                    # 200 OK、高速レスポンス
-├── slow-server                  # ヘッダー遅延（TTFB検証用）
-├── selfsigned-server            # 自己署名証明書
-├── expired-server               # 期限切れ証明書
-├── wrong-san-server             # SAN不一致
-└── error-server                 # 503等
+├── dns-server (CoreDNS)        # Controlled DNS
+├── ok-server                    # 200 OK, fast response
+├── slow-server                  # Header delay (TTFB verification)
+├── selfsigned-server            # Self-signed certificate
+├── expired-server               # Expired certificate
+├── wrong-san-server             # SAN mismatch
+└── error-server                 # 503 etc.
 ```
 
-ローカルでもCIでも `make acceptance` で同じものが動く。
+Runs identically locally and in CI via `make acceptance`.
 
-#### 層2: リファレンスツールとのクロス検証
+#### Tier 2: Cross-validation with Reference Tools
 
-| 項目 | 比較対象 | 比較方法 |
-|------|---------|---------|
-| DNS解決結果 | `dig` | 完全一致（IPアドレス） |
-| TLS証明書 | `openssl s_client` | 完全一致（fingerprint, SAN, issuer, expiry） |
-| HTTPステータス | `curl -w` | 完全一致 |
-| DNSタイミング | `dig` | 許容範囲（±200ms or 比率2.5x以内） |
-| TCPタイミング | `curl` connect time | 許容範囲 |
-| TTFB | `curl` time_starttransfer | 許容範囲（計測定義を先に合わせる） |
+| Item | Comparison Target | Comparison Method |
+|------|------------------|-------------------|
+| DNS resolution | `dig` | Exact match (IP addresses) |
+| TLS certificate | `openssl s_client` | Exact match (fingerprint, SAN, issuer, expiry) |
+| HTTP status | `curl -w` | Exact match |
+| DNS timing | `dig` | Tolerance (±200ms or ratio ≤2.5x) |
+| TCP timing | `curl` connect time | Tolerance |
+| TTFB | `curl` time_starttransfer | Tolerance (align measurement definitions first) |
 
-**重要:** タイミングの定義はツール間で異なる。比較前に定義を合わせること。
+**Important:** Timing definitions differ between tools. Align definitions before comparison.
 
-### Acceptance Test マニフェスト
+### Acceptance Test Manifest
 
 ```yaml
 - name: canary-ok
@@ -195,78 +195,78 @@ docker-compose.yml
   retries: 1
 ```
 
-### Acceptance Test 実行フロー
+### Acceptance Test Flow
 
-1. `stackdiag --json <url>` → JSON取得
-2. `dig` / `openssl` / `curl` を同じターゲットに実行
-3. 正規化して比較
-   - 事実（IP, cert, status） → 厳密一致
-   - タイミング → 許容範囲（`abs(delta) <= N ms` OR `ratio <= 2.5`）
-4. 3回リトライ、2/3で合格
-5. 失敗時は分類: `tool_bug` / `timing_drift` / `infra_flake`
+1. `stackdiag --json <url>` → capture JSON
+2. Run `dig` / `openssl` / `curl` against the same target
+3. Normalize and compare
+   - Facts (IP, cert, status) → strict match
+   - Timing → tolerance (`abs(delta) <= N ms` OR `ratio <= 2.5`)
+4. Retry 3 times, pass on 2/3 consensus
+5. On failure, classify: `tool_bug` / `timing_drift` / `infra_flake`
 
-### Flakiness対策
+### Flakiness Mitigation
 
-- 正確性（IP, cert, status）とパフォーマンス（timing）を分離
-- リトライ + コンセンサス（2/3 pass）
-- 自前canaryインフラをブロッキング判定に使用
-- 公開エンドポイントはsmoke用（CI合否には使わない）
-- 環境コンテキスト記録（解決IP, プロトコル, ALPN, タイムスタンプ）
+- Separate correctness (IP, cert, status) from performance (timing)
+- Retry + consensus (2/3 pass)
+- Use own canary infrastructure for blocking decisions
+- Public endpoints for smoke only (never used for CI pass/fail)
+- Record environment context (resolved IP, protocol, ALPN, timestamp)
 
 ## Golden File Tests
 
-- レンダラー出力を `testdata/*.golden` で管理
-- シナリオ: `success`, `dns_fail`, `tls_warn`, `http_500`, `timeout`, `partial_failure`
-- `-update` フラグで再生成
-- タイミング値はテスト時に正規化（`XXms` 等に置換）して決定的に比較
+- Manage renderer output via `testdata/*.golden`
+- Scenarios: `success`, `dns_fail`, `tls_warn`, `http_500`, `timeout`, `partial_failure`
+- Regenerate with `-update` flag
+- Normalize timing values during test (`XXms` substitution) for deterministic comparison
 
-## フェーズごとのテスト計画
+## Phased Test Plan
 
 ### Phase 0: Core types + CLI skeleton + JSON renderer
 
-- Small tests: パーサー、バリデーション、デフォルト値、エラー型、JSON shape
-- Contract tests: JSONスキーマのフィールド存在・型検証（ここから開始）
-- Golden tests: JSON出力
-- Fuzz tests: URL/CLI引数パーサー（ここから開始）
+- Small tests: parser, validation, defaults, error types, JSON shape
+- Contract tests: JSON schema field presence and type verification (start here)
+- Golden tests: JSON output
+- Fuzz tests: URL/CLI argument parser (start here)
 
 ### Phase 1: DNS → TCP → TLS → HTTP layers
 
-- Medium tests: localhost fixture使用（httptest, net.Listen, local TLS）
-- **障害マトリクス**: 成功テストより障害テストを先に・多く書く
-- タイムアウト/deadline伝播テスト
-- 部分障害シナリオ（DNS ok → TCP fail 等）
-- Benchmark: レイヤーごとのオーバーヘッド・alloc計測
+- Medium tests: localhost fixtures (httptest, net.Listen, local TLS)
+- **Failure matrix**: write failure tests first and more than success tests
+- Timeout/deadline propagation tests
+- Partial failure scenarios (DNS ok → TCP fail, etc.)
+- Benchmark: per-layer overhead and allocation measurement
 
 ### Phase 2: Runner + Table renderer + Exit codes
 
-- Race tests: `go test -race` でrunner/timeout周りの並行性
+- Race tests: `go test -race` for runner/timeout concurrency
 - Exit code contract tests
-- Golden tests: table出力（タイミング値正規化）
-- ローカルE2E: ビルド済バイナリ + fixture
+- Golden tests: table output (timing value normalization)
+- Local E2E: pre-built binary + fixtures
 
 ### Phase 3: E2E + CI/CD + Acceptance
 
-- CI full pyramid: PR=Small+Medium, Nightly=全層+fuzz+acceptance
-- Docker Compose canary環境構築
-- Acceptance harness: YAML駆動 + クロス検証
-- Smoke tests: リリースバイナリの最低限動作確認
-- クロスプラットフォーム: linux/darwin × amd64/arm64
+- CI full pyramid: PR=Small+Medium, Nightly=full stack+fuzz+acceptance
+- Docker Compose canary environment setup
+- Acceptance harness: YAML-driven + cross-validation
+- Smoke tests: minimal operational check on release binary
+- Cross-platform: linux/darwin × amd64/arm64
 
-## CI統合
+## CI Integration
 
-| タイミング | テスト内容 |
-|-----------|----------|
+| Trigger | Test Scope |
+|---------|-----------|
 | PR | `make test-race` (Small + Medium) + `make build` |
-| push main | 上記 + `make e2e` + Docker canary acceptance |
-| Nightly | 全層 + fuzz（長時間） + 公開エンドポイントsmoke + benchmark trend |
-| tag `v*` | 全層 + acceptance + smoke + goreleaser |
+| push main | Above + `make e2e` + Docker canary acceptance |
+| Nightly | Full stack + fuzz (long-running) + public endpoint smoke + benchmark trend |
+| tag `v*` | Full stack + acceptance + smoke + goreleaser |
 
-## 品質の証拠として公開するもの
+## Quality Evidence for Publication
 
-1. テストピラミッドの比率（Small:Medium:Large）
-2. 障害マトリクスのカバレッジ表
-3. スキーマ契約テストの存在
-4. Fuzz seed corpusとCI実行ログ
-5. `go test -race` がCIで常にpass
-6. 全バグ修正にregressionテスト付き
-7. リファレンスツールとのクロス検証結果
+1. Test pyramid ratio (Small:Medium:Large)
+2. Failure matrix coverage table
+3. Schema contract test existence
+4. Fuzz seed corpus and CI execution logs
+5. `go test -race` always passes in CI
+6. Every bug fix has a regression test
+7. Cross-validation results against reference tools
