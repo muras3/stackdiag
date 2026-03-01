@@ -132,7 +132,7 @@ Design notes:
 | `protocol` | string | HTTP protocol (e.g., `"HTTP/2"`) |
 | `status_code` | int | HTTP response status code |
 | `status_text` | string | HTTP status text (e.g., `"OK"`, `"Service Unavailable"`) |
-| `request_headers` | object | Request headers sent (sensitive values redacted by default) |
+| `request_headers` | object | Request headers sent (known sensitive header values are redacted by default) |
 | `response_headers` | object | Selected response headers. Can be an empty object `{}` (not all headers are returned) |
 
 ## Summary
@@ -419,7 +419,7 @@ These guarantees hold **within a given schema version** after publication:
 4. **Consistent structure on error** — the JSON shape is identical for success, warning, failure, and skip
 5. **Skip, not null** — unused layers have `status: "skip"`, not `null`
 
-Breaking changes (field removals, type changes) are permitted only across major schema version boundaries (e.g., v0.1 to v0.1). Consumers should check `schema_version` to select the appropriate parser.
+Breaking changes (field removals, type changes) are permitted only across major schema version boundaries (e.g., v0.1 to v0.2). Consumers should check `schema_version` to select the appropriate parser.
 
 ## Full Example
 

@@ -519,6 +519,13 @@ func TestHTTPRequestHeadersRedaction(t *testing.T) {
 			wantVal: "[REDACTED]",
 		},
 		{
+			name:    "X-Access-Token redacted",
+			headers: map[string]string{"X-Access-Token": "super-secret"},
+			redact:  true,
+			wantKey: "X-Access-Token",
+			wantVal: "[REDACTED]",
+		},
+		{
 			name:    "X-API-Key redacted",
 			headers: map[string]string{"X-API-Key": "super-secret"},
 			redact:  true,
