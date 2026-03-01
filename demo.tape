@@ -36,7 +36,7 @@ Enter
 Type "# Structured JSON for AI agents"
 Enter
 Sleep 300ms
-Type "stdiag --json https://self-signed.badssl.com 2>/dev/null | head -20"
+Type "stdiag --json-pretty https://self-signed.badssl.com 2>/dev/null | head -20"
 Sleep 200ms
 Enter
 Sleep 5s
