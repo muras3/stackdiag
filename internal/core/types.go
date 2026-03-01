@@ -86,6 +86,7 @@ func marshalNoEscape(v any) ([]byte, error) {
 // order (dns→tcp→tls→http) rather than Go's default alphabetical map key order.
 func (r *Result) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
+	buf.Grow(512)
 	buf.WriteByte('{')
 	if err := writeField(&buf, true, "schema_version", r.SchemaVersion); err != nil {
 		return nil, err
@@ -96,12 +97,7 @@ func (r *Result) MarshalJSON() ([]byte, error) {
 	if err := writeField(&buf, false, "target", r.Target); err != nil {
 		return nil, err
 	}
-	if err := writeOrderedMap(&buf, "layers", func(name string) any {
-		if lr, ok := r.Layers[name]; ok {
-			return lr
-		}
-		return nil
-	}); err != nil {
+	if err := writeOrderedMap(&buf, false, "layers", layerGetter(r.Layers)); err != nil {
 		return nil, err
 	}
 	if err := writeField(&buf, false, "summary", r.Summary); err != nil {
@@ -123,6 +119,7 @@ type AttemptResult struct {
 // order (dns→tcp→tls→http).
 func (a *AttemptResult) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
+	buf.Grow(512)
 	buf.WriteByte('{')
 	if err := writeField(&buf, true, "attempt", a.Attempt); err != nil {
 		return nil, err
@@ -130,12 +127,7 @@ func (a *AttemptResult) MarshalJSON() ([]byte, error) {
 	if err := writeField(&buf, false, "started_at", a.StartedAt); err != nil {
 		return nil, err
 	}
-	if err := writeOrderedMap(&buf, "layers", func(name string) any {
-		if lr, ok := a.Layers[name]; ok {
-			return lr
-		}
-		return nil
-	}); err != nil {
+	if err := writeOrderedMap(&buf, false, "layers", layerGetter(a.Layers)); err != nil {
 		return nil, err
 	}
 	if err := writeField(&buf, false, "summary", a.Summary); err != nil {
@@ -170,6 +162,7 @@ type CountResult struct {
 // execution order (dns→tcp→tls→http).
 func (c *CountResult) MarshalJSON() ([]byte, error) {
 	var buf bytes.Buffer
+	buf.Grow(512)
 	buf.WriteByte('{')
 	if err := writeField(&buf, true, "schema_version", c.SchemaVersion); err != nil {
 		return nil, err
@@ -186,7 +179,7 @@ func (c *CountResult) MarshalJSON() ([]byte, error) {
 	if err := writeField(&buf, false, "attempts", c.Attempts); err != nil {
 		return nil, err
 	}
-	if err := writeOrderedMap(&buf, "statistics", func(name string) any {
+	if err := writeOrderedMap(&buf, false, "statistics", func(name string) any {
 		if ls, ok := c.Statistics[name]; ok {
 			return ls
 		}

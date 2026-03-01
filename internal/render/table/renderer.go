@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"sort"
 	"strings"
 
 	"github.com/muras3/stackdiag/internal/core"
@@ -375,7 +376,7 @@ func renderResponseHeadersLines(w io.Writer, lr *core.LayerResult) error {
 	for k := range httpObs.ResponseHeaders {
 		keys = append(keys, k)
 	}
-	sortStrings(keys)
+	sort.Strings(keys)
 
 	for _, k := range keys {
 		if _, err := fmt.Fprintf(w, "    %s: %s\n", k, httpObs.ResponseHeaders[k]); err != nil {
@@ -383,15 +384,6 @@ func renderResponseHeadersLines(w io.Writer, lr *core.LayerResult) error {
 		}
 	}
 	return nil
-}
-
-// sortStrings sorts a slice of strings in place (simple insertion sort to avoid importing sort).
-func sortStrings(s []string) {
-	for i := 1; i < len(s); i++ {
-		for j := i; j > 0 && s[j] < s[j-1]; j-- {
-			s[j], s[j-1] = s[j-1], s[j]
-		}
-	}
 }
 
 // RenderCount writes the CountResult as a human-readable table to w.

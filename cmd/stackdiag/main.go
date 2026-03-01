@@ -169,8 +169,7 @@ func buildLayers(tgt core.Target, insecure bool, dnsServer string) []core.Layer 
 }
 
 // exitToolError outputs a structured error and exits with code 1.
-func exitToolError(jsonMode bool, code, message string, prettyMode ...bool) {
-	pretty := len(prettyMode) > 0 && prettyMode[0]
+func exitToolError(jsonMode bool, code, message string, pretty bool) {
 	if jsonMode {
 		if pretty {
 			renderjson.RenderToolErrorPretty(os.Stdout, code, message, 1)

@@ -130,10 +130,9 @@ func (l *Layer) Probe(pctx *core.ProbeContext) *core.LayerResult {
 			return result
 		}
 
-		// Verification passed — update cert_verified in observations
+		// Verification passed — update cert_verified in observations.
 		verified = true
-		v := true
-		obs.CertVerified = &v
+		obs.CertVerified = &verified
 	}
 
 	// Check certificate expiry, not-yet-valid, and hostname even on successful handshake.

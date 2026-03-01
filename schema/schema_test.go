@@ -14,8 +14,9 @@ import (
 
 const schemaFile = "stackdiag-v0.2.schema.json"
 
-// TestSchemaIsValidJSON verifies that the schema file is well-formed JSON.
-func TestSchemaIsValidJSON(t *testing.T) {
+// loadSchema reads and parses the JSON schema file, failing the test on error.
+func loadSchema(t *testing.T) map[string]any {
+	t.Helper()
 	data, err := os.ReadFile(schemaFile)
 	if err != nil {
 		t.Fatalf("failed to read schema file: %v", err)
@@ -24,6 +25,12 @@ func TestSchemaIsValidJSON(t *testing.T) {
 	if err := json.Unmarshal(data, &parsed); err != nil {
 		t.Fatalf("schema is not valid JSON: %v", err)
 	}
+	return parsed
+}
+
+// TestSchemaIsValidJSON verifies that the schema file is well-formed JSON.
+func TestSchemaIsValidJSON(t *testing.T) {
+	parsed := loadSchema(t)
 
 	// Verify it's JSON Schema draft 2020-12
 	schemaURI, ok := parsed["$schema"].(string)
@@ -34,14 +41,7 @@ func TestSchemaIsValidJSON(t *testing.T) {
 
 // TestSchemaDefinitionsExist checks that all expected type definitions are present.
 func TestSchemaDefinitionsExist(t *testing.T) {
-	data, err := os.ReadFile(schemaFile)
-	if err != nil {
-		t.Fatalf("failed to read schema file: %v", err)
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
-	}
+	parsed := loadSchema(t)
 
 	defs, ok := parsed["$defs"].(map[string]any)
 	if !ok {
@@ -79,15 +79,7 @@ func TestSchemaDefinitionsExist(t *testing.T) {
 
 // TestSchemaFieldsMatchGoStructs verifies that schema property names match Go struct JSON tags.
 func TestSchemaFieldsMatchGoStructs(t *testing.T) {
-	data, err := os.ReadFile(schemaFile)
-	if err != nil {
-		t.Fatalf("failed to read schema file: %v", err)
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
-	}
-
+	parsed := loadSchema(t)
 	defs := parsed["$defs"].(map[string]any)
 
 	cases := []struct {
@@ -162,15 +154,7 @@ func TestSchemaFieldsMatchGoStructs(t *testing.T) {
 
 // TestSchemaStatusEnum verifies the status enum matches Go constants.
 func TestSchemaStatusEnum(t *testing.T) {
-	data, err := os.ReadFile(schemaFile)
-	if err != nil {
-		t.Fatalf("failed to read schema file: %v", err)
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
-	}
-
+	parsed := loadSchema(t)
 	defs := parsed["$defs"].(map[string]any)
 	statusDef := defs["Status"].(map[string]any)
 	enumRaw := statusDef["enum"].([]any)
@@ -196,15 +180,7 @@ func TestSchemaStatusEnum(t *testing.T) {
 
 // TestSchemaLayerNames verifies the layers object requires exactly the 5 layer names.
 func TestSchemaLayerNames(t *testing.T) {
-	data, err := os.ReadFile(schemaFile)
-	if err != nil {
-		t.Fatalf("failed to read schema file: %v", err)
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
-	}
-
+	parsed := loadSchema(t)
 	defs := parsed["$defs"].(map[string]any)
 	layersDef := defs["Layers"].(map[string]any)
 	props := layersDef["properties"].(map[string]any)
@@ -237,15 +213,7 @@ func TestSchemaLayerNames(t *testing.T) {
 
 // TestSchemaExitCodes verifies the exit_code enum in Summary matches documented values.
 func TestSchemaExitCodes(t *testing.T) {
-	data, err := os.ReadFile(schemaFile)
-	if err != nil {
-		t.Fatalf("failed to read schema file: %v", err)
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
-	}
-
+	parsed := loadSchema(t)
 	defs := parsed["$defs"].(map[string]any)
 	summaryDef := defs["Summary"].(map[string]any)
 	exitCodeProp := summaryDef["properties"].(map[string]any)["exit_code"].(map[string]any)
@@ -365,15 +333,7 @@ func TestCountResultMarshalHasRequiredFields(t *testing.T) {
 
 // TestSchemaErrorCodesComplete verifies all documented error codes are in the schema enum.
 func TestSchemaErrorCodesComplete(t *testing.T) {
-	data, err := os.ReadFile(schemaFile)
-	if err != nil {
-		t.Fatalf("failed to read schema file: %v", err)
-	}
-	var parsed map[string]any
-	if err := json.Unmarshal(data, &parsed); err != nil {
-		t.Fatalf("schema is not valid JSON: %v", err)
-	}
-
+	parsed := loadSchema(t)
 	defs := parsed["$defs"].(map[string]any)
 	errorDef := defs["ProbeError"].(map[string]any)
 	codeProp := errorDef["properties"].(map[string]any)["code"].(map[string]any)

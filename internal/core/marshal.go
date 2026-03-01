@@ -18,22 +18,36 @@ func writeField(buf *bytes.Buffer, first bool, key string, val any) error {
 	return nil
 }
 
+// layerGetter returns a getter function for writeOrderedMap over a Layers map.
+func layerGetter(m map[string]*LayerResult) func(string) any {
+	return func(name string) any {
+		if lr, ok := m[name]; ok {
+			return lr
+		}
+		return nil
+	}
+}
+
 // writeOrderedMap writes a JSON object whose keys follow LayerOrder.
 // getter returns the value for a layer name, or nil if absent.
-func writeOrderedMap(buf *bytes.Buffer, key string, getter func(string) any) error {
-	buf.WriteString(`,"`)
+// If first is true, the leading comma before the key is omitted.
+func writeOrderedMap(buf *bytes.Buffer, first bool, key string, getter func(string) any) error {
+	if !first {
+		buf.WriteByte(',')
+	}
+	buf.WriteString(`"`)
 	buf.WriteString(key)
 	buf.WriteString(`":{`)
-	first := true
+	innerFirst := true
 	for _, name := range LayerOrder {
 		v := getter(name)
 		if v == nil {
 			continue
 		}
-		if err := writeField(buf, first, name, v); err != nil {
+		if err := writeField(buf, innerFirst, name, v); err != nil {
 			return err
 		}
-		first = false
+		innerFirst = false
 	}
 	buf.WriteByte('}')
 	return nil

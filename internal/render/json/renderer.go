@@ -11,33 +11,33 @@ import (
 // Compact format minimizes token count for AI agent consumption.
 // HTML escaping is disabled to keep URLs readable.
 func Render(w io.Writer, r *core.Result) error {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	return enc.Encode(r)
+	return encode(w, r, false)
 }
 
 // RenderPretty writes the Result as indented JSON to w.
 func RenderPretty(w io.Writer, r *core.Result) error {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(r)
+	return encode(w, r, true)
 }
 
 // RenderCount writes the CountResult as compact JSON to w.
 // HTML escaping is disabled to keep URLs readable.
 func RenderCount(w io.Writer, r *core.CountResult) error {
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	return enc.Encode(r)
+	return encode(w, r, false)
 }
 
 // RenderCountPretty writes the CountResult as indented JSON to w.
 func RenderCountPretty(w io.Writer, r *core.CountResult) error {
+	return encode(w, r, true)
+}
+
+// encode writes v as JSON to w. When pretty is true, output is indented.
+func encode(w io.Writer, v any, pretty bool) error {
 	enc := json.NewEncoder(w)
 	enc.SetEscapeHTML(false)
-	enc.SetIndent("", "  ")
-	return enc.Encode(r)
+	if pretty {
+		enc.SetIndent("", "  ")
+	}
+	return enc.Encode(v)
 }
 
 // toolError is the JSON structure for argument/target parse errors.

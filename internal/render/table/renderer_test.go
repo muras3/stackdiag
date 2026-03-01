@@ -9,6 +9,8 @@ import (
 	"github.com/muras3/stackdiag/internal/core"
 )
 
+func ptr[T any](v T) *T { return &v }
+
 // allOKResult returns a Result where every layer succeeds.
 func allOKResult() *core.Result {
 	return &core.Result{
@@ -19,45 +21,45 @@ func allOKResult() *core.Result {
 			"dns": {
 				Status:     core.StatusOK,
 				DurationMS: 9,
-				Observations: map[string]any{
-					"query_name": "api.example.com",
-					"answers":    []any{"203.0.113.10"},
+				Observations: &core.DNSObservations{
+					QueryName: "api.example.com",
+					Answers:   []string{"203.0.113.10"},
 				},
 				Error: nil,
 			},
 			"reachability": {
 				Status:       core.StatusOK,
 				DurationMS:   2,
-				Observations: map[string]any{"method": "icmp"},
+				Observations: &core.ReachabilityObservations{ProbeMethod: "icmp"},
 				Error:        nil,
 			},
 			"tcp": {
 				Status:     core.StatusOK,
 				DurationMS: 16,
-				Observations: map[string]any{
-					"remote_ip":   "203.0.113.10",
-					"remote_port": 443,
+				Observations: &core.TCPObservations{
+					RemoteIP:   "203.0.113.10",
+					RemotePort: 443,
 				},
 				Error: nil,
 			},
 			"tls": {
 				Status:     core.StatusOK,
 				DurationMS: 31,
-				Observations: map[string]any{
-					"version":                "TLSv1.3",
-					"cipher_suite":           "TLS_AES_256_GCM_SHA384",
-					"cert_days_until_expiry": 90,
+				Observations: &core.TLSObservations{
+					Version:             "TLSv1.3",
+					CipherSuite:         "TLS_AES_256_GCM_SHA384",
+					CertDaysUntilExpiry: ptr(90),
 				},
 				Error: nil,
 			},
 			"http": {
 				Status:     core.StatusOK,
 				DurationMS: 57,
-				Observations: map[string]any{
-					"method":      "GET",
-					"protocol":    "HTTP/2",
-					"status_code": 200,
-					"status_text": "OK",
+				Observations: &core.HTTPObservations{
+					Method:     "GET",
+					Protocol:   "HTTP/2",
+					StatusCode: 200,
+					StatusText: "OK",
 				},
 				Error: nil,
 			},
@@ -80,45 +82,45 @@ func mixedResult() *core.Result {
 			"dns": {
 				Status:     core.StatusOK,
 				DurationMS: 9,
-				Observations: map[string]any{
-					"query_name": "api.example.com",
-					"answers":    []any{"203.0.113.10"},
+				Observations: &core.DNSObservations{
+					QueryName: "api.example.com",
+					Answers:   []string{"203.0.113.10"},
 				},
 				Error: nil,
 			},
 			"reachability": {
 				Status:       core.StatusOK,
 				DurationMS:   2,
-				Observations: map[string]any{"method": "icmp"},
+				Observations: &core.ReachabilityObservations{ProbeMethod: "icmp"},
 				Error:        nil,
 			},
 			"tcp": {
 				Status:     core.StatusOK,
 				DurationMS: 16,
-				Observations: map[string]any{
-					"remote_ip":   "203.0.113.10",
-					"remote_port": 443,
+				Observations: &core.TCPObservations{
+					RemoteIP:   "203.0.113.10",
+					RemotePort: 443,
 				},
 				Error: nil,
 			},
 			"tls": {
 				Status:     core.StatusWarn,
 				DurationMS: 31,
-				Observations: map[string]any{
-					"version":                "TLSv1.3",
-					"cipher_suite":           "TLS_AES_256_GCM_SHA384",
-					"cert_days_until_expiry": 5,
+				Observations: &core.TLSObservations{
+					Version:             "TLSv1.3",
+					CipherSuite:         "TLS_AES_256_GCM_SHA384",
+					CertDaysUntilExpiry: ptr(5),
 				},
 				Error: &core.ProbeError{Code: "TLS_CERT_EXPIRING_SOON", Message: "Certificate expires in 5 days"},
 			},
 			"http": {
 				Status:     core.StatusFail,
 				DurationMS: 57,
-				Observations: map[string]any{
-					"method":      "GET",
-					"protocol":    "HTTP/2",
-					"status_code": 503,
-					"status_text": "Service Unavailable",
+				Observations: &core.HTTPObservations{
+					Method:     "GET",
+					Protocol:   "HTTP/2",
+					StatusCode: 503,
+					StatusText: "Service Unavailable",
 				},
 				Error: &core.ProbeError{Code: "HTTP_503", Message: "503 Service Unavailable"},
 			},
@@ -141,31 +143,31 @@ func dnsFailResult() *core.Result {
 			"dns": {
 				Status:       core.StatusFail,
 				DurationMS:   12,
-				Observations: map[string]any{"query_name": "nonexistent.example.com"},
+				Observations: &core.DNSObservations{QueryName: "nonexistent.example.com"},
 				Error:        &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "NXDOMAIN"},
 			},
 			"reachability": {
 				Status:       core.StatusSkip,
 				DurationMS:   0,
-				Observations: map[string]any{},
+				Observations: &core.ReachabilityObservations{},
 				Error:        nil,
 			},
 			"tcp": {
 				Status:       core.StatusSkip,
 				DurationMS:   0,
-				Observations: map[string]any{},
+				Observations: &core.TCPObservations{},
 				Error:        nil,
 			},
 			"tls": {
 				Status:       core.StatusSkip,
 				DurationMS:   0,
-				Observations: map[string]any{},
+				Observations: &core.TLSObservations{},
 				Error:        nil,
 			},
 			"http": {
 				Status:       core.StatusSkip,
 				DurationMS:   0,
-				Observations: map[string]any{},
+				Observations: &core.HTTPObservations{},
 				Error:        nil,
 			},
 		},
@@ -412,7 +414,7 @@ func TestRenderTimingAlignment(t *testing.T) {
 // tlsScanResult returns a Result with tls_scan observations.
 func tlsScanResult() *core.Result {
 	r := allOKResult()
-	r.Layers["tls"].Observations.(map[string]any)["tls_scan"] = map[string]any{
+	r.Layers["tls"].Observations.(*core.TLSObservations).TLSScan = map[string]any{
 		"performed": true,
 		"attempts": []any{
 			map[string]any{"version": "TLSv1.0", "supported": true},
@@ -449,11 +451,11 @@ func basicCountResult() *core.CountResult {
 				Attempt:   1,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":          {Status: core.StatusOK, DurationMS: 9, Observations: map[string]any{"query_name": "api.example.com", "answers": []any{"1.2.3.4"}}},
-					"reachability": {Status: core.StatusOK, DurationMS: 2, Observations: map[string]any{"method": "icmp"}},
-					"tcp":          {Status: core.StatusOK, DurationMS: 16, Observations: map[string]any{"remote_port": 443}},
-					"tls":          {Status: core.StatusOK, DurationMS: 31, Observations: map[string]any{"version": "TLSv1.3"}},
-					"http":         {Status: core.StatusOK, DurationMS: 57, Observations: map[string]any{"status_code": 200, "status_text": "OK"}},
+					"dns":          {Status: core.StatusOK, DurationMS: 9, Observations: &core.DNSObservations{QueryName: "api.example.com", Answers: []string{"1.2.3.4"}}},
+					"reachability": {Status: core.StatusOK, DurationMS: 2, Observations: &core.ReachabilityObservations{ProbeMethod: "icmp"}},
+					"tcp":          {Status: core.StatusOK, DurationMS: 16, Observations: &core.TCPObservations{RemotePort: 443}},
+					"tls":          {Status: core.StatusOK, DurationMS: 31, Observations: &core.TLSObservations{Version: "TLSv1.3"}},
+					"http":         {Status: core.StatusOK, DurationMS: 57, Observations: &core.HTTPObservations{StatusCode: 200, StatusText: "OK"}},
 				},
 				Summary: &core.Summary{WallClockMS: 113, ExitCode: 0},
 			},
@@ -461,11 +463,11 @@ func basicCountResult() *core.CountResult {
 				Attempt:   2,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 4, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":          {Status: core.StatusOK, DurationMS: 10, Observations: map[string]any{"query_name": "api.example.com", "answers": []any{"1.2.3.4"}}},
-					"reachability": {Status: core.StatusOK, DurationMS: 2, Observations: map[string]any{"method": "icmp"}},
-					"tcp":          {Status: core.StatusOK, DurationMS: 15, Observations: map[string]any{"remote_port": 443}},
-					"tls":          {Status: core.StatusOK, DurationMS: 30, Observations: map[string]any{"version": "TLSv1.3"}},
-					"http":         {Status: core.StatusOK, DurationMS: 55, Observations: map[string]any{"status_code": 200, "status_text": "OK"}},
+					"dns":          {Status: core.StatusOK, DurationMS: 10, Observations: &core.DNSObservations{QueryName: "api.example.com", Answers: []string{"1.2.3.4"}}},
+					"reachability": {Status: core.StatusOK, DurationMS: 2, Observations: &core.ReachabilityObservations{ProbeMethod: "icmp"}},
+					"tcp":          {Status: core.StatusOK, DurationMS: 15, Observations: &core.TCPObservations{RemotePort: 443}},
+					"tls":          {Status: core.StatusOK, DurationMS: 30, Observations: &core.TLSObservations{Version: "TLSv1.3"}},
+					"http":         {Status: core.StatusOK, DurationMS: 55, Observations: &core.HTTPObservations{StatusCode: 200, StatusText: "OK"}},
 				},
 				Summary: &core.Summary{WallClockMS: 110, ExitCode: 0},
 			},
@@ -473,11 +475,11 @@ func basicCountResult() *core.CountResult {
 				Attempt:   3,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 5, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":          {Status: core.StatusOK, DurationMS: 8, Observations: map[string]any{"query_name": "api.example.com", "answers": []any{"1.2.3.4"}}},
-					"reachability": {Status: core.StatusOK, DurationMS: 3, Observations: map[string]any{"method": "icmp"}},
-					"tcp":          {Status: core.StatusOK, DurationMS: 17, Observations: map[string]any{"remote_port": 443}},
-					"tls":          {Status: core.StatusOK, DurationMS: 32, Observations: map[string]any{"version": "TLSv1.3"}},
-					"http":         {Status: core.StatusOK, DurationMS: 60, Observations: map[string]any{"status_code": 200, "status_text": "OK"}},
+					"dns":          {Status: core.StatusOK, DurationMS: 8, Observations: &core.DNSObservations{QueryName: "api.example.com", Answers: []string{"1.2.3.4"}}},
+					"reachability": {Status: core.StatusOK, DurationMS: 3, Observations: &core.ReachabilityObservations{ProbeMethod: "icmp"}},
+					"tcp":          {Status: core.StatusOK, DurationMS: 17, Observations: &core.TCPObservations{RemotePort: 443}},
+					"tls":          {Status: core.StatusOK, DurationMS: 32, Observations: &core.TLSObservations{Version: "TLSv1.3"}},
+					"http":         {Status: core.StatusOK, DurationMS: 60, Observations: &core.HTTPObservations{StatusCode: 200, StatusText: "OK"}},
 				},
 				Summary: &core.Summary{WallClockMS: 117, ExitCode: 0},
 			},
@@ -504,11 +506,11 @@ func allFailCountResult() *core.CountResult {
 				Attempt:   1,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":          {Status: core.StatusFail, DurationMS: 12, Observations: map[string]any{"query_name": "nonexistent.example.com"}, Error: &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "NXDOMAIN"}},
-					"reachability": {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
-					"tcp":          {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
-					"tls":          {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
-					"http":         {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
+					"dns":          {Status: core.StatusFail, DurationMS: 12, Observations: &core.DNSObservations{QueryName: "nonexistent.example.com"}, Error: &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "NXDOMAIN"}},
+					"reachability": {Status: core.StatusSkip, DurationMS: 0, Observations: &core.ReachabilityObservations{}},
+					"tcp":          {Status: core.StatusSkip, DurationMS: 0, Observations: &core.TCPObservations{}},
+					"tls":          {Status: core.StatusSkip, DurationMS: 0, Observations: &core.TLSObservations{}},
+					"http":         {Status: core.StatusSkip, DurationMS: 0, Observations: &core.HTTPObservations{}},
 				},
 				Summary: &core.Summary{WallClockMS: 12, FirstNonOKLayer: "dns", ExitCode: 1},
 			},
@@ -516,11 +518,11 @@ func allFailCountResult() *core.CountResult {
 				Attempt:   2,
 				StartedAt: time.Date(2026, 2, 26, 18, 42, 4, 0, time.UTC),
 				Layers: map[string]*core.LayerResult{
-					"dns":          {Status: core.StatusFail, DurationMS: 15, Observations: map[string]any{"query_name": "nonexistent.example.com"}, Error: &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "NXDOMAIN"}},
-					"reachability": {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
-					"tcp":          {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
-					"tls":          {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
-					"http":         {Status: core.StatusSkip, DurationMS: 0, Observations: map[string]any{}},
+					"dns":          {Status: core.StatusFail, DurationMS: 15, Observations: &core.DNSObservations{QueryName: "nonexistent.example.com"}, Error: &core.ProbeError{Code: "DNS_NXDOMAIN", Message: "NXDOMAIN"}},
+					"reachability": {Status: core.StatusSkip, DurationMS: 0, Observations: &core.ReachabilityObservations{}},
+					"tcp":          {Status: core.StatusSkip, DurationMS: 0, Observations: &core.TCPObservations{}},
+					"tls":          {Status: core.StatusSkip, DurationMS: 0, Observations: &core.TLSObservations{}},
+					"http":         {Status: core.StatusSkip, DurationMS: 0, Observations: &core.HTTPObservations{}},
 				},
 				Summary: &core.Summary{WallClockMS: 15, FirstNonOKLayer: "dns", ExitCode: 1},
 			},
@@ -728,10 +730,10 @@ func reachabilityOKResult() *core.Result {
 	r.Layers["reachability"] = &core.LayerResult{
 		Status:     core.StatusOK,
 		DurationMS: 3,
-		Observations: map[string]any{
-			"probe_method": "icmp",
-			"reachable":    true,
-			"rtt_ms":       2.5,
+		Observations: &core.ReachabilityObservations{
+			ProbeMethod: "icmp",
+			Reachable:   ptr(true),
+			RTTMS:       ptr(2.5),
 		},
 	}
 	return r
@@ -759,7 +761,7 @@ func TestRenderReachabilitySkip(t *testing.T) {
 	r.Layers["reachability"] = &core.LayerResult{
 		Status:       core.StatusSkip,
 		DurationMS:   0,
-		Observations: map[string]any{"skip_reason": "permission_denied"},
+		Observations: &core.ReachabilityObservations{SkipReason: ptr("permission_denied")},
 	}
 
 	var buf bytes.Buffer
@@ -781,7 +783,7 @@ func TestRenderReachabilityFail(t *testing.T) {
 	r.Layers["reachability"] = &core.LayerResult{
 		Status:       core.StatusFail,
 		DurationMS:   5,
-		Observations: map[string]any{},
+		Observations: &core.ReachabilityObservations{},
 		Error:        &core.ProbeError{Code: "REACHABILITY_TIMEOUT", Message: "host unreachable (timeout)"},
 	}
 
@@ -804,13 +806,13 @@ func TestRenderTLSExpandedObservations(t *testing.T) {
 	r.Layers["tls"] = &core.LayerResult{
 		Status:     core.StatusOK,
 		DurationMS: 31,
-		Observations: map[string]any{
-			"version":                "TLSv1.3",
-			"cipher_suite":           "TLS_AES_256_GCM_SHA384",
-			"cert_days_until_expiry": 90,
-			"cert_verified":          true,
-			"cert_subject":           "CN=api.example.com",
-			"cert_issuer":            "CN=Let's Encrypt Authority X3",
+		Observations: &core.TLSObservations{
+			Version:             "TLSv1.3",
+			CipherSuite:         "TLS_AES_256_GCM_SHA384",
+			CertDaysUntilExpiry: ptr(90),
+			CertVerified:        ptr(true),
+			CertSubject:         ptr("CN=api.example.com"),
+			CertIssuer:          ptr("CN=Let's Encrypt Authority X3"),
 		},
 	}
 
@@ -831,11 +833,11 @@ func TestRenderTLSUnverifiedCert(t *testing.T) {
 	r.Layers["tls"] = &core.LayerResult{
 		Status:     core.StatusWarn,
 		DurationMS: 31,
-		Observations: map[string]any{
-			"version":                "TLSv1.3",
-			"cert_days_until_expiry": 90,
-			"cert_verified":          false,
-			"cert_subject":           "CN=api.example.com",
+		Observations: &core.TLSObservations{
+			Version:             "TLSv1.3",
+			CertDaysUntilExpiry: ptr(90),
+			CertVerified:        ptr(false),
+			CertSubject:         ptr("CN=api.example.com"),
 		},
 		Error: &core.ProbeError{Code: "TLS_CERT_UNVERIFIED", Message: "certificate not verified"},
 	}
@@ -855,11 +857,11 @@ func TestRenderHTTPResponseHeaders(t *testing.T) {
 	r.Layers["http"] = &core.LayerResult{
 		Status:     core.StatusOK,
 		DurationMS: 57,
-		Observations: map[string]any{
-			"method":      "GET",
-			"status_code": 200,
-			"status_text": "OK",
-			"response_headers": map[string]any{
+		Observations: &core.HTTPObservations{
+			Method:     "GET",
+			StatusCode: 200,
+			StatusText: "OK",
+			ResponseHeaders: map[string]string{
 				"Content-Type": "application/json",
 				"Server":       "nginx",
 			},
@@ -882,10 +884,10 @@ func TestRenderDNSErrorHint(t *testing.T) {
 	r.Layers["dns"] = &core.LayerResult{
 		Status:     core.StatusWarn,
 		DurationMS: 12,
-		Observations: map[string]any{
-			"query_name":     "api.example.com",
-			"answers":        []any{"203.0.113.10"},
-			"dns_error_hint": "servfail",
+		Observations: &core.DNSObservations{
+			QueryName:    "api.example.com",
+			Answers:      []string{"203.0.113.10"},
+			DNSErrorHint: ptr("servfail"),
 		},
 		Error: &core.ProbeError{Code: "DNS_WARN", Message: "partial failure"},
 	}

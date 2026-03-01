@@ -12,6 +12,14 @@ import (
 	"github.com/muras3/stackdiag/internal/core"
 )
 
+// ICMP message type constants.
+const (
+	icmpEchoReply      = 0
+	icmpEchoRequest    = 8
+	icmpv6EchoRequest  = 128
+	icmpv6EchoReply    = 129
+)
+
 // Pinger abstracts ICMP echo request/reply.
 type Pinger interface {
 	Ping(ctx context.Context, addr string) (rtt time.Duration, err error)
@@ -104,7 +112,7 @@ func skipReason(err error) string {
 
 func buildICMPv6EchoRequest(id, seq uint16) []byte {
 	msg := make([]byte, 8)
-	msg[0] = 128 // Type: ICMPv6 Echo Request
+	msg[0] = icmpv6EchoRequest
 	msg[1] = 0   // Code
 	// Checksum at [2:4] = 0 (kernel-computed for ICMPv6)
 	binary.BigEndian.PutUint16(msg[4:6], id)
@@ -185,8 +193,7 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 			if n < 8 {
 				continue
 			}
-			// ICMPv6 Echo Reply: type=129, code=0
-			if buf[0] == 129 && buf[1] == 0 {
+			if buf[0] == icmpv6EchoReply && buf[1] == 0 {
 				replyID := binary.BigEndian.Uint16(buf[4:6])
 				if replyID == id {
 					return time.Since(start), nil
@@ -202,8 +209,7 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 				continue
 			}
 			icmpData := buf[ipHeaderLen:n]
-			// Check for Echo Reply (type=0, code=0) with matching ID
-			if icmpData[0] == 0 && icmpData[1] == 0 {
+			if icmpData[0] == icmpEchoReply && icmpData[1] == 0 {
 				replyID := binary.BigEndian.Uint16(icmpData[4:6])
 				if replyID == id {
 					return time.Since(start), nil
@@ -215,7 +221,7 @@ func (p *icmpPinger) Ping(ctx context.Context, addr string) (time.Duration, erro
 
 func buildICMPEchoRequest(id, seq uint16) []byte {
 	msg := make([]byte, 8)
-	msg[0] = 8 // Type: Echo Request
+	msg[0] = icmpEchoRequest
 	msg[1] = 0 // Code
 	// Checksum at [2:4], computed below
 	binary.BigEndian.PutUint16(msg[4:6], id)

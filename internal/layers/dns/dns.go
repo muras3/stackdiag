@@ -66,18 +66,34 @@ type trackingResolver struct {
 // /etc/resolv.conf contains a link-local nameserver with a zone ID (e.g. fe80::1%en0).
 // Returning an error causes Go's resolver to immediately try the next nameserver.
 func newTrackingResolver() *trackingResolver {
+	return newTrackingResolverInternal("")
+}
+
+// newTrackingResolverWithServer creates a resolver that always dials the specified server.
+// It still captures the resolver address and skips link-local nameservers.
+func newTrackingResolverWithServer(server string) *trackingResolver {
+	return newTrackingResolverInternal(server)
+}
+
+// newTrackingResolverInternal creates a tracking resolver. If fixedServer is non-empty,
+// all DNS queries dial that server; otherwise the system-provided nameserver is used.
+func newTrackingResolverInternal(fixedServer string) *trackingResolver {
 	tr := &trackingResolver{}
 	tr.inner = &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			if isLinkLocalNameserver(address) {
-				return nil, fmt.Errorf("skipping link-local nameserver %s", address)
+			target := address
+			if fixedServer != "" {
+				target = fixedServer
+			}
+			if isLinkLocalNameserver(target) {
+				return nil, fmt.Errorf("skipping link-local nameserver %s", target)
 			}
 			tr.mu.Lock()
-			tr.address = address
+			tr.address = target
 			tr.mu.Unlock()
 			var d net.Dialer
-			return d.DialContext(ctx, network, address)
+			return d.DialContext(ctx, network, target)
 		},
 	}
 	return tr
@@ -99,26 +115,6 @@ func isLinkLocalNameserver(address string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLinkLocalUnicast()
-}
-
-// newTrackingResolverWithServer creates a resolver that always dials the specified server.
-// It still captures the resolver address and skips link-local nameservers.
-func newTrackingResolverWithServer(server string) *trackingResolver {
-	tr := &trackingResolver{}
-	tr.inner = &net.Resolver{
-		PreferGo: true,
-		Dial: func(ctx context.Context, network, _ string) (net.Conn, error) {
-			if isLinkLocalNameserver(server) {
-				return nil, fmt.Errorf("skipping link-local nameserver %s", server)
-			}
-			tr.mu.Lock()
-			tr.address = server
-			tr.mu.Unlock()
-			var d net.Dialer
-			return d.DialContext(ctx, network, server)
-		},
-	}
-	return tr
 }
 
 func (tr *trackingResolver) LookupHost(ctx context.Context, host string) ([]string, error) {

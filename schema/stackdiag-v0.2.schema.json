@@ -217,10 +217,6 @@
       "required": ["method", "protocol", "status_code", "status_text", "request_headers", "response_headers"],
       "additionalProperties": false
     },
-    "EmptyObservations": {
-      "type": "object",
-      "maxProperties": 0
-    },
     "LayerResult": {
       "type": "object",
       "properties": {
