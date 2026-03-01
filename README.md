@@ -50,6 +50,18 @@ Exit codes tell you which layer broke — no JSON parsing needed:
 | 10 / 15 / 20 / 30 / 40 | DNS / Reachability / TCP / TLS / HTTP |
 | 1 | Tool error |
 
+## Supported Platforms
+
+- Go: `1.26+`
+- Release binaries: `linux/darwin` × `amd64/arm64`
+- Windows binaries are not published in current release configuration.
+
+## Known Limitations
+
+- `request_headers` redaction is applied to known sensitive header names (for example `Authorization`, `Cookie`, `X-Access-Token`).
+- Reachability may be `skip` on environments without ICMP privileges.
+- HTTP redirects are not followed (first response is reported).
+
 ## Why stackdiag
 
 - **Compression, not replacement.** stackdiag compresses the common `dig` → `openssl` → `curl` triage path into one deterministic command. ~80% fewer tokens than running each tool separately. Use raw tools when you need deep manual forensics.
