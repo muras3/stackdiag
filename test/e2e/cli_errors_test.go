@@ -69,26 +69,24 @@ func TestExtraPositionalArgsJSONError(t *testing.T) {
 	}
 }
 
-// --- Invalid target formats ---
+// --- Invalid target formats (table-driven) ---
 
-func TestInvalidTargetTCPNoPort(t *testing.T) {
-	_, _, exitCode := runStackdiag(t, "tcp://host")
-	if exitCode != 1 {
-		t.Errorf("exit code = %d, want 1 for tcp without port", exitCode)
+func TestInvalidTargetVariants(t *testing.T) {
+	cases := []struct {
+		name   string
+		target string
+	}{
+		{"tcp_no_port", "tcp://host"},
+		{"missing_host", "://"},
+		{"unsupported_scheme", "ftp://host"},
 	}
-}
-
-func TestInvalidTargetMissingHost(t *testing.T) {
-	_, _, exitCode := runStackdiag(t, "://")
-	if exitCode != 1 {
-		t.Errorf("exit code = %d, want 1 for missing host", exitCode)
-	}
-}
-
-func TestInvalidTargetUnsupportedScheme(t *testing.T) {
-	_, _, exitCode := runStackdiag(t, "ftp://host")
-	if exitCode != 1 {
-		t.Errorf("exit code = %d, want 1 for unsupported scheme", exitCode)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, exitCode := runStackdiag(t, tc.target)
+			if exitCode != 1 {
+				t.Errorf("exit code = %d, want 1 for target %q", exitCode, tc.target)
+			}
+		})
 	}
 }
 
@@ -104,25 +102,26 @@ func TestInvalidTargetJSONError(t *testing.T) {
 	}
 }
 
-// --- Timeout range validation ---
+// --- Timeout range validation (table-driven) ---
 
-func TestTimeoutTooLow(t *testing.T) {
-	_, stderr, exitCode := runStackdiag(t, "--timeout", "0", "https://example.com")
-	if exitCode != 1 {
-		t.Errorf("exit code = %d, want 1", exitCode)
+func TestTimeoutRange(t *testing.T) {
+	cases := []struct {
+		name    string
+		timeout string
+	}{
+		{"too_low", "0"},
+		{"too_high", "301"},
 	}
-	if !strings.Contains(stderr, "between 1 and 300") {
-		t.Errorf("stderr should mention 'between 1 and 300', got: %s", stderr)
-	}
-}
-
-func TestTimeoutTooHigh(t *testing.T) {
-	_, stderr, exitCode := runStackdiag(t, "--timeout", "301", "https://example.com")
-	if exitCode != 1 {
-		t.Errorf("exit code = %d, want 1", exitCode)
-	}
-	if !strings.Contains(stderr, "between 1 and 300") {
-		t.Errorf("stderr should mention 'between 1 and 300', got: %s", stderr)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, stderr, exitCode := runStackdiag(t, "--timeout", tc.timeout, "https://example.com")
+			if exitCode != 1 {
+				t.Errorf("exit code = %d, want 1", exitCode)
+			}
+			if !strings.Contains(stderr, "between 1 and 300") {
+				t.Errorf("stderr should mention 'between 1 and 300', got: %s", stderr)
+			}
+		})
 	}
 }
 
@@ -164,7 +163,6 @@ func TestInvalidHeaderMissingColon(t *testing.T) {
 }
 
 func TestHeaderControlChars(t *testing.T) {
-	// Pass actual CR+LF control characters in the header value.
 	_, _, exitCode := runStackdiag(t, "--header", "X-Bad: val\r\n", "https://example.com")
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1 for header with control chars", exitCode)
@@ -184,7 +182,6 @@ func TestBasicEnvHeaderAuthConflict(t *testing.T) {
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1", exitCode)
 	}
-	// The conflict is detected in ParseArgs, which uses HasJSONFlag → JSON on stdout.
 	errObj := parseJSONError(t, stdout)
 	msg, _ := errObj["message"].(string)
 	if !strings.Contains(msg, "conflicts") {
@@ -192,64 +189,52 @@ func TestBasicEnvHeaderAuthConflict(t *testing.T) {
 	}
 }
 
-// --- Auth env whitespace validation ---
+// --- Auth env whitespace validation (table-driven) ---
 
-func TestBearerEnvWhitespaceOnly(t *testing.T) {
-	t.Setenv("TEST_BEARER_WS", " ")
-
-	// --json is required because ResolveAuth errors use cfg.JSON (exitToolError path).
-	stdout, _, exitCode := runStackdiag(t,
-		"--json",
-		"--bearer-env", "TEST_BEARER_WS",
-		"https://example.com")
-	if exitCode != 1 {
-		t.Errorf("exit code = %d, want 1", exitCode)
+func TestAuthEnvWhitespaceOnly(t *testing.T) {
+	cases := []struct {
+		name    string
+		flag    string
+		envVar  string
+	}{
+		{"bearer", "--bearer-env", "TEST_BEARER_WS"},
+		{"basic", "--basic-env", "TEST_BASIC_WS"},
 	}
-	errObj := parseJSONError(t, stdout)
-	msg, _ := errObj["message"].(string)
-	if !strings.Contains(msg, "whitespace") {
-		t.Errorf("error message should mention 'whitespace', got: %s", msg)
-	}
-}
-
-func TestBasicEnvWhitespaceOnly(t *testing.T) {
-	t.Setenv("TEST_BASIC_WS", " ")
-
-	// --json is required because ResolveAuth errors use cfg.JSON (exitToolError path).
-	stdout, _, exitCode := runStackdiag(t,
-		"--json",
-		"--basic-env", "TEST_BASIC_WS",
-		"https://example.com")
-	if exitCode != 1 {
-		t.Errorf("exit code = %d, want 1", exitCode)
-	}
-	errObj := parseJSONError(t, stdout)
-	msg, _ := errObj["message"].(string)
-	if !strings.Contains(msg, "whitespace") {
-		t.Errorf("error message should mention 'whitespace', got: %s", msg)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Setenv(tc.envVar, " ")
+			stdout, _, exitCode := runStackdiag(t,
+				"--json", tc.flag, tc.envVar, "https://example.com")
+			if exitCode != 1 {
+				t.Errorf("exit code = %d, want 1", exitCode)
+			}
+			errObj := parseJSONError(t, stdout)
+			msg, _ := errObj["message"].(string)
+			if !strings.Contains(msg, "whitespace") {
+				t.Errorf("error message should mention 'whitespace', got: %s", msg)
+			}
+		})
 	}
 }
 
-// --- --count flag validation ---
+// --- --count flag validation (table-driven) ---
 
-func TestCountZeroError(t *testing.T) {
-	_, _, exitCode := runStackdiag(t, "--count", "0", "https://example.com")
-	if exitCode != 1 {
-		t.Errorf("exit code = %d, want 1 for --count 0", exitCode)
+func TestCountInvalidValues(t *testing.T) {
+	cases := []struct {
+		name  string
+		value string
+	}{
+		{"zero", "0"},
+		{"negative", "-1"},
+		{"non_numeric", "abc"},
 	}
-}
-
-func TestCountNegativeError(t *testing.T) {
-	_, _, exitCode := runStackdiag(t, "--count", "-1", "https://example.com")
-	if exitCode != 1 {
-		t.Errorf("exit code = %d, want 1 for --count -1", exitCode)
-	}
-}
-
-func TestCountNonNumericError(t *testing.T) {
-	_, _, exitCode := runStackdiag(t, "--count", "abc", "https://example.com")
-	if exitCode != 1 {
-		t.Errorf("exit code = %d, want 1 for --count abc", exitCode)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, exitCode := runStackdiag(t, "--count", tc.value, "https://example.com")
+			if exitCode != 1 {
+				t.Errorf("exit code = %d, want 1 for --count %s", exitCode, tc.value)
+			}
+		})
 	}
 }
 
@@ -265,7 +250,6 @@ func TestUnknownFlagError(t *testing.T) {
 // --- Output format for errors ---
 
 func TestTableErrorOutputFormat(t *testing.T) {
-	// Without --json, errors go to stderr with "Error:" prefix and USAGE block.
 	_, stderr, exitCode := runStackdiag(t, "--timeout", "0", "https://example.com")
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1", exitCode)
@@ -279,7 +263,6 @@ func TestTableErrorOutputFormat(t *testing.T) {
 }
 
 func TestJSONPrettyErrorIsIndented(t *testing.T) {
-	// --json-pretty with parse error should produce multi-line indented JSON on stdout.
 	stdout, _, exitCode := runStackdiag(t, "--json-pretty", "--timeout", "0", "https://example.com")
 	if exitCode != 1 {
 		t.Errorf("exit code = %d, want 1", exitCode)
@@ -291,7 +274,6 @@ func TestJSONPrettyErrorIsIndented(t *testing.T) {
 	if err := json.Unmarshal([]byte(stdout), &result); err != nil {
 		t.Fatalf("expected valid JSON: %v\n%s", err, stdout)
 	}
-	// Must be multi-line (indented).
 	lines := strings.Split(strings.TrimRight(stdout, "\n"), "\n")
 	if len(lines) <= 1 {
 		t.Error("--json-pretty error output should be multi-line indented")

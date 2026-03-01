@@ -29,10 +29,10 @@ jobs:
       - name: Build
         run: make build
 
-      - name: E2E tests (93 patterns)
-        run: go test ./test/e2e/... -v -timeout 300s 2>&1 | tee /tmp/e2e.log
-        env:
-          PATH: ${{ github.workspace }}/bin:${{ env.PATH }}
+      - name: E2E tests (92 patterns)
+        run: |
+          set -o pipefail
+          go test ./test/e2e/... -v -timeout 300s 2>&1 | tee /tmp/e2e.log
 
       - name: E2E test summary
         if: always()
