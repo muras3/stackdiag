@@ -63,7 +63,7 @@ Log of decisions agreed upon through discussions between Claude and Codex.
 - Colors: green✓ / yellow⚠ / red✗
 - Monospace alignment
 - `NO_COLOR` / non-TTY ASCII fallback
-- Timing bar deferred to v0.2 (skipped in MVP)
+- Timing bar deferred to v0.1 (skipped in MVP)
 
 ## Decision 8: Agent-friendly = stable decision interface
 
@@ -123,7 +123,7 @@ Log of decisions agreed upon through discussions between Claude and Codex.
   - `--count N` + p50/p95/loss statistics (repeated measurement and statistical aggregation)
 - Rationale:
   - Schema contract (additions only, type changes forbidden) means we should design optimal structure in v0.1 before users exist
-  - Deferring to v0.2 forces design within backward-compatibility constraints
+  - Deferring to v0.1 forces design within backward-compatibility constraints
   - Auth hardening is core to identity as a security diagnostic tool
   - Default behavior unchanged; all features are opt-in, preserving simplicity
 - Auth conflict rules:
@@ -202,11 +202,11 @@ Log of decisions agreed upon through discussions between Claude and Codex.
 
 **Agreement:** Claude & Codex
 
-- v0.2 moves from 4 layers (DNS → TCP → TLS → HTTP) to 5 layers (DNS → Reachability → TCP → TLS → HTTP)
+- v0.1 moves from 4 layers (DNS → TCP → TLS → HTTP) to 5 layers (DNS → Reachability → TCP → TLS → HTTP)
 - Motivated by real-world incident analysis where 4-layer model had diagnostic gaps:
   - Cloudflare BGP leak (2024): DNS resolved correctly but packets were routed to wrong AS — TCP timeout gave no reachability signal
   - Route leak incidents: host was unreachable at IP level but TCP timeout was ambiguous (firewall drop vs routing failure)
   - HTTP/2 Rapid Reset (CVE-2023-44487): connection-level issue was masked by HTTP layer errors — reachability data would have shown host was alive
-- Adding the layer now (before v0.2 users exist) avoids future schema compatibility costs
-- Schema contract means adding a layer post-publication requires a version bump; doing it in v0.2 is the last low-cost opportunity
+- Adding the layer now (before v0.1 users exist) avoids future schema compatibility costs
+- Schema contract means adding a layer post-publication requires a version bump; doing it in v0.1 is the last low-cost opportunity
 - Exit code 15 fits naturally in the 10-20 gap between DNS and TCP

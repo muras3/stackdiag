@@ -9,7 +9,7 @@ import (
 )
 
 // SchemaVersion is the current schema version for stackdiag output.
-const SchemaVersion = "v0.2"
+const SchemaVersion = "v0.1"
 
 // LayerOrder defines the canonical execution order for layers.
 // JSON output must always follow this order.

@@ -147,8 +147,8 @@ func TestJSONOutputStructure(t *testing.T) {
 		}
 	}
 
-	if v, ok := result["schema_version"].(string); !ok || v != "v0.2" {
-		t.Errorf("schema_version = %v, want v0.2", result["schema_version"])
+	if v, ok := result["schema_version"].(string); !ok || v != "v0.1" {
+		t.Errorf("schema_version = %v, want v0.1", result["schema_version"])
 	}
 }
 

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/muras3/stackdiag/schema/stackdiag-v0.2.schema.json",
-  "title": "stackdiag v0.2 Output Schema",
-  "description": "JSON Schema for stackdiag --json output (schema version v0.2)",
+  "$id": "https://github.com/muras3/stackdiag/schema/stackdiag-v0.1.schema.json",
+  "title": "stackdiag v0.1 Output Schema",
+  "description": "JSON Schema for stackdiag --json output (schema version v0.1)",
   "oneOf": [
     { "$ref": "#/$defs/Result" },
     { "$ref": "#/$defs/CountResult" },
@@ -265,7 +265,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "v0.2"
+          "const": "v0.1"
         },
         "started_at": {
           "type": "string",
@@ -327,7 +327,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "v0.2"
+          "const": "v0.1"
         },
         "target": { "type": "string" },
         "count": { "type": "integer" },
@@ -349,7 +349,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "v0.2"
+          "const": "v0.1"
         },
         "error": { "$ref": "#/$defs/ProbeError" },
         "exit_code": {

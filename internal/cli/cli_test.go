@@ -549,7 +549,7 @@ func TestParseArgsJSONPrettyDefault(t *testing.T) {
 	}
 }
 
-// --- v0.2 expansion: dns-server flag ---
+// --- v0.1 expansion: dns-server flag ---
 
 func TestParseArgsDNSServer(t *testing.T) {
 	cfg, err := ParseArgs([]string{"--dns-server", "8.8.8.8:53", "https://example.com"})

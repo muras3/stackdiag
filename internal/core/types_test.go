@@ -178,7 +178,7 @@ func TestCountResultMarshalJSON(t *testing.T) {
 
 func TestCountResultStatisticsOrder(t *testing.T) {
 	cr := &CountResult{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		Target:        "https://example.com",
 		Count:         1,
 		ExitCode:      0,
@@ -232,8 +232,8 @@ func TestLayerStatisticsOmitsNilPercentiles(t *testing.T) {
 }
 
 func TestSchemaVersionV02(t *testing.T) {
-	if SchemaVersion != "v0.2" {
-		t.Errorf("SchemaVersion = %q, want v0.2", SchemaVersion)
+	if SchemaVersion != "v0.1" {
+		t.Errorf("SchemaVersion = %q, want v0.1", SchemaVersion)
 	}
 }
 
@@ -252,7 +252,7 @@ func TestLayerOrderV02(t *testing.T) {
 func TestResultMarshalJSONV02(t *testing.T) {
 	now := time.Now().UTC()
 	r := &Result{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		StartedAt:     now,
 		Target:        "https://example.com",
 		Layers: map[string]*LayerResult{

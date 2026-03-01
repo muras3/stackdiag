@@ -12,7 +12,7 @@ import (
 	"github.com/muras3/stackdiag/internal/core"
 )
 
-const schemaFile = "stackdiag-v0.2.schema.json"
+const schemaFile = "stackdiag-v0.1.schema.json"
 
 // loadSchema reads and parses the JSON schema file, failing the test on error.
 func loadSchema(t *testing.T) map[string]any {
@@ -278,8 +278,8 @@ func TestResultMarshalHasRequiredFields(t *testing.T) {
 	}
 
 	// Verify schema_version value
-	if v := parsed["schema_version"].(string); v != "v0.2" {
-		t.Errorf("schema_version = %q, want %q", v, "v0.2")
+	if v := parsed["schema_version"].(string); v != "v0.1" {
+		t.Errorf("schema_version = %q, want %q", v, "v0.1")
 	}
 }
 

@@ -12,7 +12,7 @@ import (
 
 func testResult() *core.Result {
 	return &core.Result{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		StartedAt:     time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 		Target:        "https://api.example.com/health",
 		Layers: map[string]*core.LayerResult{
@@ -120,7 +120,7 @@ func testCountResult() *core.CountResult {
 	p50tcp := 16.0
 	p95tcp := 20.0
 	return &core.CountResult{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		Target:        "https://api.example.com/health",
 		Count:         2,
 		ExitCode:      1,

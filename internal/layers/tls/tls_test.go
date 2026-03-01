@@ -1197,7 +1197,7 @@ func TestTLSObservationsV02(t *testing.T) {
 		t.Errorf("version = %v, want TLSv1.3", obs.Version)
 	}
 
-	// New v0.2 fields
+	// New v0.1 fields
 	if obs.CertVerified == nil || !*obs.CertVerified {
 		t.Errorf("cert_verified = %v, want true", obs.CertVerified)
 	}

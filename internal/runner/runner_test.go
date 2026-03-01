@@ -264,8 +264,8 @@ func TestRunSchemaVersion(t *testing.T) {
 		Target:  core.Target{Original: "tcp://example.com:80", Scheme: "tcp", Host: "example.com", Port: 80},
 	})
 
-	if result.SchemaVersion != "v0.2" {
-		t.Errorf("SchemaVersion = %q, want v0.2", result.SchemaVersion)
+	if result.SchemaVersion != "v0.1" {
+		t.Errorf("SchemaVersion = %q, want v0.1", result.SchemaVersion)
 	}
 	if result.Target != "tcp://example.com:80" {
 		t.Errorf("Target = %q", result.Target)

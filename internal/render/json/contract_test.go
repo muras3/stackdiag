@@ -13,7 +13,7 @@ import (
 // contractResult returns a full Result with all layers for contract testing.
 func contractResult() *core.Result {
 	return &core.Result{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		StartedAt:     time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 		Target:        "https://api.example.com/health",
 		Layers: map[string]*core.LayerResult{
@@ -144,7 +144,7 @@ func TestContractStatusValues(t *testing.T) {
 // contractResultWithSkip returns a Result with skipped layers for contract testing.
 func contractResultWithSkip() *core.Result {
 	return &core.Result{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		StartedAt:     time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 		Target:        "tcp://db.example.com:5432",
 		Layers: map[string]*core.LayerResult{
@@ -365,7 +365,7 @@ func contractCountResult() *core.CountResult {
 	p50http := 55.0
 	p95http := 60.0
 	return &core.CountResult{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		Target:        "https://api.example.com/health",
 		Count:         2,
 		ExitCode:      1,
@@ -575,8 +575,8 @@ func TestContractSchemaVersion(t *testing.T) {
 		t.Fatalf("JSON parse error: %v", err)
 	}
 
-	if v, ok := m["schema_version"].(string); !ok || v != "v0.2" {
-		t.Errorf("schema_version = %v, want \"v0.2\"", m["schema_version"])
+	if v, ok := m["schema_version"].(string); !ok || v != "v0.1" {
+		t.Errorf("schema_version = %v, want \"v0.1\"", m["schema_version"])
 	}
 }
 
@@ -606,7 +606,7 @@ func TestContractFiveLayersPresent(t *testing.T) {
 // contractResultReachabilitySkip returns a Result where reachability is skipped with permission_denied.
 func contractResultReachabilitySkip() *core.Result {
 	return &core.Result{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		StartedAt:     time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 		Target:        "https://api.example.com/health",
 		Layers: map[string]*core.LayerResult{

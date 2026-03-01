@@ -1,6 +1,6 @@
 # stackdiag JSON Schema Reference
 
-> Schema version: **v0.2**
+> Schema version: **v0.1**
 
 This document is the complete specification for stackdiag's `--json` output.
 
@@ -8,7 +8,7 @@ This document is the complete specification for stackdiag's `--json` output.
 
 ```json
 {
-  "schema_version": "v0.2",
+  "schema_version": "v0.1",
   "started_at": "2026-02-26T18:42:03Z",
   "target": "https://api.example.com/health",
   "layers": { ... },
@@ -18,7 +18,7 @@ This document is the complete specification for stackdiag's `--json` output.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `schema_version` | string | Schema version identifier (currently `"v0.2"`) |
+| `schema_version` | string | Schema version identifier (currently `"v0.1"`) |
 | `started_at` | string | ISO 8601 UTC timestamp of stackdiag start |
 | `target` | string | Original target as provided by the user |
 | `layers` | object | Per-layer results (see below) |
@@ -290,7 +290,7 @@ HTTP redirects are **not** followed. The response from the first request is repo
 
 ### DNS Resolution
 
-Uses the system resolver via Go's `net.LookupHost`. No custom DNS server configuration in v0.2.
+Uses the system resolver via Go's `net.LookupHost`. No custom DNS server configuration in v0.1.
 
 ### TLS / `--insecure`
 
@@ -346,7 +346,7 @@ When `--count N` is used, the output structure changes to a `CountResult`:
 
 ```json
 {
-  "schema_version": "v0.2",
+  "schema_version": "v0.1",
   "target": "https://example.com",
   "count": 5,
   "exit_code": 0,
@@ -397,7 +397,7 @@ When `--json` is used and an argument or target parsing error occurs, stackdiag 
 
 ```json
 {
-  "schema_version": "v0.2",
+  "schema_version": "v0.1",
   "error": {
     "code": "INVALID_TARGET",
     "message": "unsupported scheme: \"ftp\""
@@ -418,13 +418,13 @@ These guarantees hold **within a given schema version** after publication:
 4. **Consistent structure on error** — the JSON shape is identical for success, warning, failure, and skip
 5. **Skip, not null** — unused layers have `status: "skip"`, not `null`
 
-Breaking changes (field removals, type changes) are permitted only across major schema version boundaries (e.g., v0.1 to v0.2). Consumers should check `schema_version` to select the appropriate parser.
+Breaking changes (field removals, type changes) are permitted only across major schema version boundaries (e.g., v0.1 to v0.1). Consumers should check `schema_version` to select the appropriate parser.
 
 ## Full Example
 
 ```json
 {
-  "schema_version": "v0.2",
+  "schema_version": "v0.1",
   "started_at": "2026-02-26T18:42:03Z",
   "target": "https://api.example.com/health",
   "layers": {

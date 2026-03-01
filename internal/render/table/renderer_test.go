@@ -14,7 +14,7 @@ func ptr[T any](v T) *T { return &v }
 // allOKResult returns a Result where every layer succeeds.
 func allOKResult() *core.Result {
 	return &core.Result{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		StartedAt:     time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 		Target:        "https://api.example.com/health",
 		Layers: map[string]*core.LayerResult{
@@ -75,7 +75,7 @@ func allOKResult() *core.Result {
 // mixedResult returns a Result with tls warn and http fail.
 func mixedResult() *core.Result {
 	return &core.Result{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		StartedAt:     time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 		Target:        "https://api.example.com/health",
 		Layers: map[string]*core.LayerResult{
@@ -136,7 +136,7 @@ func mixedResult() *core.Result {
 // dnsFailResult returns a Result where DNS fails and the rest are skipped.
 func dnsFailResult() *core.Result {
 	return &core.Result{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		StartedAt:     time.Date(2026, 2, 26, 18, 42, 3, 0, time.UTC),
 		Target:        "https://nonexistent.example.com/health",
 		Layers: map[string]*core.LayerResult{
@@ -442,7 +442,7 @@ func basicCountResult() *core.CountResult {
 	p95http := 60.0
 
 	return &core.CountResult{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		Target:        "https://api.example.com/health",
 		Count:         3,
 		ExitCode:      0,
@@ -497,7 +497,7 @@ func basicCountResult() *core.CountResult {
 // allFailCountResult returns a CountResult where all attempts fail at DNS.
 func allFailCountResult() *core.CountResult {
 	return &core.CountResult{
-		SchemaVersion: "v0.2",
+		SchemaVersion: "v0.1",
 		Target:        "https://nonexistent.example.com/health",
 		Count:         2,
 		ExitCode:      1,
