@@ -47,6 +47,7 @@ Exit codes tell you which layer broke — no JSON parsing needed:
 | Exit | Layer |
 |------|-------|
 | 0 | All OK |
+| 2 | Warning (no failure) |
 | 10 / 15 / 20 / 30 / 40 | DNS / Reachability / TCP / TLS / HTTP |
 | 1 | Tool error |
 
@@ -64,9 +65,9 @@ Exit codes tell you which layer broke — no JSON parsing needed:
 
 ## Why stackdiag
 
-- **Compression, not replacement.** stackdiag compresses the common `dig` → `openssl` → `curl` triage path into one deterministic command. ~80% fewer tokens than running each tool separately. Use raw tools when you need deep manual forensics.
+- **Compression, not replacement.** stackdiag compresses the common `dig` → `openssl` → `curl` triage path into one deterministic command. In the benchmark harness (`bench/`, 24 scenarios), total token count was `9,994` (`stdiag --json`) vs `52,436` (manual commands), about **80.9% fewer tokens**. Use raw tools when you need deep manual forensics.
 
-- **Deterministic classification.** Error codes like `TLS_CERT_EXPIRED` and `DNS_NXDOMAIN` are type-based, not regex. Stable across OS, locale, and tool version. Agents can branch on `error.code` without string matching.
+- **Deterministic classification.** Primary error codes (for example `TLS_CERT_EXPIRED`, `DNS_NXDOMAIN`) are classified with stable type/errno checks. Some fallback classifications (for example `TLS_PROTOCOL_ERROR`) are best-effort and documented in schema docs. Agents can branch on `error.code` without parsing free-form CLI text.
 
 - **Schema contract.** `--json` output follows a versioned schema — fields are never removed, types never changed. `stdout` = data, `stderr` = logs. Wrap as an MCP tool or LangChain `tool_call` with zero adaptation.
 
@@ -75,6 +76,12 @@ Exit codes tell you which layer broke — no JSON parsing needed:
 - [JSON Schema & Error Codes](docs/schema.md) — output format, typed fields, exit code contract
 - [Design Decisions](docs/design-decisions.md) — architecture rationale
 - [Benchmarks](bench/) — reproducible token efficiency measurements
+
+## Contribution & Security (Temporary)
+
+- Feature requests and bug reports via GitHub Issues are especially helpful.
+- PRs are also welcome, but opening an issue first helps us align on scope and verification.
+- For security issues, please do not open a public issue. Contact the maintainer via X (Twitter) DM: [@tomatolinux](https://x.com/tomatolinux)
 
 ## License
 
